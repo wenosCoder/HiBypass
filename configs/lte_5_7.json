@@ -1,0 +1,335 @@
+{
+  "remarks": "LTE | Авто 5.7",
+  "dns": {
+    "servers": [
+      "1.1.1.1",
+      "1.0.0.1"
+    ],
+    "queryStrategy": "UseIP"
+  },
+  "routing": {
+    "domainMatcher": "hybrid",
+    "domainStrategy": "IPIfNonMatch",
+    "rules": [
+      {
+        "type": "field",
+        "protocol": [
+          "bittorrent"
+        ],
+        "outboundTag": "direct"
+      },
+      {
+        "type": "field",
+        "inboundTag": [
+          "socks",
+          "http"
+        ],
+        "balancerTag": "AUTO-n5g7"
+      }
+    ],
+    "balancers": [
+      {
+        "tag": "AUTO-n5g7",
+        "selector": [
+          "n5g7-1",
+          "n5g7-2",
+          "n5g7-3",
+          "n5g7-4",
+          "n5g7-5",
+          "n5g7-6",
+          "n5g7-7"
+        ],
+        "strategy": {
+          "type": "leastPing",
+          "settings": {
+            "maxRTT": "2000ms",
+            "expected": 3,
+            "baselines": [
+              "1200ms"
+            ],
+            "tolerance": 0.1
+          }
+        },
+        "fallbackTag": "direct"
+      }
+    ]
+  },
+  "inbounds": [
+    {
+      "tag": "socks",
+      "port": 10808,
+      "listen": "127.0.0.1",
+      "protocol": "socks",
+      "settings": {
+        "udp": true,
+        "auth": "noauth"
+      },
+      "sniffing": {
+        "enabled": true,
+        "routeOnly": false,
+        "destOverride": [
+          "http",
+          "tls",
+          "quic"
+        ]
+      }
+    },
+    {
+      "tag": "http",
+      "port": 10809,
+      "listen": "127.0.0.1",
+      "protocol": "http",
+      "settings": {
+        "allowTransparent": false
+      },
+      "sniffing": {
+        "enabled": true,
+        "routeOnly": false,
+        "destOverride": [
+          "http",
+          "tls",
+          "quic"
+        ]
+      }
+    }
+  ],
+  "outbounds": [
+    {
+      "tag": "n5g7-1",
+      "protocol": "vless",
+      "settings": {
+        "vnext": [
+          {
+            "address": "62.60.233.178",
+            "port": 52000,
+            "users": [
+              {
+                "id": "fd2bfdd2-68eb-49b0-98ad-ed82f901edde",
+                "encryption": "none",
+                "flow": "xtls-rprx-vision"
+              }
+            ]
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "tcp",
+        "tcpSettings": {},
+        "security": "reality",
+        "realitySettings": {
+          "serverName": "ozon.ru",
+          "publicKey": "4Fs4rORU_bK5Nwy9qvmVw3dAxS91bIG5cQYOmXl7zDA",
+          "shortId": "3d67b0666a5e09a0",
+          "fingerprint": "chrome"
+        }
+      }
+    },
+    {
+      "tag": "n5g7-2",
+      "protocol": "vless",
+      "settings": {
+        "vnext": [
+          {
+            "address": "62.60.233.178",
+            "port": 52000,
+            "users": [
+              {
+                "id": "fd2bfdd2-68eb-49b0-98ad-ed82f901edde",
+                "encryption": "none",
+                "flow": "xtls-rprx-vision"
+              }
+            ]
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "tcp",
+        "tcpSettings": {},
+        "security": "reality",
+        "realitySettings": {
+          "serverName": "ozon.ru",
+          "publicKey": "4Fs4rORU_bK5Nwy9qvmVw3dAxS91bIG5cQYOmXl7zDA",
+          "shortId": "3d67b0666a5e09a0",
+          "fingerprint": "chrome"
+        }
+      }
+    },
+    {
+      "tag": "n5g7-3",
+      "protocol": "vless",
+      "settings": {
+        "vnext": [
+          {
+            "address": "62.60.233.178",
+            "port": 52000,
+            "users": [
+              {
+                "id": "fd2bfdd2-68eb-49b0-98ad-ed82f901edde",
+                "encryption": "none",
+                "flow": "xtls-rprx-vision"
+              }
+            ]
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "tcp",
+        "tcpSettings": {},
+        "security": "reality",
+        "realitySettings": {
+          "serverName": "ozon.ru",
+          "publicKey": "4Fs4rORU_bK5Nwy9qvmVw3dAxS91bIG5cQYOmXl7zDA",
+          "shortId": "3d67b0666a5e09a0",
+          "fingerprint": "chrome"
+        }
+      }
+    },
+    {
+      "tag": "n5g7-4",
+      "protocol": "vless",
+      "settings": {
+        "vnext": [
+          {
+            "address": "tr-1.illusion-vpn.ru",
+            "port": 52000,
+            "users": [
+              {
+                "id": "fd2bfdd2-68eb-49b0-98ad-ed82f901edde",
+                "encryption": "none",
+                "flow": "xtls-rprx-vision"
+              }
+            ]
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "tcp",
+        "tcpSettings": {},
+        "security": "reality",
+        "realitySettings": {
+          "serverName": "ozon.ru",
+          "publicKey": "4Fs4rORU_bK5Nwy9qvmVw3dAxS91bIG5cQYOmXl7zDA",
+          "shortId": "3d67b0666a5e09a0",
+          "fingerprint": "chrome"
+        }
+      }
+    },
+    {
+      "tag": "n5g7-5",
+      "protocol": "vless",
+      "settings": {
+        "vnext": [
+          {
+            "address": "tr-1.illusion-vpn.ru",
+            "port": 52000,
+            "users": [
+              {
+                "id": "fd2bfdd2-68eb-49b0-98ad-ed82f901edde",
+                "encryption": "none",
+                "flow": "xtls-rprx-vision"
+              }
+            ]
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "tcp",
+        "tcpSettings": {},
+        "security": "reality",
+        "realitySettings": {
+          "serverName": "ozon.ru",
+          "publicKey": "4Fs4rORU_bK5Nwy9qvmVw3dAxS91bIG5cQYOmXl7zDA",
+          "shortId": "3d67b0666a5e09a0",
+          "fingerprint": "chrome"
+        }
+      }
+    },
+    {
+      "tag": "n5g7-6",
+      "protocol": "vless",
+      "settings": {
+        "vnext": [
+          {
+            "address": "tr-1.illusion-vpn.ru",
+            "port": 52000,
+            "users": [
+              {
+                "id": "fd2bfdd2-68eb-49b0-98ad-ed82f901edde",
+                "encryption": "none",
+                "flow": "xtls-rprx-vision"
+              }
+            ]
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "tcp",
+        "tcpSettings": {},
+        "security": "reality",
+        "realitySettings": {
+          "serverName": "ozon.ru",
+          "publicKey": "4Fs4rORU_bK5Nwy9qvmVw3dAxS91bIG5cQYOmXl7zDA",
+          "shortId": "3d67b0666a5e09a0",
+          "fingerprint": "chrome"
+        }
+      }
+    },
+    {
+      "tag": "n5g7-7",
+      "protocol": "vless",
+      "settings": {
+        "vnext": [
+          {
+            "address": "tr-1.illusion-vpn.ru",
+            "port": 52000,
+            "users": [
+              {
+                "id": "fd2bfdd2-68eb-49b0-98ad-ed82f901edde",
+                "encryption": "none",
+                "flow": "xtls-rprx-vision"
+              }
+            ]
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "tcp",
+        "tcpSettings": {},
+        "security": "reality",
+        "realitySettings": {
+          "serverName": "ozon.ru",
+          "publicKey": "4Fs4rORU_bK5Nwy9qvmVw3dAxS91bIG5cQYOmXl7zDA",
+          "shortId": "3d67b0666a5e09a0",
+          "fingerprint": "chrome"
+        }
+      }
+    },
+    {
+      "tag": "direct",
+      "protocol": "freedom"
+    },
+    {
+      "tag": "block",
+      "protocol": "blackhole"
+    }
+  ],
+  "burstObservatory": {
+    "pingConfig": {
+      "timeout": "2s",
+      "interval": "10s",
+      "sampling": 2,
+      "httpMethod": "GET",
+      "destination": "https://www.gstatic.com/generate_204",
+      "connectivity": ""
+    },
+    "subjectSelector": [
+      "n5g7-1",
+      "n5g7-2",
+      "n5g7-3",
+      "n5g7-4",
+      "n5g7-5",
+      "n5g7-6",
+      "n5g7-7"
+    ]
+  }
+}

@@ -1,0 +1,367 @@
+{
+  "remarks": "LTE | Авто 1.8",
+  "dns": {
+    "servers": [
+      "1.1.1.1",
+      "1.0.0.1"
+    ],
+    "queryStrategy": "UseIP"
+  },
+  "routing": {
+    "domainMatcher": "hybrid",
+    "domainStrategy": "IPIfNonMatch",
+    "rules": [
+      {
+        "type": "field",
+        "protocol": [
+          "bittorrent"
+        ],
+        "outboundTag": "direct"
+      },
+      {
+        "type": "field",
+        "inboundTag": [
+          "socks",
+          "http"
+        ],
+        "balancerTag": "AUTO-n1g8"
+      }
+    ],
+    "balancers": [
+      {
+        "tag": "AUTO-n1g8",
+        "selector": [
+          "n1g8-1",
+          "n1g8-2",
+          "n1g8-3",
+          "n1g8-4",
+          "n1g8-5",
+          "n1g8-6",
+          "n1g8-7",
+          "n1g8-8"
+        ],
+        "strategy": {
+          "type": "leastPing",
+          "settings": {
+            "maxRTT": "2000ms",
+            "expected": 3,
+            "baselines": [
+              "1200ms"
+            ],
+            "tolerance": 0.1
+          }
+        },
+        "fallbackTag": "direct"
+      }
+    ]
+  },
+  "inbounds": [
+    {
+      "tag": "socks",
+      "port": 10808,
+      "listen": "127.0.0.1",
+      "protocol": "socks",
+      "settings": {
+        "udp": true,
+        "auth": "noauth"
+      },
+      "sniffing": {
+        "enabled": true,
+        "routeOnly": false,
+        "destOverride": [
+          "http",
+          "tls",
+          "quic"
+        ]
+      }
+    },
+    {
+      "tag": "http",
+      "port": 10809,
+      "listen": "127.0.0.1",
+      "protocol": "http",
+      "settings": {
+        "allowTransparent": false
+      },
+      "sniffing": {
+        "enabled": true,
+        "routeOnly": false,
+        "destOverride": [
+          "http",
+          "tls",
+          "quic"
+        ]
+      }
+    }
+  ],
+  "outbounds": [
+    {
+      "tag": "n1g8-1",
+      "protocol": "vless",
+      "settings": {
+        "vnext": [
+          {
+            "address": "balancer.colorbox.space",
+            "port": 443,
+            "users": [
+              {
+                "id": "freedom-runet-39",
+                "encryption": "none",
+                "flow": "xtls-rprx-vision"
+              }
+            ]
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "tcp",
+        "tcpSettings": {},
+        "security": "reality",
+        "realitySettings": {
+          "serverName": "balancer.colorbox.space",
+          "publicKey": "pkJAYTWmgDooxrkLvw_P6QPvQ0DE6s4HHEeD5ztJ6ig",
+          "shortId": "16a05263d62fe40f",
+          "fingerprint": "chrome"
+        }
+      }
+    },
+    {
+      "tag": "n1g8-2",
+      "protocol": "vless",
+      "settings": {
+        "vnext": [
+          {
+            "address": "balancer.colorbox.space",
+            "port": 443,
+            "users": [
+              {
+                "id": "freedom-runet-61",
+                "encryption": "none",
+                "flow": "xtls-rprx-vision"
+              }
+            ]
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "tcp",
+        "tcpSettings": {},
+        "security": "reality",
+        "realitySettings": {
+          "serverName": "balancer.colorbox.space",
+          "publicKey": "pkJAYTWmgDooxrkLvw_P6QPvQ0DE6s4HHEeD5ztJ6ig",
+          "shortId": "16a05263d62fe40f",
+          "fingerprint": "chrome"
+        }
+      }
+    },
+    {
+      "tag": "n1g8-3",
+      "protocol": "vless",
+      "settings": {
+        "vnext": [
+          {
+            "address": "balancer.colorbox.space",
+            "port": 443,
+            "users": [
+              {
+                "id": "freedom-runet-62",
+                "encryption": "none",
+                "flow": "xtls-rprx-vision"
+              }
+            ]
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "tcp",
+        "tcpSettings": {},
+        "security": "reality",
+        "realitySettings": {
+          "serverName": "balancer.colorbox.space",
+          "publicKey": "pkJAYTWmgDooxrkLvw_P6QPvQ0DE6s4HHEeD5ztJ6ig",
+          "shortId": "16a05263d62fe40f",
+          "fingerprint": "chrome"
+        }
+      }
+    },
+    {
+      "tag": "n1g8-4",
+      "protocol": "vless",
+      "settings": {
+        "vnext": [
+          {
+            "address": "balancer.colorbox.space",
+            "port": 443,
+            "users": [
+              {
+                "id": "freedom-runet-63",
+                "encryption": "none",
+                "flow": "xtls-rprx-vision"
+              }
+            ]
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "tcp",
+        "tcpSettings": {},
+        "security": "reality",
+        "realitySettings": {
+          "serverName": "balancer.colorbox.space",
+          "publicKey": "pkJAYTWmgDooxrkLvw_P6QPvQ0DE6s4HHEeD5ztJ6ig",
+          "shortId": "16a05263d62fe40f",
+          "fingerprint": "chrome"
+        }
+      }
+    },
+    {
+      "tag": "n1g8-5",
+      "protocol": "vless",
+      "settings": {
+        "vnext": [
+          {
+            "address": "balancer.colorbox.space",
+            "port": 443,
+            "users": [
+              {
+                "id": "freedom-runet-71",
+                "encryption": "none",
+                "flow": "xtls-rprx-vision"
+              }
+            ]
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "tcp",
+        "tcpSettings": {},
+        "security": "reality",
+        "realitySettings": {
+          "serverName": "balancer.colorbox.space",
+          "publicKey": "pkJAYTWmgDooxrkLvw_P6QPvQ0DE6s4HHEeD5ztJ6ig",
+          "shortId": "16a05263d62fe40f",
+          "fingerprint": "chrome"
+        }
+      }
+    },
+    {
+      "tag": "n1g8-6",
+      "protocol": "vless",
+      "settings": {
+        "vnext": [
+          {
+            "address": "balancer.colorbox.space",
+            "port": 443,
+            "users": [
+              {
+                "id": "freedom-runet-72",
+                "encryption": "none",
+                "flow": "xtls-rprx-vision"
+              }
+            ]
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "tcp",
+        "tcpSettings": {},
+        "security": "reality",
+        "realitySettings": {
+          "serverName": "balancer.colorbox.space",
+          "publicKey": "pkJAYTWmgDooxrkLvw_P6QPvQ0DE6s4HHEeD5ztJ6ig",
+          "shortId": "16a05263d62fe40f",
+          "fingerprint": "chrome"
+        }
+      }
+    },
+    {
+      "tag": "n1g8-7",
+      "protocol": "vless",
+      "settings": {
+        "vnext": [
+          {
+            "address": "balancer.colorbox.space",
+            "port": 443,
+            "users": [
+              {
+                "id": "freedom-runet-78",
+                "encryption": "none",
+                "flow": "xtls-rprx-vision"
+              }
+            ]
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "tcp",
+        "tcpSettings": {},
+        "security": "reality",
+        "realitySettings": {
+          "serverName": "balancer.colorbox.space",
+          "publicKey": "pkJAYTWmgDooxrkLvw_P6QPvQ0DE6s4HHEeD5ztJ6ig",
+          "shortId": "16a05263d62fe40f",
+          "fingerprint": "chrome"
+        }
+      }
+    },
+    {
+      "tag": "n1g8-8",
+      "protocol": "vless",
+      "settings": {
+        "vnext": [
+          {
+            "address": "balancer.colorbox.space",
+            "port": 443,
+            "users": [
+              {
+                "id": "freedom-runet-99",
+                "encryption": "none",
+                "flow": "xtls-rprx-vision"
+              }
+            ]
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "tcp",
+        "tcpSettings": {},
+        "security": "reality",
+        "realitySettings": {
+          "serverName": "balancer.colorbox.space",
+          "publicKey": "pkJAYTWmgDooxrkLvw_P6QPvQ0DE6s4HHEeD5ztJ6ig",
+          "shortId": "16a05263d62fe40f",
+          "fingerprint": "chrome"
+        }
+      }
+    },
+    {
+      "tag": "direct",
+      "protocol": "freedom"
+    },
+    {
+      "tag": "block",
+      "protocol": "blackhole"
+    }
+  ],
+  "burstObservatory": {
+    "pingConfig": {
+      "timeout": "2s",
+      "interval": "10s",
+      "sampling": 2,
+      "httpMethod": "GET",
+      "destination": "https://www.gstatic.com/generate_204",
+      "connectivity": ""
+    },
+    "subjectSelector": [
+      "n1g8-1",
+      "n1g8-2",
+      "n1g8-3",
+      "n1g8-4",
+      "n1g8-5",
+      "n1g8-6",
+      "n1g8-7",
+      "n1g8-8"
+    ]
+  }
+}

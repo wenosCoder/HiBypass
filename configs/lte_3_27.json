@@ -1,0 +1,367 @@
+{
+  "remarks": "LTE | Авто 3.27",
+  "dns": {
+    "servers": [
+      "1.1.1.1",
+      "1.0.0.1"
+    ],
+    "queryStrategy": "UseIP"
+  },
+  "routing": {
+    "domainMatcher": "hybrid",
+    "domainStrategy": "IPIfNonMatch",
+    "rules": [
+      {
+        "type": "field",
+        "protocol": [
+          "bittorrent"
+        ],
+        "outboundTag": "direct"
+      },
+      {
+        "type": "field",
+        "inboundTag": [
+          "socks",
+          "http"
+        ],
+        "balancerTag": "AUTO-n3g27"
+      }
+    ],
+    "balancers": [
+      {
+        "tag": "AUTO-n3g27",
+        "selector": [
+          "n3g27-1",
+          "n3g27-2",
+          "n3g27-3",
+          "n3g27-4",
+          "n3g27-5",
+          "n3g27-6",
+          "n3g27-7",
+          "n3g27-8"
+        ],
+        "strategy": {
+          "type": "leastPing",
+          "settings": {
+            "maxRTT": "2000ms",
+            "expected": 3,
+            "baselines": [
+              "1200ms"
+            ],
+            "tolerance": 0.1
+          }
+        },
+        "fallbackTag": "direct"
+      }
+    ]
+  },
+  "inbounds": [
+    {
+      "tag": "socks",
+      "port": 10808,
+      "listen": "127.0.0.1",
+      "protocol": "socks",
+      "settings": {
+        "udp": true,
+        "auth": "noauth"
+      },
+      "sniffing": {
+        "enabled": true,
+        "routeOnly": false,
+        "destOverride": [
+          "http",
+          "tls",
+          "quic"
+        ]
+      }
+    },
+    {
+      "tag": "http",
+      "port": 10809,
+      "listen": "127.0.0.1",
+      "protocol": "http",
+      "settings": {
+        "allowTransparent": false
+      },
+      "sniffing": {
+        "enabled": true,
+        "routeOnly": false,
+        "destOverride": [
+          "http",
+          "tls",
+          "quic"
+        ]
+      }
+    }
+  ],
+  "outbounds": [
+    {
+      "tag": "n3g27-1",
+      "protocol": "vless",
+      "settings": {
+        "vnext": [
+          {
+            "address": "188.130.154.56",
+            "port": 443,
+            "users": [
+              {
+                "id": "ec6b5efa-f5c1-4ed4-a0f0-0f4bf300496f",
+                "encryption": "none",
+                "flow": "xtls-rprx-vision"
+              }
+            ]
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "tcp",
+        "tcpSettings": {},
+        "security": "reality",
+        "realitySettings": {
+          "serverName": "jobinvest.ru",
+          "publicKey": "SbVKOEMjK0sIlbwg4akyBg5mL5KZwwB-ed4eEE7YnRc",
+          "shortId": "",
+          "fingerprint": "qq"
+        }
+      }
+    },
+    {
+      "tag": "n3g27-2",
+      "protocol": "vless",
+      "settings": {
+        "vnext": [
+          {
+            "address": "87.242.118.99",
+            "port": 443,
+            "users": [
+              {
+                "id": "ec8232b7-9f40-415d-8b22-e25ff20ab7b8",
+                "encryption": "none",
+                "flow": "xtls-rprx-vision"
+              }
+            ]
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "xhttp",
+        "tcpSettings": {},
+        "security": "reality",
+        "realitySettings": {
+          "serverName": "travel.yandex.ru",
+          "publicKey": "XqH-gNEL9eJfr1pglaI8WU3OvE654_5duXYBS35UXlM",
+          "shortId": "ab",
+          "fingerprint": "firefox"
+        }
+      }
+    },
+    {
+      "tag": "n3g27-3",
+      "protocol": "vless",
+      "settings": {
+        "vnext": [
+          {
+            "address": "87.242.118.99",
+            "port": 443,
+            "users": [
+              {
+                "id": "ed00c040-575d-4c8a-bb87-5b9d1cc00cbe",
+                "encryption": "none",
+                "flow": "xtls-rprx-vision"
+              }
+            ]
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "xhttp",
+        "tcpSettings": {},
+        "security": "reality",
+        "realitySettings": {
+          "serverName": "vk.com",
+          "publicKey": "OvzRQOJMpkup7bhUmQicdBxrB0Pm8adQHLbTxgNorlo",
+          "shortId": "ab",
+          "fingerprint": "chrome"
+        }
+      }
+    },
+    {
+      "tag": "n3g27-4",
+      "protocol": "vless",
+      "settings": {
+        "vnext": [
+          {
+            "address": "217.168.240.172",
+            "port": 2443,
+            "users": [
+              {
+                "id": "f9c916e9-957a-460f-81ba-8e6736d6bc2b",
+                "encryption": "none",
+                "flow": "xtls-rprx-vision"
+              }
+            ]
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "xhttp",
+        "tcpSettings": {},
+        "security": "reality",
+        "realitySettings": {
+          "serverName": "travel.yandex.ru",
+          "publicKey": "XqH-gNEL9eJfr1pglaI8WU3OvE654_5duXYBS35UXlM",
+          "shortId": "abcdef0123456789",
+          "fingerprint": "chrome"
+        }
+      }
+    },
+    {
+      "tag": "n3g27-5",
+      "protocol": "vless",
+      "settings": {
+        "vnext": [
+          {
+            "address": "87.242.118.99",
+            "port": 443,
+            "users": [
+              {
+                "id": "f9c916e9-957a-460f-81ba-8e6736d6bc2b",
+                "encryption": "none",
+                "flow": "xtls-rprx-vision"
+              }
+            ]
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "xhttp",
+        "tcpSettings": {},
+        "security": "reality",
+        "realitySettings": {
+          "serverName": "vk.com",
+          "publicKey": "OvzRQOJMpkup7bhUmQicdBxrB0Pm8adQHLbTxgNorlo",
+          "shortId": "abcdef0123456789",
+          "fingerprint": "chrome"
+        }
+      }
+    },
+    {
+      "tag": "n3g27-6",
+      "protocol": "vless",
+      "settings": {
+        "vnext": [
+          {
+            "address": "217.168.240.172",
+            "port": 2443,
+            "users": [
+              {
+                "id": "ffccef03-2117-4264-a0df-8f4cb432231d",
+                "encryption": "none",
+                "flow": "xtls-rprx-vision"
+              }
+            ]
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "xhttp",
+        "tcpSettings": {},
+        "security": "reality",
+        "realitySettings": {
+          "serverName": "travel.yandex.ru",
+          "publicKey": "XqH-gNEL9eJfr1pglaI8WU3OvE654_5duXYBS35UXlM",
+          "shortId": "abcdef0123456789",
+          "fingerprint": "chrome"
+        }
+      }
+    },
+    {
+      "tag": "n3g27-7",
+      "protocol": "vless",
+      "settings": {
+        "vnext": [
+          {
+            "address": "87.242.118.99",
+            "port": 443,
+            "users": [
+              {
+                "id": "ffccef03-2117-4264-a0df-8f4cb432231d",
+                "encryption": "none",
+                "flow": "xtls-rprx-vision"
+              }
+            ]
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "xhttp",
+        "tcpSettings": {},
+        "security": "reality",
+        "realitySettings": {
+          "serverName": "vk.com",
+          "publicKey": "OvzRQOJMpkup7bhUmQicdBxrB0Pm8adQHLbTxgNorlo",
+          "shortId": "ab",
+          "fingerprint": "chrome"
+        }
+      }
+    },
+    {
+      "tag": "n3g27-8",
+      "protocol": "vless",
+      "settings": {
+        "vnext": [
+          {
+            "address": "87.242.118.99",
+            "port": 443,
+            "users": [
+              {
+                "id": "ffccef03-2117-4264-a0df-8f4cb432231d",
+                "encryption": "none",
+                "flow": "xtls-rprx-vision"
+              }
+            ]
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "xhttp",
+        "tcpSettings": {},
+        "security": "reality",
+        "realitySettings": {
+          "serverName": "vk.com",
+          "publicKey": "OvzRQOJMpkup7bhUmQicdBxrB0Pm8adQHLbTxgNorlo",
+          "shortId": "ab",
+          "fingerprint": "chrome"
+        }
+      }
+    },
+    {
+      "tag": "direct",
+      "protocol": "freedom"
+    },
+    {
+      "tag": "block",
+      "protocol": "blackhole"
+    }
+  ],
+  "burstObservatory": {
+    "pingConfig": {
+      "timeout": "2s",
+      "interval": "10s",
+      "sampling": 2,
+      "httpMethod": "GET",
+      "destination": "https://www.gstatic.com/generate_204",
+      "connectivity": ""
+    },
+    "subjectSelector": [
+      "n3g27-1",
+      "n3g27-2",
+      "n3g27-3",
+      "n3g27-4",
+      "n3g27-5",
+      "n3g27-6",
+      "n3g27-7",
+      "n3g27-8"
+    ]
+  }
+}
