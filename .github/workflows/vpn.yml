@@ -2,7 +2,7 @@ name: Merge VLESS Configs
 
 on:
   schedule:
-    - cron: '0 */6 * * *'
+    - cron: '0 * * * *'
   workflow_dispatch:
 
 jobs:
@@ -22,7 +22,7 @@ jobs:
         run: |
           printf '%s\n' \
             '#profile-title: HiBypass | LTE FREE 🏳🇷🇺' \
-            '#profile-update-interval: 6' \
+            '#profile-update-interval: 1' \
             '#support-url: https://t.me/Hibypass' \
             '#profile-web-page-url: https://t.me/Hibypass' \
             '#announce: Бесплатный обход белых списков РФ 🏳🇷🇺 | ТГ : @Hibypass' \
@@ -103,7 +103,7 @@ jobs:
           while IFS=$'\t' read -r PING BASE HOST PORT PREFIX; do
             PAK_NUM=$(( (GLOBAL_COUNTER - 1) / 10 + 1 ))
             LINE_IN_PAK=$(( (GLOBAL_COUNTER - 1) % 10 + 1 ))
-            echo "${BASE}#🇪🇺LTE | ${PAK_NUM}.${LINE_IN_PAK}" >> vlees.txt
+            echo "${BASE}#🇪🇺📡LTE | ${PAK_NUM}.${LINE_IN_PAK}" >> vlees.txt
             GLOBAL_COUNTER=$((GLOBAL_COUNTER + 1))
           done < "$SORTED_TMP"
 
@@ -146,7 +146,7 @@ jobs:
             done < <(sed -n "${START_LINE},${END_LINE}p" "$SORTED_TMP")
 
             PAK_JSON=$(jq -n \
-              --arg rem "🇪🇺LTE | Пак ${PAK}" \
+              --arg rem "🇪🇺📡LTE | ${PAK}" \
               --argjson out "$OUTBOUNDS_JSON" \
               --argjson pak "$PAK" \
               '{
@@ -157,10 +157,10 @@ jobs:
                   rules:[
                     {type:"field",protocol:["bittorrent"],outboundTag:"direct"},
                     {type:"field",inboundTag:["socks","http"],
-                     balancerTag:("LTE-PAK-"+($pak|tostring))}
+                     balancerTag:("LTE-"+($pak|tostring))}
                   ],
                   balancers:[{
-                    tag:("LTE-PAK-"+($pak|tostring)),
+                    tag:("LTE-"+($pak|tostring)),
                     selector:[("lte-"+($pak|tostring))],
                     strategy:{type:"leastPing",settings:{
                       maxRTT:"1400ms",expected:3,baselines:["1200ms"],tolerance:0.05}},
