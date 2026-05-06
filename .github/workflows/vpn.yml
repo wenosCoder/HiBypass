@@ -5,6 +5,9 @@ on:
     - cron: '0 */6 * * *'
   workflow_dispatch:
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   merge:
     runs-on: ubuntu-latest
@@ -32,22 +35,25 @@ jobs:
           fetch "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/BLACK_VLESS_RUS.txt" "7" >> vlees.txt
           fetch "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/BLACK_VLESS_RUS_mobile.txt" "8" >> vlees.txt
 
+          echo "vlees.txt: $(wc -l < vlees.txt) lines"
+
       - name: Generate config.json
         run: |
-          > outbounds.txt
-          > selectors.txt
+          rm -f outbounds.txt selectors.txt
           N=1
 
           while IFS= read -r line; do
             [[ "$line" =~ ^vless:// ]] || continue
-            UUID=$(echo "$line" | grep -oP '(?<=vless://)[^@]+')
-            HOST=$(echo "$line" | grep -oP '(?<=@)[^:]+')
-            PORT=$(echo "$line" | grep -oP '(?<=:)\d+(?=\?)')
-            SNI=$(echo "$line" | grep -oP '(?<=sni=)[^&]+' | head -1)
-            PBK=$(echo "$line" | grep -oP '(?<=pbk=)[^&]+' | head -1)
-            SID=$(echo "$line" | grep -oP '(?<=sid=)[^&]+' | head -1)
-            [ -z "$SNI" ] && SNI="$HOST"
+            UUID=$(echo "$line" | grep -oP '(?<=vless://)[^@]+' || true)
+            HOST=$(echo "$line" | grep -oP '(?<=@)[^:]+' || true)
+            PORT=$(echo "$line" | grep -oP '(?<=:)\d+(?=\?)' | head -1 || true)
+            SNI=$(echo "$line" | grep -oP '(?<=sni=)[^&]+' | head -1 || true)
+            PBK=$(echo "$line" | grep -oP '(?<=pbk=)[^&]+' | head -1 || true)
+            SID=$(echo "$line" | grep -oP '(?<=sid=)[^&]+' | head -1 || true)
+            [ -z "$UUID" ] && continue
+            [ -z "$HOST" ] && continue
             [ -z "$PORT" ] && continue
+            [ -z "$SNI" ] && SNI="$HOST"
             TAG="s${N}"
             echo "{\"tag\":\"$TAG\",\"protocol\":\"vless\",\"settings\":{\"vnext\":[{\"address\":\"$HOST\",\"port\":$PORT,\"users\":[{\"id\":\"$UUID\",\"encryption\":\"none\",\"flow\":\"xtls-rprx-vision\"}]}]},\"streamSettings\":{\"network\":\"tcp\",\"security\":\"reality\",\"realitySettings\":{\"serverName\":\"$SNI\",\"publicKey\":\"$PBK\",\"shortId\":\"$SID\",\"fingerprint\":\"chrome\"}}}" >> outbounds.txt
             echo "\"$TAG\"" >> selectors.txt
@@ -59,7 +65,7 @@ jobs:
 
           echo "{\"remarks\":\"HiBypass | LTE AUTO\",\"dns\":{\"servers\":[\"1.1.1.1\",\"1.0.0.1\"]},\"routing\":{\"domainStrategy\":\"IPIfNonMatch\",\"rules\":[{\"type\":\"field\",\"protocol\":[\"bittorrent\"],\"outboundTag\":\"direct\"},{\"type\":\"field\",\"inboundTag\":[\"socks\",\"http\"],\"balancerTag\":\"auto\"}],\"balancers\":[{\"tag\":\"auto\",\"selector\":[$SELECTORS],\"strategy\":{\"type\":\"leastPing\"}}]},\"inbounds\":[{\"tag\":\"socks\",\"port\":10808,\"listen\":\"127.0.0.1\",\"protocol\":\"socks\",\"settings\":{\"udp\":true}},{\"tag\":\"http\",\"port\":10809,\"listen\":\"127.0.0.1\",\"protocol\":\"http\"}],\"outbounds\":[$OUTBOUNDS,{\"tag\":\"direct\",\"protocol\":\"freedom\"},{\"tag\":\"block\",\"protocol\":\"blackhole\"}],\"burstObservatory\":{\"pingConfig\":{\"timeout\":\"2s\",\"interval\":\"10s\",\"sampling\":2,\"destination\":\"https://www.gstatic.com/generate_204\"},\"subjectSelector\":[$SELECTORS]}}" > config.json
 
-          echo "Done"
+          echo "config.json: done, $((N-1)) servers"
 
       - name: Commit
         run: |
