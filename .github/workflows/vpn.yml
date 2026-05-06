@@ -16,10 +16,10 @@ jobs:
       - name: Install dependencies
         run: sudo apt-get install -y jq curl
 
-      - name: Write helper script
+      - name: Write build script
         run: |
-          cat > /tmp/build.sh << 'SCRIPT'
-          #!/usr/bin/env bash
+          python3 - << 'PYEOF'
+          script = r"""#!/usr/bin/env bash
           set -euo pipefail
 
           GROUP_SIZE=20
@@ -27,12 +27,11 @@ jobs:
           VLESS_TXT="vlees.txt"
           mkdir -p "$OUTPUT_DIR"
 
-          printf '#profile-title: HiBypass | LTE FREE 🏳🇷🇺\n' > "$VLESS_TXT"
-          printf '#profile-update-interval: 6\n'                 >> "$VLESS_TXT"
-          printf '#support-url: https://t.me/Hibypass\n'         >> "$VLESS_TXT"
-          printf '#profile-web-page-url: https://t.me/Hibypass\n' >> "$VLESS_TXT"
-          printf '#traffic-limit: ∞\n'                           >> "$VLESS_TXT"
-          printf '#traffic-remaining: ∞\n'                       >> "$VLESS_TXT"
+          printf '#profile-title: HiBypass | LTE FREE\n' > "$VLESS_TXT"
+          printf '#profile-update-interval: 6\n'         >> "$VLESS_TXT"
+          printf '#support-url: https://t.me/Hibypass\n' >> "$VLESS_TXT"
+          printf '#traffic-limit: inf\n'                 >> "$VLESS_TXT"
+          printf '#traffic-remaining: inf\n'             >> "$VLESS_TXT"
 
           parse_vless() {
             local uri="$1"
@@ -44,7 +43,6 @@ jobs:
             local port="${hostport##*:}"
             local params="${rest#*\?}"
             params="${params%%#*}"
-
             local flow sni pbk fp sid net
             flow=$(printf '%s' "$params" | tr '&' '\n' | grep '^flow=' | cut -d= -f2 | head -1)
             sni=$( printf '%s' "$params" | tr '&' '\n' | grep '^sni='  | cut -d= -f2 | head -1)
@@ -52,13 +50,11 @@ jobs:
             fp=$(  printf '%s' "$params" | tr '&' '\n' | grep '^fp='   | cut -d= -f2 | head -1)
             sid=$( printf '%s' "$params" | tr '&' '\n' | grep '^sid='  | cut -d= -f2 | head -1)
             net=$( printf '%s' "$params" | tr '&' '\n' | grep '^type=' | cut -d= -f2 | head -1)
-
             [ -z "$flow" ] && flow="xtls-rprx-vision"
             [ -z "$fp"   ] && fp="chrome"
             [ -z "$net"  ] && net="tcp"
             [ -z "$sni"  ] && sni="$host"
             [ -z "$sid"  ] && sid=""
-
             printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s' \
               "$uuid" "$host" "$port" "$flow" "$sni" "$pbk" "$fp" "$sid" "$net"
           }
@@ -68,14 +64,12 @@ jobs:
             local LINES_FILE="$2"
             local TAG_PREFIX="$3"
             local OUT_FILE="$4"
-
             local OUTBOUNDS_JSON="[]"
             local TAGS_JSON="[]"
             local idx=1
 
             while IFS= read -r line; do
               [ -z "$line" ] && continue
-
               local fields uuid host port flow sni pbk fp sid net
               fields=$(parse_vless "$line")
               uuid=$(printf '%s' "$fields" | cut -f1)
@@ -87,33 +81,21 @@ jobs:
               fp=$(  printf '%s' "$fields" | cut -f7)
               sid=$( printf '%s' "$fields" | cut -f8)
               net=$( printf '%s' "$fields" | cut -f9)
-
               [ -z "$host" ] && continue
               [ -z "$uuid" ] && continue
               [ -z "$pbk"  ] && continue
               printf '%s' "$port" | grep -qE '^[0-9]+$' || continue
-
               local tag="${TAG_PREFIX}-${idx}"
               local ob
               ob=$(jq -n \
-                --arg    tag  "$tag"  \
-                --arg    uuid "$uuid" \
-                --arg    host "$host" \
-                --argjson port "$port" \
-                --arg    flow "$flow" \
-                --arg    sni  "$sni"  \
-                --arg    pbk  "$pbk"  \
-                --arg    fp   "$fp"   \
-                --arg    sid  "$sid"  \
-                --arg    net  "$net"  \
-              '{
-                tag: $tag, protocol: "vless",
-                settings: { vnext: [{ address: $host, port: ($port|tonumber),
-                  users: [{ id: $uuid, encryption: "none", flow: $flow }] }] },
-                streamSettings: { network: $net, tcpSettings: {}, security: "reality",
-                  realitySettings: { serverName: $sni, publicKey: $pbk, shortId: $sid, fingerprint: $fp } }
-              }') || continue
-
+                --arg tag "$tag" --arg uuid "$uuid" --arg host "$host" \
+                --argjson port "$port" --arg flow "$flow" --arg sni "$sni" \
+                --arg pbk "$pbk" --arg fp "$fp" --arg sid "$sid" --arg net "$net" \
+              '{tag:$tag,protocol:"vless",
+                settings:{vnext:[{address:$host,port:($port|tonumber),
+                  users:[{id:$uuid,encryption:"none",flow:$flow}]}]},
+                streamSettings:{network:$net,tcpSettings:{},security:"reality",
+                  realitySettings:{serverName:$sni,publicKey:$pbk,shortId:$sid,fingerprint:$fp}}}') || continue
               OUTBOUNDS_JSON=$(printf '%s' "$OUTBOUNDS_JSON" | jq ". + [$ob]")
               TAGS_JSON=$(printf '%s' "$TAGS_JSON" | jq ". + [\"$tag\"]")
               idx=$((idx + 1))
@@ -121,50 +103,42 @@ jobs:
 
             local count
             count=$(printf '%s' "$TAGS_JSON" | jq 'length')
-            [ "$count" -eq 0 ] && { echo "  ⚠️  нет валидных конфигов, пропускаем"; return 0; }
+            [ "$count" -eq 0 ] && { echo "  skip: no valid configs"; return 0; }
 
             OUTBOUNDS_JSON=$(printf '%s' "$OUTBOUNDS_JSON" | jq \
               '. + [{"tag":"direct","protocol":"freedom"},{"tag":"block","protocol":"blackhole"}]')
 
-            local balTag="AUTO-${TAG_PREFIX}"
             jq -n \
-              --arg    remarks "$LABEL"  \
-              --arg    balTag  "$balTag" \
-              --argjson tags   "$TAGS_JSON"      \
-              --argjson outs   "$OUTBOUNDS_JSON" \
-            '{
-              remarks: $remarks,
-              dns: { servers: ["1.1.1.1","1.0.0.1"], queryStrategy: "UseIP" },
-              routing: {
-                domainMatcher: "hybrid", domainStrategy: "IPIfNonMatch",
-                rules: [
-                  { type: "field", protocol: ["bittorrent"], outboundTag: "direct" },
-                  { type: "field", inboundTag: ["socks","http"], balancerTag: $balTag }
-                ],
-                balancers: [{ tag: $balTag, selector: $tags,
-                  strategy: { type: "leastPing",
-                    settings: { maxRTT: "2000ms", expected: 3, baselines: ["1200ms"], tolerance: 0.1 } },
-                  fallbackTag: "direct" }]
-              },
-              inbounds: [
-                { tag: "socks", port: 10808, listen: "127.0.0.1", protocol: "socks",
-                  settings: { udp: true, auth: "noauth" },
-                  sniffing: { enabled: true, routeOnly: false, destOverride: ["http","tls","quic"] } },
-                { tag: "http", port: 10809, listen: "127.0.0.1", protocol: "http",
-                  settings: { allowTransparent: false },
-                  sniffing: { enabled: true, routeOnly: false, destOverride: ["http","tls","quic"] } }
-              ],
-              outbounds: $outs,
-              burstObservatory: {
-                pingConfig: { timeout: "2s", interval: "10s", sampling: 2,
-                  httpMethod: "GET", destination: "https://www.gstatic.com/generate_204", connectivity: "" },
-                subjectSelector: $tags }
-            }' > "$OUT_FILE"
+              --arg remarks "$LABEL" \
+              --arg balTag "AUTO-${TAG_PREFIX}" \
+              --argjson tags "$TAGS_JSON" \
+              --argjson outs "$OUTBOUNDS_JSON" \
+            '{remarks:$remarks,
+              dns:{servers:["1.1.1.1","1.0.0.1"],queryStrategy:"UseIP"},
+              routing:{domainMatcher:"hybrid",domainStrategy:"IPIfNonMatch",
+                rules:[
+                  {type:"field",protocol:["bittorrent"],outboundTag:"direct"},
+                  {type:"field",inboundTag:["socks","http"],balancerTag:$balTag}],
+                balancers:[{tag:$balTag,selector:$tags,
+                  strategy:{type:"leastPing",
+                    settings:{maxRTT:"2000ms",expected:3,baselines:["1200ms"],tolerance:0.1}},
+                  fallbackTag:"direct"}]},
+              inbounds:[
+                {tag:"socks",port:10808,listen:"127.0.0.1",protocol:"socks",
+                  settings:{udp:true,auth:"noauth"},
+                  sniffing:{enabled:true,routeOnly:false,destOverride:["http","tls","quic"]}},
+                {tag:"http",port:10809,listen:"127.0.0.1",protocol:"http",
+                  settings:{allowTransparent:false},
+                  sniffing:{enabled:true,routeOnly:false,destOverride:["http","tls","quic"]}}],
+              outbounds:$outs,
+              burstObservatory:{
+                pingConfig:{timeout:"2s",interval:"10s",sampling:2,
+                  httpMethod:"GET",destination:"https://www.gstatic.com/generate_204",connectivity:""},
+                subjectSelector:$tags}}' > "$OUT_FILE"
 
-            echo "  ✅ $OUT_FILE  ($count конфигов)"
+            echo "  OK $OUT_FILE ($count configs)"
           }
 
-          # ========== ИСТОЧНИКИ ==========
           SOURCES=(
             "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/Vless-Reality-White-Lists-Rus-Mobile-2.txt"
             "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/Vless-Reality-White-Lists-Rus-Mobile.txt"
@@ -176,17 +150,15 @@ jobs:
             "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/BLACK_VLESS_RUS_mobile.txt"
           )
 
-          # ========== ОСНОВНОЙ ЦИКЛ ==========
           BLOCK=1
           for URL in "${SOURCES[@]}"; do
-            echo "📥 Блок $BLOCK: $URL"
+            echo "--- Block $BLOCK: $URL"
             TMP_RAW=$(mktemp)
             curl -fsSL "$URL" | grep -E '^vless://' | sort -u > "$TMP_RAW" || true
             TOTAL=$(wc -l < "$TMP_RAW")
-            echo "   Найдено: $TOTAL конфигов"
+            echo "    found: $TOTAL"
 
             if [ "$TOTAL" -eq 0 ]; then
-              echo "   ⚠️  Пусто, пропускаем"
               BLOCK=$((BLOCK + 1))
               rm -f "$TMP_RAW"
               continue
@@ -199,11 +171,11 @@ jobs:
               printf '%s\n' "$line" >> "$TMP_CHUNK"
               CHUNK_LEN=$(wc -l < "$TMP_CHUNK")
               if [ "$CHUNK_LEN" -ge "$GROUP_SIZE" ]; then
-                LABEL="LTE | Авто ${BLOCK}.${GROUP}"
-                FNAME="${OUTPUT_DIR}/lte_${BLOCK}_${GROUP}.json"
-                generate_config "$LABEL" "$TMP_CHUNK" "n${BLOCK}g${GROUP}" "$FNAME"
+                LABEL="LTE | Auto ${BLOCK}.${GROUP}"
+                generate_config "$LABEL" "$TMP_CHUNK" "n${BLOCK}g${GROUP}" \
+                  "${OUTPUT_DIR}/lte_${BLOCK}_${GROUP}.json"
                 while IFS= read -r vline; do
-                  printf '%s#🇪🇺%s\n' "${vline%%#*}" "$LABEL" >> "$VLESS_TXT"
+                  printf '%s#%s\n' "${vline%%#*}" "$LABEL" >> "$VLESS_TXT"
                 done < "$TMP_CHUNK"
                 > "$TMP_CHUNK"
                 GROUP=$((GROUP + 1))
@@ -211,11 +183,11 @@ jobs:
             done < "$TMP_RAW"
 
             if [ -s "$TMP_CHUNK" ]; then
-              LABEL="LTE | Авто ${BLOCK}.${GROUP}"
-              FNAME="${OUTPUT_DIR}/lte_${BLOCK}_${GROUP}.json"
-              generate_config "$LABEL" "$TMP_CHUNK" "n${BLOCK}g${GROUP}" "$FNAME"
+              LABEL="LTE | Auto ${BLOCK}.${GROUP}"
+              generate_config "$LABEL" "$TMP_CHUNK" "n${BLOCK}g${GROUP}" \
+                "${OUTPUT_DIR}/lte_${BLOCK}_${GROUP}.json"
               while IFS= read -r vline; do
-                printf '%s#🇪🇺%s\n' "${vline%%#*}" "$LABEL" >> "$VLESS_TXT"
+                printf '%s#%s\n' "${vline%%#*}" "$LABEL" >> "$VLESS_TXT"
               done < "$TMP_CHUNK"
             fi
 
@@ -223,20 +195,15 @@ jobs:
             BLOCK=$((BLOCK + 1))
           done
 
-          # ========== СОБИРАЕМ LTE_ALL.JSON ==========
-          echo ""
-          echo "🔗 Собираем LTE_ALL.json из всех блоков..."
-
+          # === LTE_ALL.json ===
+          echo "--- Building LTE_ALL.json"
           ALL_TAGS="[]"
           ALL_OUTS="[]"
           GLOBAL_IDX=1
 
           for f in "$OUTPUT_DIR"/lte_*.json; do
             [ -f "$f" ] || continue
-
-            # Берём все outbounds кроме direct и block, переименовываем теги чтобы не было дублей
             while IFS= read -r ob; do
-              old_tag=$(printf '%s' "$ob" | jq -r '.tag')
               new_tag="all-${GLOBAL_IDX}"
               ob=$(printf '%s' "$ob" | jq --arg t "$new_tag" '.tag = $t')
               ALL_OUTS=$(printf '%s' "$ALL_OUTS" | jq ". + [$ob]")
@@ -246,62 +213,57 @@ jobs:
           done
 
           COUNT=$(printf '%s' "$ALL_TAGS" | jq 'length')
-          echo "   Всего нод в LTE_ALL: $COUNT"
+          echo "    total nodes: $COUNT"
 
           if [ "$COUNT" -gt 0 ]; then
             ALL_OUTS=$(printf '%s' "$ALL_OUTS" | jq \
               '. + [{"tag":"direct","protocol":"freedom"},{"tag":"block","protocol":"blackhole"}]')
-
             jq -n \
-              --arg    remarks "LTE | Авто ALL 🌍" \
-              --argjson tags   "$ALL_TAGS" \
-              --argjson outs   "$ALL_OUTS" \
-            '{
-              remarks: $remarks,
-              dns: { servers: ["1.1.1.1","1.0.0.1"], queryStrategy: "UseIP" },
-              routing: {
-                domainMatcher: "hybrid", domainStrategy: "IPIfNonMatch",
-                rules: [
-                  { type: "field", protocol: ["bittorrent"], outboundTag: "direct" },
-                  { type: "field", inboundTag: ["socks","http"], balancerTag: "AUTO-ALL" }
-                ],
-                balancers: [{ tag: "AUTO-ALL", selector: $tags,
-                  strategy: { type: "leastPing",
-                    settings: { maxRTT: "2000ms", expected: 3, baselines: ["1200ms"], tolerance: 0.1 } },
-                  fallbackTag: "direct" }]
-              },
-              inbounds: [
-                { tag: "socks", port: 10808, listen: "127.0.0.1", protocol: "socks",
-                  settings: { udp: true, auth: "noauth" },
-                  sniffing: { enabled: true, routeOnly: false, destOverride: ["http","tls","quic"] } },
-                { tag: "http", port: 10809, listen: "127.0.0.1", protocol: "http",
-                  settings: { allowTransparent: false },
-                  sniffing: { enabled: true, routeOnly: false, destOverride: ["http","tls","quic"] } }
-              ],
-              outbounds: $outs,
-              burstObservatory: {
-                pingConfig: { timeout: "2s", interval: "10s", sampling: 2,
-                  httpMethod: "GET", destination: "https://www.gstatic.com/generate_204", connectivity: "" },
-                subjectSelector: $tags }
-            }' > "${OUTPUT_DIR}/LTE_ALL.json"
-
-            echo "  ✅ ${OUTPUT_DIR}/LTE_ALL.json  ($COUNT нод)"
+              --arg remarks "LTE | Auto ALL" \
+              --argjson tags "$ALL_TAGS" \
+              --argjson outs "$ALL_OUTS" \
+            '{remarks:$remarks,
+              dns:{servers:["1.1.1.1","1.0.0.1"],queryStrategy:"UseIP"},
+              routing:{domainMatcher:"hybrid",domainStrategy:"IPIfNonMatch",
+                rules:[
+                  {type:"field",protocol:["bittorrent"],outboundTag:"direct"},
+                  {type:"field",inboundTag:["socks","http"],balancerTag:"AUTO-ALL"}],
+                balancers:[{tag:"AUTO-ALL",selector:$tags,
+                  strategy:{type:"leastPing",
+                    settings:{maxRTT:"2000ms",expected:3,baselines:["1200ms"],tolerance:0.1}},
+                  fallbackTag:"direct"}]},
+              inbounds:[
+                {tag:"socks",port:10808,listen:"127.0.0.1",protocol:"socks",
+                  settings:{udp:true,auth:"noauth"},
+                  sniffing:{enabled:true,routeOnly:false,destOverride:["http","tls","quic"]}},
+                {tag:"http",port:10809,listen:"127.0.0.1",protocol:"http",
+                  settings:{allowTransparent:false},
+                  sniffing:{enabled:true,routeOnly:false,destOverride:["http","tls","quic"]}}],
+              outbounds:$outs,
+              burstObservatory:{
+                pingConfig:{timeout:"2s",interval:"10s",sampling:2,
+                  httpMethod:"GET",destination:"https://www.gstatic.com/generate_204",connectivity:""},
+                subjectSelector:$tags}}' > "${OUTPUT_DIR}/LTE_ALL.json"
+            echo "  OK ${OUTPUT_DIR}/LTE_ALL.json ($COUNT nodes)"
           fi
 
-          echo ""
-          echo "✅ Готово!"
-          echo "   JSON конфигов : $(find "$OUTPUT_DIR" -name '*.json' | wc -l)"
-          echo "   Строк vlees   : $(wc -l < "$VLESS_TXT")"
-          SCRIPT
-          chmod +x /tmp/build.sh
+          echo "Done. JSON files: $(find "$OUTPUT_DIR" -name '*.json' | wc -l)"
+          echo "Done. vlees lines: $(wc -l < "$VLESS_TXT")"
+          """
+          with open("/tmp/build.sh", "w") as f:
+              f.write(script)
+          import os, stat
+          os.chmod("/tmp/build.sh", stat.S_IRWXU | stat.S_IRGRP | stat.S_IXGRP | stat.S_IROTH | stat.S_IXOTH)
+          print("build.sh written and made executable")
+          PYEOF
 
       - name: Run build script
-        run: bash /tmp/build.sh
+        run: /bin/bash /tmp/build.sh
 
       - name: Commit and push
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add configs/ vlees.txt
-          git diff --staged --quiet || git commit -m "Auto: обновление $(date -u '+%Y-%m-%d %H:%M UTC')"
+          git diff --staged --quiet || git commit -m "Auto: update $(date -u '+%Y-%m-%d %H:%M UTC')"
           git push
