@@ -1,15 +1,31 @@
-- name: Convert VLESS to JSON and split by 20
+name: Merge VLESS Configs
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+
+jobs:
+  merge:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y jq curl
+
+      - name: Convert VLESS to JSON and split by 20
         run: |
           set -euo pipefail
 
           echo "🚀 Начало обработки VLESS конфигов..."
 
-          # ==================== УЛУЧШЕННЫЙ ПАРСЕР ====================
           parse_vless() {
             local url="$1"
             local remark="$2"
 
-            # Базовое извлечение
             local temp="${url#vless://}"
             local uuid="${temp%%@*}"
             local rest="${temp#*@}"
@@ -19,15 +35,13 @@
             local query=""
             [[ "\( rest" == *"?"* ]] && query=" \){rest#*\?}" && query="${query%%#*}"
 
-            # Параметры
             local pbk=$(echo "$query" | grep -o 'pbk=[^&]*' | cut -d'=' -f2 || echo "")
             local sni=$(echo "$query" | grep -o 'sni=[^&]*' | cut -d'=' -f2 || echo "$address")
             local fp=$(echo "$query" | grep -o 'fp=[^&]*' | cut -d'=' -f2 || echo "chrome")
             local flow=$(echo "$query" | grep -o 'flow=[^&]*' | cut -d'=' -f2 || echo "")
-            local security=$(echo "$query" | grep -o 'security=[^&]*' | cut -d'=' -f2 || echo "reality")
 
             if [[ -z "$pbk" ]]; then
-              echo "⚠️ Пропуск (нет pbk): ${remark:0:60}..." >&2
+              echo "⚠️ Пропуск (нет pbk): ${remark:0:50}..." >&2
               return 1
             fi
 
@@ -38,7 +52,6 @@
               --arg port "$port" \
               --arg id "$uuid" \
               --arg flow "$flow" \
-              --arg security "$security" \
               --arg sni "$sni" \
               --arg fp "$fp" \
               --arg pbk "$pbk" \
@@ -54,7 +67,7 @@
                 },
                 streamSettings: {
                   network: "tcp",
-                  security: $security,
+                  security: "reality",
                   realitySettings: {
                     serverName: $sni,
                     publicKey: $pbk,
@@ -65,7 +78,7 @@
               }'
           }
 
-          # ==================== БАЗОВЫЙ ШАБЛОН ====================
+          # Базовый шаблон
           cat > base_config.json << 'EOL'
           {
             "dns": {
@@ -100,31 +113,6 @@
           }
           EOL
 
-          # ==================== ОБРАБОТКА ====================
-          process_source() {
-            local url="$1"
-            local block="$2"
-
-            echo "📥 Загрузка источника $block..."
-            mapfile -t links < <(curl -fsSL "$url" 2>/dev/null | grep -E '^vless://' | sort -u)
-
-            echo "   Найдено: ${#links[@]} ссылок"
-
-            if [[ ${#links[@]} -eq 0 ]]; then
-              echo "   ⚠️ Пустой источник"
-              return 0
-            fi
-
-            local batch=1
-            local i=0
-            while (( i < ${#links[@]} )); do
-              local chunk=("${links[@]:i:20}")
-              process_batch "$block" "\( batch" " \){chunk[@]}"
-              batch=$((batch + 1))
-              i=$((i + 20))
-            done
-          }
-
           process_batch() {
             local block=$1 batch=$2
             shift 2
@@ -142,20 +130,36 @@
             done
 
             if [[ $added -gt 0 ]]; then
-              jq -s '.[0] as $b | $b + {outbounds: (.[1:])}' "$outfile" "$outfile.tmp" > "$outfile.new" 2>> parse.log && \
-              mv "$outfile.new" "$outfile"
-              
-              jq --arg r "🇪🇺 LTE | \( {block}. \){batch} (${added} nodes)" '.remarks = $r' "$outfile" > "$outfile.new" && \
-              mv "$outfile.new" "$outfile"
-              
+              jq -s '.[0] as $b | $b + {outbounds: (.[1:])}' "$outfile" "$outfile.tmp" > "$outfile.new" && mv "$outfile.new" "$outfile"
+              jq --arg r "🇪🇺 LTE | \( {block}. \){batch} (${added} nodes)" '.remarks = $r' "$outfile" > "$outfile.new" && mv "$outfile.new" "$outfile"
               echo "✅ Создан: \( outfile ( \){added} нод)"
             else
               rm -f "$outfile"*
-              echo "❌ Блок \( {block}. \){batch} — ничего не добавлено"
+              echo "❌ Блок \( {block}. \){batch} пуст"
             fi
           }
 
           rm -f lte_*.json parse.log
+
+          echo "=== Обработка источников ==="
+
+          process_source() {
+            local url="$1"
+            local block="$2"
+            echo "📥 Источник $block..."
+            mapfile -t links < <(curl -fsSL "$url" 2>/dev/null | grep -E '^vless://' | sort -u)
+            echo "   Найдено: ${#links[@]} ссылок"
+
+            if [[ ${#links[@]} -eq 0 ]]; then return; fi
+
+            local batch=1 i=0
+            while (( i < ${#links[@]} )); do
+              local chunk=("${links[@]:i:20}")
+              process_batch "$block" "\( batch" " \){chunk[@]}"
+              batch=$((batch+1))
+              i=$((i+20))
+            done
+          }
 
           process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/Vless-Reality-White-Lists-Rus-Mobile-2.txt" "1"
           process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/Vless-Reality-White-Lists-Rus-Mobile.txt" "2"
@@ -167,5 +171,18 @@
           process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/BLACK_VLESS_RUS_mobile.txt" "8"
 
           echo "=== ИТОГ ==="
-          ls lte_*.json 2>/dev/null | wc -l | xargs echo "Создано JSON файлов:"
-          ls -lh lte_*.json 2>/dev/null || echo "Файлы НЕ созданы!"
+          echo "Создано файлов: $(ls lte_*.json 2>/dev/null | wc -l)"
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          if git diff --quiet lte_*.json 2>/dev/null; then
+            echo "Нет изменений"
+          else
+            git add lte_*.json
+            git commit -m "Auto: обновление $(date -u '+%Y-%m-%d %H:%M UTC')"
+            git push
+            echo "✅ Успешно закоммичено"
+          fi
