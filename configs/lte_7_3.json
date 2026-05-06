@@ -1,5 +1,5 @@
 {
-  "remarks": "LTE | Авто 7.3",
+  "remarks": "LTE | Auto 7.3",
   "dns": {
     "servers": [
       "1.1.1.1",
@@ -24,22 +24,22 @@
           "socks",
           "http"
         ],
-        "balancerTag": "AUTO-n7g3"
+        "balancerTag": "AUTO-BAL"
       }
     ],
     "balancers": [
       {
-        "tag": "AUTO-n7g3",
+        "tag": "AUTO-BAL",
         "selector": [
           "n7g3-1",
           "n7g3-2",
           "n7g3-3",
           "n7g3-4",
-          "n7g3-5",
           "n7g3-6",
           "n7g3-7",
           "n7g3-8",
-          "n7g3-9"
+          "n7g3-9",
+          "n7g3-10"
         ],
         "strategy": {
           "type": "leastPing",
@@ -217,7 +217,7 @@
       }
     },
     {
-      "tag": "n7g3-5",
+      "tag": "n7g3-6",
       "protocol": "vless",
       "settings": {
         "vnext": [
@@ -247,7 +247,7 @@
       }
     },
     {
-      "tag": "n7g3-6",
+      "tag": "n7g3-7",
       "protocol": "vless",
       "settings": {
         "vnext": [
@@ -277,7 +277,7 @@
       }
     },
     {
-      "tag": "n7g3-7",
+      "tag": "n7g3-8",
       "protocol": "vless",
       "settings": {
         "vnext": [
@@ -307,7 +307,7 @@
       }
     },
     {
-      "tag": "n7g3-8",
+      "tag": "n7g3-9",
       "protocol": "vless",
       "settings": {
         "vnext": [
@@ -337,7 +337,7 @@
       }
     },
     {
-      "tag": "n7g3-9",
+      "tag": "n7g3-10",
       "protocol": "vless",
       "settings": {
         "vnext": [
@@ -389,11 +389,11 @@
       "n7g3-2",
       "n7g3-3",
       "n7g3-4",
-      "n7g3-5",
       "n7g3-6",
       "n7g3-7",
       "n7g3-8",
-      "n7g3-9"
+      "n7g3-9",
+      "n7g3-10"
     ]
   }
 }

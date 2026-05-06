@@ -1,5 +1,5 @@
 {
-  "remarks": "LTE | Авто 7.2",
+  "remarks": "LTE | Auto 7.2",
   "dns": {
     "servers": [
       "1.1.1.1",
@@ -24,16 +24,16 @@
           "socks",
           "http"
         ],
-        "balancerTag": "AUTO-n7g2"
+        "balancerTag": "AUTO-BAL"
       }
     ],
     "balancers": [
       {
-        "tag": "AUTO-n7g2",
+        "tag": "AUTO-BAL",
         "selector": [
-          "n7g2-1",
           "n7g2-2",
-          "n7g2-3"
+          "n7g2-14",
+          "n7g2-15"
         ],
         "strategy": {
           "type": "leastPing",
@@ -91,7 +91,7 @@
   ],
   "outbounds": [
     {
-      "tag": "n7g2-1",
+      "tag": "n7g2-2",
       "protocol": "vless",
       "settings": {
         "vnext": [
@@ -121,7 +121,7 @@
       }
     },
     {
-      "tag": "n7g2-2",
+      "tag": "n7g2-14",
       "protocol": "vless",
       "settings": {
         "vnext": [
@@ -151,7 +151,7 @@
       }
     },
     {
-      "tag": "n7g2-3",
+      "tag": "n7g2-15",
       "protocol": "vless",
       "settings": {
         "vnext": [
@@ -199,9 +199,9 @@
       "connectivity": ""
     },
     "subjectSelector": [
-      "n7g2-1",
       "n7g2-2",
-      "n7g2-3"
+      "n7g2-14",
+      "n7g2-15"
     ]
   }
 }

@@ -1,5 +1,5 @@
 {
-  "remarks": "LTE | Авто 5.5",
+  "remarks": "LTE | Auto 5.5",
   "dns": {
     "servers": [
       "1.1.1.1",
@@ -24,12 +24,12 @@
           "socks",
           "http"
         ],
-        "balancerTag": "AUTO-n5g5"
+        "balancerTag": "AUTO-BAL"
       }
     ],
     "balancers": [
       {
-        "tag": "AUTO-n5g5",
+        "tag": "AUTO-BAL",
         "selector": [
           "n5g5-1",
           "n5g5-2",
@@ -403,7 +403,7 @@
           "serverName": "rbc.ru",
           "publicKey": "Cxvc5bVMKln6RxPs5MtviUZNDsmpfuYUK8UFBlcBaS0",
           "shortId": "331a8c3fe668c1ee",
-          "fingerprint": "chrome"
+          "fingerprint": ""
         }
       }
     },

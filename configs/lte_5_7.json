@@ -1,5 +1,5 @@
 {
-  "remarks": "LTE | Авто 5.7",
+  "remarks": "LTE | Auto 5.7",
   "dns": {
     "servers": [
       "1.1.1.1",
@@ -24,20 +24,20 @@
           "socks",
           "http"
         ],
-        "balancerTag": "AUTO-n5g7"
+        "balancerTag": "AUTO-BAL"
       }
     ],
     "balancers": [
       {
-        "tag": "AUTO-n5g7",
+        "tag": "AUTO-BAL",
         "selector": [
-          "n5g7-1",
-          "n5g7-2",
-          "n5g7-3",
-          "n5g7-4",
-          "n5g7-5",
-          "n5g7-6",
-          "n5g7-7"
+          "n5g7-9",
+          "n5g7-10",
+          "n5g7-11",
+          "n5g7-12",
+          "n5g7-13",
+          "n5g7-14",
+          "n5g7-15"
         ],
         "strategy": {
           "type": "leastPing",
@@ -95,7 +95,7 @@
   ],
   "outbounds": [
     {
-      "tag": "n5g7-1",
+      "tag": "n5g7-9",
       "protocol": "vless",
       "settings": {
         "vnext": [
@@ -125,7 +125,7 @@
       }
     },
     {
-      "tag": "n5g7-2",
+      "tag": "n5g7-10",
       "protocol": "vless",
       "settings": {
         "vnext": [
@@ -155,7 +155,7 @@
       }
     },
     {
-      "tag": "n5g7-3",
+      "tag": "n5g7-11",
       "protocol": "vless",
       "settings": {
         "vnext": [
@@ -185,7 +185,7 @@
       }
     },
     {
-      "tag": "n5g7-4",
+      "tag": "n5g7-12",
       "protocol": "vless",
       "settings": {
         "vnext": [
@@ -215,7 +215,7 @@
       }
     },
     {
-      "tag": "n5g7-5",
+      "tag": "n5g7-13",
       "protocol": "vless",
       "settings": {
         "vnext": [
@@ -245,7 +245,7 @@
       }
     },
     {
-      "tag": "n5g7-6",
+      "tag": "n5g7-14",
       "protocol": "vless",
       "settings": {
         "vnext": [
@@ -275,7 +275,7 @@
       }
     },
     {
-      "tag": "n5g7-7",
+      "tag": "n5g7-15",
       "protocol": "vless",
       "settings": {
         "vnext": [
@@ -323,13 +323,13 @@
       "connectivity": ""
     },
     "subjectSelector": [
-      "n5g7-1",
-      "n5g7-2",
-      "n5g7-3",
-      "n5g7-4",
-      "n5g7-5",
-      "n5g7-6",
-      "n5g7-7"
+      "n5g7-9",
+      "n5g7-10",
+      "n5g7-11",
+      "n5g7-12",
+      "n5g7-13",
+      "n5g7-14",
+      "n5g7-15"
     ]
   }
 }

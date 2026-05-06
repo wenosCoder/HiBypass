@@ -1,5 +1,5 @@
 {
-  "remarks": "LTE | Авто 2.8",
+  "remarks": "LTE | Auto 2.8",
   "dns": {
     "servers": [
       "1.1.1.1",
@@ -24,12 +24,12 @@
           "socks",
           "http"
         ],
-        "balancerTag": "AUTO-n2g8"
+        "balancerTag": "AUTO-BAL"
       }
     ],
     "balancers": [
       {
-        "tag": "AUTO-n2g8",
+        "tag": "AUTO-BAL",
         "selector": [
           "n2g8-1",
           "n2g8-2",
@@ -38,7 +38,8 @@
           "n2g8-5",
           "n2g8-6",
           "n2g8-7",
-          "n2g8-8"
+          "n2g8-8",
+          "n2g8-9"
         ],
         "strategy": {
           "type": "leastPing",
@@ -101,11 +102,11 @@
       "settings": {
         "vnext": [
           {
-            "address": "89.125.37.149",
+            "address": "balancer.colorbox.space",
             "port": 443,
             "users": [
               {
-                "id": "e9ebf8c2-dbe9-4220-9234-6a47be3e9dea",
+                "id": "freedom-runet-3",
                 "encryption": "none",
                 "flow": "xtls-rprx-vision"
               }
@@ -118,10 +119,10 @@
         "tcpSettings": {},
         "security": "reality",
         "realitySettings": {
-          "serverName": "se-cdn.ru",
-          "publicKey": "nF_kEdHan2dgl2tlQ_dtNaKZ4oORhuiFrXHbtEDcT2Q",
-          "shortId": "2d6d073dc88f22a8",
-          "fingerprint": "edge"
+          "serverName": "balancer.colorbox.space",
+          "publicKey": "pkJAYTWmgDooxrkLvw_P6QPvQ0DE6s4HHEeD5ztJ6ig",
+          "shortId": "16a05263d62fe40f",
+          "fingerprint": "chrome"
         }
       }
     },
@@ -131,11 +132,11 @@
       "settings": {
         "vnext": [
           {
-            "address": "89.125.37.79",
+            "address": "balancer.colorbox.space",
             "port": 443,
             "users": [
               {
-                "id": "e9ebf8c2-dbe9-4220-9234-6a47be3e9dea",
+                "id": "freedom-runet-48",
                 "encryption": "none",
                 "flow": "xtls-rprx-vision"
               }
@@ -148,10 +149,10 @@
         "tcpSettings": {},
         "security": "reality",
         "realitySettings": {
-          "serverName": "se-cdn.ru",
-          "publicKey": "nF_kEdHan2dgl2tlQ_dtNaKZ4oORhuiFrXHbtEDcT2Q",
-          "shortId": "2d6d073dc88f22a8",
-          "fingerprint": "edge"
+          "serverName": "balancer.colorbox.space",
+          "publicKey": "pkJAYTWmgDooxrkLvw_P6QPvQ0DE6s4HHEeD5ztJ6ig",
+          "shortId": "16a05263d62fe40f",
+          "fingerprint": "chrome"
         }
       }
     },
@@ -161,11 +162,11 @@
       "settings": {
         "vnext": [
           {
-            "address": "91.108.249.10",
+            "address": "balancer.colorbox.space",
             "port": 443,
             "users": [
               {
-                "id": "e9ebf8c2-dbe9-4220-9234-6a47be3e9dea",
+                "id": "freedom-runet-50",
                 "encryption": "none",
                 "flow": "xtls-rprx-vision"
               }
@@ -178,10 +179,10 @@
         "tcpSettings": {},
         "security": "reality",
         "realitySettings": {
-          "serverName": "pl-cdn.ru",
-          "publicKey": "fz-ncRVRmWnpd2sFb5Q3bR3BQEdpL6N_zbDSD16g5QI",
-          "shortId": "7a3f9e2b1c8d4f6a",
-          "fingerprint": "edge"
+          "serverName": "balancer.colorbox.space",
+          "publicKey": "pkJAYTWmgDooxrkLvw_P6QPvQ0DE6s4HHEeD5ztJ6ig",
+          "shortId": "16a05263d62fe40f",
+          "fingerprint": "chrome"
         }
       }
     },
@@ -191,11 +192,11 @@
       "settings": {
         "vnext": [
           {
-            "address": "91.108.249.8",
+            "address": "balancer.colorbox.space",
             "port": 443,
             "users": [
               {
-                "id": "e9ebf8c2-dbe9-4220-9234-6a47be3e9dea",
+                "id": "freedom-runet-58",
                 "encryption": "none",
                 "flow": "xtls-rprx-vision"
               }
@@ -208,10 +209,10 @@
         "tcpSettings": {},
         "security": "reality",
         "realitySettings": {
-          "serverName": "pl-cdn.ru",
-          "publicKey": "fz-ncRVRmWnpd2sFb5Q3bR3BQEdpL6N_zbDSD16g5QI",
-          "shortId": "7a3f9e2b1c8d4f6a",
-          "fingerprint": "edge"
+          "serverName": "balancer.colorbox.space",
+          "publicKey": "pkJAYTWmgDooxrkLvw_P6QPvQ0DE6s4HHEeD5ztJ6ig",
+          "shortId": "16a05263d62fe40f",
+          "fingerprint": "chrome"
         }
       }
     },
@@ -221,11 +222,11 @@
       "settings": {
         "vnext": [
           {
-            "address": "91.108.249.9",
+            "address": "balancer.colorbox.space",
             "port": 443,
             "users": [
               {
-                "id": "e9ebf8c2-dbe9-4220-9234-6a47be3e9dea",
+                "id": "freedom-runet-64",
                 "encryption": "none",
                 "flow": "xtls-rprx-vision"
               }
@@ -238,10 +239,10 @@
         "tcpSettings": {},
         "security": "reality",
         "realitySettings": {
-          "serverName": "pl-cdn.ru",
-          "publicKey": "fz-ncRVRmWnpd2sFb5Q3bR3BQEdpL6N_zbDSD16g5QI",
-          "shortId": "7a3f9e2b1c8d4f6a",
-          "fingerprint": "edge"
+          "serverName": "balancer.colorbox.space",
+          "publicKey": "pkJAYTWmgDooxrkLvw_P6QPvQ0DE6s4HHEeD5ztJ6ig",
+          "shortId": "16a05263d62fe40f",
+          "fingerprint": "chrome"
         }
       }
     },
@@ -251,11 +252,11 @@
       "settings": {
         "vnext": [
           {
-            "address": "109.73.199.48",
-            "port": 8454,
+            "address": "balancer.colorbox.space",
+            "port": 443,
             "users": [
               {
-                "id": "ec6b5efa-f5c1-4ed4-a0f0-0f4bf300496f",
+                "id": "freedom-runet-6",
                 "encryption": "none",
                 "flow": "xtls-rprx-vision"
               }
@@ -268,10 +269,10 @@
         "tcpSettings": {},
         "security": "reality",
         "realitySettings": {
-          "serverName": "jobinvest.ru",
-          "publicKey": "SbVKOEMjK0sIlbwg4akyBg5mL5KZwwB-ed4eEE7YnRc",
-          "shortId": "",
-          "fingerprint": "qq"
+          "serverName": "balancer.colorbox.space",
+          "publicKey": "pkJAYTWmgDooxrkLvw_P6QPvQ0DE6s4HHEeD5ztJ6ig",
+          "shortId": "16a05263d62fe40f",
+          "fingerprint": "chrome"
         }
       }
     },
@@ -281,11 +282,11 @@
       "settings": {
         "vnext": [
           {
-            "address": "176.124.211.23",
-            "port": 8446,
+            "address": "balancer.colorbox.space",
+            "port": 443,
             "users": [
               {
-                "id": "ec6b5efa-f5c1-4ed4-a0f0-0f4bf300496f",
+                "id": "freedom-runet-74",
                 "encryption": "none",
                 "flow": "xtls-rprx-vision"
               }
@@ -298,10 +299,10 @@
         "tcpSettings": {},
         "security": "reality",
         "realitySettings": {
-          "serverName": "jobinvest.ru",
-          "publicKey": "SbVKOEMjK0sIlbwg4akyBg5mL5KZwwB-ed4eEE7YnRc",
-          "shortId": "",
-          "fingerprint": "qq"
+          "serverName": "balancer.colorbox.space",
+          "publicKey": "pkJAYTWmgDooxrkLvw_P6QPvQ0DE6s4HHEeD5ztJ6ig",
+          "shortId": "16a05263d62fe40f",
+          "fingerprint": "chrome"
         }
       }
     },
@@ -311,11 +312,11 @@
       "settings": {
         "vnext": [
           {
-            "address": "176.124.211.23",
-            "port": 8454,
+            "address": "balancer.colorbox.space",
+            "port": 443,
             "users": [
               {
-                "id": "ec6b5efa-f5c1-4ed4-a0f0-0f4bf300496f",
+                "id": "freedom-runet-91",
                 "encryption": "none",
                 "flow": "xtls-rprx-vision"
               }
@@ -328,10 +329,40 @@
         "tcpSettings": {},
         "security": "reality",
         "realitySettings": {
-          "serverName": "jobinvest.ru",
-          "publicKey": "SbVKOEMjK0sIlbwg4akyBg5mL5KZwwB-ed4eEE7YnRc",
-          "shortId": "",
-          "fingerprint": "qq"
+          "serverName": "balancer.colorbox.space",
+          "publicKey": "pkJAYTWmgDooxrkLvw_P6QPvQ0DE6s4HHEeD5ztJ6ig",
+          "shortId": "16a05263d62fe40f",
+          "fingerprint": "chrome"
+        }
+      }
+    },
+    {
+      "tag": "n2g8-9",
+      "protocol": "vless",
+      "settings": {
+        "vnext": [
+          {
+            "address": "balancer.colorbox.space",
+            "port": 443,
+            "users": [
+              {
+                "id": "freedom-runet-95",
+                "encryption": "none",
+                "flow": "xtls-rprx-vision"
+              }
+            ]
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "tcp",
+        "tcpSettings": {},
+        "security": "reality",
+        "realitySettings": {
+          "serverName": "balancer.colorbox.space",
+          "publicKey": "pkJAYTWmgDooxrkLvw_P6QPvQ0DE6s4HHEeD5ztJ6ig",
+          "shortId": "16a05263d62fe40f",
+          "fingerprint": "chrome"
         }
       }
     },
@@ -361,7 +392,8 @@
       "n2g8-5",
       "n2g8-6",
       "n2g8-7",
-      "n2g8-8"
+      "n2g8-8",
+      "n2g8-9"
     ]
   }
 }

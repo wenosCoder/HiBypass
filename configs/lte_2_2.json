@@ -1,5 +1,5 @@
 {
-  "remarks": "LTE | Авто 2.2",
+  "remarks": "LTE | Auto 2.2",
   "dns": {
     "servers": [
       "1.1.1.1",
@@ -24,15 +24,17 @@
           "socks",
           "http"
         ],
-        "balancerTag": "AUTO-n2g2"
+        "balancerTag": "AUTO-BAL"
       }
     ],
     "balancers": [
       {
-        "tag": "AUTO-n2g2",
+        "tag": "AUTO-BAL",
         "selector": [
           "n2g2-1",
-          "n2g2-2"
+          "n2g2-2",
+          "n2g2-3",
+          "n2g2-4"
         ],
         "strategy": {
           "type": "leastPing",
@@ -95,7 +97,7 @@
       "settings": {
         "vnext": [
           {
-            "address": "netherland.boot-lee.ru",
+            "address": "85.206.161.98",
             "port": 8443,
             "users": [
               {
@@ -112,10 +114,10 @@
         "tcpSettings": {},
         "security": "reality",
         "realitySettings": {
-          "serverName": "eh.vk.com",
+          "serverName": "sun6-22.userapi.com",
           "publicKey": "3JGwSDrfkiCPdU3rvQP5m0z4Ag_UB_2w8Qq3VMXmo28",
-          "shortId": "abc123",
-          "fingerprint": "qq"
+          "shortId": "abc323",
+          "fingerprint": "chrome"
         }
       }
     },
@@ -125,11 +127,71 @@
       "settings": {
         "vnext": [
           {
-            "address": "87.242.118.99",
+            "address": "85.206.161.98",
+            "port": 8443,
+            "users": [
+              {
+                "id": "5ad9f8f3-40dc-457b-942b-d210825d7627",
+                "encryption": "none",
+                "flow": "xtls-rprx-vision"
+              }
+            ]
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "tcp",
+        "tcpSettings": {},
+        "security": "reality",
+        "realitySettings": {
+          "serverName": "sun6-22.userapi.com",
+          "publicKey": "3JGwSDrfkiCPdU3rvQP5m0z4Ag_UB_2w8Qq3VMXmo28",
+          "shortId": "abc323",
+          "fingerprint": "chrome"
+        }
+      }
+    },
+    {
+      "tag": "n2g2-3",
+      "protocol": "vless",
+      "settings": {
+        "vnext": [
+          {
+            "address": "85.206.161.98",
+            "port": 8443,
+            "users": [
+              {
+                "id": "5ad9f8f3-40dc-457b-942b-d210825d7627",
+                "encryption": "none",
+                "flow": "xtls-rprx-vision"
+              }
+            ]
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "tcp",
+        "tcpSettings": {},
+        "security": "reality",
+        "realitySettings": {
+          "serverName": "sun6-22.userapi.com",
+          "publicKey": "3JGwSDrfkiCPdU3rvQP5m0z4Ag_UB_2w8Qq3VMXmo28",
+          "shortId": "abc323",
+          "fingerprint": "qq"
+        }
+      }
+    },
+    {
+      "tag": "n2g2-4",
+      "protocol": "vless",
+      "settings": {
+        "vnext": [
+          {
+            "address": "176.109.101.198",
             "port": 443,
             "users": [
               {
-                "id": "68a6779c-6719-43b1-8e39-32820085b02e",
+                "id": "5b8fb9a7-70b4-4d38-90eb-9f72e6ddf783",
                 "encryption": "none",
                 "flow": "xtls-rprx-vision"
               }
@@ -142,10 +204,10 @@
         "tcpSettings": {},
         "security": "reality",
         "realitySettings": {
-          "serverName": "travel.yandex.ru",
-          "publicKey": "XqH-gNEL9eJfr1pglaI8WU3OvE654_5duXYBS35UXlM",
-          "shortId": "abcdef0123456789",
-          "fingerprint": "firefox"
+          "serverName": "www.max.ru",
+          "publicKey": "Irvu1ScKMHoj6FBEPmYdj5RGvdpj1qwVLrQTu_OzNyY",
+          "shortId": "bbb76504",
+          "fingerprint": "chrome"
         }
       }
     },
@@ -169,7 +231,9 @@
     },
     "subjectSelector": [
       "n2g2-1",
-      "n2g2-2"
+      "n2g2-2",
+      "n2g2-3",
+      "n2g2-4"
     ]
   }
 }

@@ -1,5 +1,5 @@
 {
-  "remarks": "LTE | Авто 1.5",
+  "remarks": "LTE | Auto 1.5",
   "dns": {
     "servers": [
       "1.1.1.1",
@@ -24,25 +24,25 @@
           "socks",
           "http"
         ],
-        "balancerTag": "AUTO-n1g5"
+        "balancerTag": "AUTO-BAL"
       }
     ],
     "balancers": [
       {
-        "tag": "AUTO-n1g5",
+        "tag": "AUTO-BAL",
         "selector": [
-          "n1g5-1",
-          "n1g5-2",
-          "n1g5-3",
-          "n1g5-4",
-          "n1g5-5",
-          "n1g5-6",
-          "n1g5-7",
-          "n1g5-8",
           "n1g5-9",
           "n1g5-10",
           "n1g5-11",
-          "n1g5-12"
+          "n1g5-12",
+          "n1g5-13",
+          "n1g5-14",
+          "n1g5-15",
+          "n1g5-16",
+          "n1g5-17",
+          "n1g5-18",
+          "n1g5-19",
+          "n1g5-20"
         ],
         "strategy": {
           "type": "leastPing",
@@ -100,7 +100,7 @@
   ],
   "outbounds": [
     {
-      "tag": "n1g5-1",
+      "tag": "n1g5-9",
       "protocol": "vless",
       "settings": {
         "vnext": [
@@ -130,7 +130,7 @@
       }
     },
     {
-      "tag": "n1g5-2",
+      "tag": "n1g5-10",
       "protocol": "vless",
       "settings": {
         "vnext": [
@@ -160,7 +160,7 @@
       }
     },
     {
-      "tag": "n1g5-3",
+      "tag": "n1g5-11",
       "protocol": "vless",
       "settings": {
         "vnext": [
@@ -190,7 +190,7 @@
       }
     },
     {
-      "tag": "n1g5-4",
+      "tag": "n1g5-12",
       "protocol": "vless",
       "settings": {
         "vnext": [
@@ -220,7 +220,7 @@
       }
     },
     {
-      "tag": "n1g5-5",
+      "tag": "n1g5-13",
       "protocol": "vless",
       "settings": {
         "vnext": [
@@ -250,7 +250,7 @@
       }
     },
     {
-      "tag": "n1g5-6",
+      "tag": "n1g5-14",
       "protocol": "vless",
       "settings": {
         "vnext": [
@@ -280,7 +280,7 @@
       }
     },
     {
-      "tag": "n1g5-7",
+      "tag": "n1g5-15",
       "protocol": "vless",
       "settings": {
         "vnext": [
@@ -310,7 +310,7 @@
       }
     },
     {
-      "tag": "n1g5-8",
+      "tag": "n1g5-16",
       "protocol": "vless",
       "settings": {
         "vnext": [
@@ -340,7 +340,7 @@
       }
     },
     {
-      "tag": "n1g5-9",
+      "tag": "n1g5-17",
       "protocol": "vless",
       "settings": {
         "vnext": [
@@ -370,7 +370,7 @@
       }
     },
     {
-      "tag": "n1g5-10",
+      "tag": "n1g5-18",
       "protocol": "vless",
       "settings": {
         "vnext": [
@@ -400,7 +400,7 @@
       }
     },
     {
-      "tag": "n1g5-11",
+      "tag": "n1g5-19",
       "protocol": "vless",
       "settings": {
         "vnext": [
@@ -430,7 +430,7 @@
       }
     },
     {
-      "tag": "n1g5-12",
+      "tag": "n1g5-20",
       "protocol": "vless",
       "settings": {
         "vnext": [
@@ -478,18 +478,18 @@
       "connectivity": ""
     },
     "subjectSelector": [
-      "n1g5-1",
-      "n1g5-2",
-      "n1g5-3",
-      "n1g5-4",
-      "n1g5-5",
-      "n1g5-6",
-      "n1g5-7",
-      "n1g5-8",
       "n1g5-9",
       "n1g5-10",
       "n1g5-11",
-      "n1g5-12"
+      "n1g5-12",
+      "n1g5-13",
+      "n1g5-14",
+      "n1g5-15",
+      "n1g5-16",
+      "n1g5-17",
+      "n1g5-18",
+      "n1g5-19",
+      "n1g5-20"
     ]
   }
 }

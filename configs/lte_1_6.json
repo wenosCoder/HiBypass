@@ -1,5 +1,5 @@
 {
-  "remarks": "LTE | Авто 1.6",
+  "remarks": "LTE | Auto 1.6",
   "dns": {
     "servers": [
       "1.1.1.1",
@@ -24,12 +24,12 @@
           "socks",
           "http"
         ],
-        "balancerTag": "AUTO-n1g6"
+        "balancerTag": "AUTO-BAL"
       }
     ],
     "balancers": [
       {
-        "tag": "AUTO-n1g6",
+        "tag": "AUTO-BAL",
         "selector": [
           "n1g6-1",
           "n1g6-2",

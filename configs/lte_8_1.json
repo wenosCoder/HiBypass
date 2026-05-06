@@ -1,5 +1,5 @@
 {
-  "remarks": "LTE | Авто 8.1",
+  "remarks": "LTE | Auto 8.1",
   "dns": {
     "servers": [
       "1.1.1.1",
@@ -24,15 +24,15 @@
           "socks",
           "http"
         ],
-        "balancerTag": "AUTO-n8g1"
+        "balancerTag": "AUTO-BAL"
       }
     ],
     "balancers": [
       {
-        "tag": "AUTO-n8g1",
+        "tag": "AUTO-BAL",
         "selector": [
           "n8g1-1",
-          "n8g1-2"
+          "n8g1-19"
         ],
         "strategy": {
           "type": "leastPing",
@@ -120,7 +120,7 @@
       }
     },
     {
-      "tag": "n8g1-2",
+      "tag": "n8g1-19",
       "protocol": "vless",
       "settings": {
         "vnext": [
@@ -169,7 +169,7 @@
     },
     "subjectSelector": [
       "n8g1-1",
-      "n8g1-2"
+      "n8g1-19"
     ]
   }
 }

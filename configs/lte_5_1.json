@@ -1,5 +1,5 @@
 {
-  "remarks": "LTE | Авто 5.1",
+  "remarks": "LTE | Auto 5.1",
   "dns": {
     "servers": [
       "1.1.1.1",
@@ -24,12 +24,12 @@
           "socks",
           "http"
         ],
-        "balancerTag": "AUTO-n5g1"
+        "balancerTag": "AUTO-BAL"
       }
     ],
     "balancers": [
       {
-        "tag": "AUTO-n5g1",
+        "tag": "AUTO-BAL",
         "selector": [
           "n5g1-1",
           "n5g1-2",
@@ -133,7 +133,7 @@
           "serverName": "rbc.ru",
           "publicKey": "zr8_rtHm86s_G1gfRwNtunStGngYZSdYkA3PyBFXpDg",
           "shortId": "04bf0403f96e5b4b",
-          "fingerprint": "chrome"
+          "fingerprint": ""
         }
       }
     },
@@ -253,7 +253,7 @@
           "serverName": "rbc.ru",
           "publicKey": "zr8_rtHm86s_G1gfRwNtunStGngYZSdYkA3PyBFXpDg",
           "shortId": "28047c78b3f5ee2c",
-          "fingerprint": "chrome"
+          "fingerprint": ""
         }
       }
     },
@@ -553,7 +553,7 @@
           "serverName": "rbc.ru",
           "publicKey": "_CjW0Khlrr5z5oc9Oy6-w2ZEanz-zMBktVn5EOX9oTM",
           "shortId": "4ffc99daad0f261f",
-          "fingerprint": "chrome"
+          "fingerprint": ""
         }
       }
     },
@@ -673,7 +673,7 @@
           "serverName": "rbc.ru",
           "publicKey": "_CjW0Khlrr5z5oc9Oy6-w2ZEanz-zMBktVn5EOX9oTM",
           "shortId": "f32140952ba18e18",
-          "fingerprint": "chrome"
+          "fingerprint": ""
         }
       }
     },

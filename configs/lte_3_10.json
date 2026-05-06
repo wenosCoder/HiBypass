@@ -1,5 +1,5 @@
 {
-  "remarks": "LTE | Auto 8.2",
+  "remarks": "LTE | Auto 3.10",
   "dns": {
     "servers": [
       "1.1.1.1",
@@ -31,14 +31,14 @@
       {
         "tag": "AUTO-BAL",
         "selector": [
-          "n8g2-8",
-          "n8g2-9",
-          "n8g2-14",
-          "n8g2-15",
-          "n8g2-16",
-          "n8g2-17",
-          "n8g2-19",
-          "n8g2-20"
+          "n3g10-13",
+          "n3g10-14",
+          "n3g10-15",
+          "n3g10-16",
+          "n3g10-17",
+          "n3g10-18",
+          "n3g10-19",
+          "n3g10-20"
         ],
         "strategy": {
           "type": "leastPing",
@@ -96,16 +96,16 @@
   ],
   "outbounds": [
     {
-      "tag": "n8g2-8",
+      "tag": "n3g10-13",
       "protocol": "vless",
       "settings": {
         "vnext": [
           {
-            "address": "47.81.12.38",
+            "address": "84.32.103.183",
             "port": 443,
             "users": [
               {
-                "id": "3e7f67de-648e-4871-b51a-a225214d41ee",
+                "id": "7b13eaac-882d-43a0-b19e-6d2e867d624e",
                 "encryption": "none",
                 "flow": "xtls-rprx-vision"
               }
@@ -118,24 +118,24 @@
         "tcpSettings": {},
         "security": "reality",
         "realitySettings": {
-          "serverName": "api.digital-help-prd.autodesk.com",
-          "publicKey": "TRP10HqKUXEQ3O-cfsq93DycfBmbJe9KM36yvSa8Mmw",
-          "shortId": "",
+          "serverName": "hcaptcha.com",
+          "publicKey": "s7STQtGCpR_y3PeQK0XOLUKEj689oKDy9v9iuxwzRzk",
+          "shortId": "8ac90e6b636226f7",
           "fingerprint": "chrome"
         }
       }
     },
     {
-      "tag": "n8g2-9",
+      "tag": "n3g10-14",
       "protocol": "vless",
       "settings": {
         "vnext": [
           {
-            "address": "8.218.166.188",
+            "address": "84.32.50.23",
             "port": 443,
             "users": [
               {
-                "id": "3e7f67de-648e-4871-b51a-a225214d41ee",
+                "id": "7b13eaac-882d-43a0-b19e-6d2e867d624e",
                 "encryption": "none",
                 "flow": "xtls-rprx-vision"
               }
@@ -148,144 +148,54 @@
         "tcpSettings": {},
         "security": "reality",
         "realitySettings": {
-          "serverName": "www.debian.org",
-          "publicKey": "TRP10HqKUXEQ3O-cfsq93DycfBmbJe9KM36yvSa8Mmw",
-          "shortId": "",
+          "serverName": "hcaptcha.com",
+          "publicKey": "zrsoSERYFT2ZNMvykzMUkie-Ho5rn_afn7cLPOQgNzg",
+          "shortId": "8999066b636226f7",
+          "fingerprint": "random"
+        }
+      }
+    },
+    {
+      "tag": "n3g10-15",
+      "protocol": "vless",
+      "settings": {
+        "vnext": [
+          {
+            "address": "154.91.157.61",
+            "port": 443,
+            "users": [
+              {
+                "id": "89db56bf-9379-40b5-9244-43b401d836c5",
+                "encryption": "none",
+                "flow": "xtls-rprx-vision"
+              }
+            ]
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "tcp",
+        "tcpSettings": {},
+        "security": "reality",
+        "realitySettings": {
+          "serverName": "rbc.ru",
+          "publicKey": "_0HnraldEtXmJMu7t3nEm8VmQXkMWF7dX1Dmz5KceSw",
+          "shortId": "b4f3a05896b60039",
           "fingerprint": "chrome"
         }
       }
     },
     {
-      "tag": "n8g2-14",
+      "tag": "n3g10-16",
       "protocol": "vless",
       "settings": {
         "vnext": [
           {
-            "address": "72.56.233.230",
-            "port": 8446,
-            "users": [
-              {
-                "id": "48fb0504-87c4-4f06-b0a5-115ea2a9b61c",
-                "encryption": "none",
-                "flow": "xtls-rprx-vision"
-              }
-            ]
-          }
-        ]
-      },
-      "streamSettings": {
-        "network": "tcp",
-        "tcpSettings": {},
-        "security": "reality",
-        "realitySettings": {
-          "serverName": "jobinvest.ru",
-          "publicKey": "SbVKOEMjK0sIlbwg4akyBg5mL5KZwwB-ed4eEE7YnRc",
-          "shortId": "",
-          "fingerprint": "qq"
-        }
-      }
-    },
-    {
-      "tag": "n8g2-15",
-      "protocol": "vless",
-      "settings": {
-        "vnext": [
-          {
-            "address": "72.56.233.230",
-            "port": 8454,
-            "users": [
-              {
-                "id": "48fb0504-87c4-4f06-b0a5-115ea2a9b61c",
-                "encryption": "none",
-                "flow": "xtls-rprx-vision"
-              }
-            ]
-          }
-        ]
-      },
-      "streamSettings": {
-        "network": "tcp",
-        "tcpSettings": {},
-        "security": "reality",
-        "realitySettings": {
-          "serverName": "jobinvest.ru",
-          "publicKey": "SbVKOEMjK0sIlbwg4akyBg5mL5KZwwB-ed4eEE7YnRc",
-          "shortId": "",
-          "fingerprint": "qq"
-        }
-      }
-    },
-    {
-      "tag": "n8g2-16",
-      "protocol": "vless",
-      "settings": {
-        "vnext": [
-          {
-            "address": "72.56.233.230",
-            "port": 8446,
-            "users": [
-              {
-                "id": "4c5167a1-af2c-4960-ad05-d26b71360bf4",
-                "encryption": "none",
-                "flow": "xtls-rprx-vision"
-              }
-            ]
-          }
-        ]
-      },
-      "streamSettings": {
-        "network": "tcp",
-        "tcpSettings": {},
-        "security": "reality",
-        "realitySettings": {
-          "serverName": "jobinvest.ru",
-          "publicKey": "SbVKOEMjK0sIlbwg4akyBg5mL5KZwwB-ed4eEE7YnRc",
-          "shortId": "",
-          "fingerprint": "qq"
-        }
-      }
-    },
-    {
-      "tag": "n8g2-17",
-      "protocol": "vless",
-      "settings": {
-        "vnext": [
-          {
-            "address": "72.56.233.230",
-            "port": 8454,
-            "users": [
-              {
-                "id": "4c5167a1-af2c-4960-ad05-d26b71360bf4",
-                "encryption": "none",
-                "flow": "xtls-rprx-vision"
-              }
-            ]
-          }
-        ]
-      },
-      "streamSettings": {
-        "network": "tcp",
-        "tcpSettings": {},
-        "security": "reality",
-        "realitySettings": {
-          "serverName": "jobinvest.ru",
-          "publicKey": "SbVKOEMjK0sIlbwg4akyBg5mL5KZwwB-ed4eEE7YnRc",
-          "shortId": "",
-          "fingerprint": "qq"
-        }
-      }
-    },
-    {
-      "tag": "n8g2-19",
-      "protocol": "vless",
-      "settings": {
-        "vnext": [
-          {
-            "address": "2.26.114.181",
+            "address": "154.91.157.61",
             "port": 443,
             "users": [
               {
-                "id": "729a544f-aa57-4d0d-a2b0-df9775bc6a2f",
+                "id": "89db56bf-9379-40b5-9244-43b401d836c5",
                 "encryption": "none",
                 "flow": "xtls-rprx-vision"
               }
@@ -298,24 +208,24 @@
         "tcpSettings": {},
         "security": "reality",
         "realitySettings": {
-          "serverName": "www.ya.ru",
-          "publicKey": "o2SrzDoX5tfMpju7B-RSxsb7eo6-hdV1vRFP8VA-dUA",
-          "shortId": "",
+          "serverName": "rbc.ru",
+          "publicKey": "_0HnraldEtXmJMu7t3nEm8VmQXkMWF7dX1Dmz5KceSw",
+          "shortId": "b4f3a05896b60039",
           "fingerprint": "chrome"
         }
       }
     },
     {
-      "tag": "n8g2-20",
+      "tag": "n3g10-17",
       "protocol": "vless",
       "settings": {
         "vnext": [
           {
-            "address": "2.27.47.172",
-            "port": 443,
+            "address": "154.91.157.61",
+            "port": 8443,
             "users": [
               {
-                "id": "729a544f-aa57-4d0d-a2b0-df9775bc6a2f",
+                "id": "89db56bf-9379-40b5-9244-43b401d836c5",
                 "encryption": "none",
                 "flow": "xtls-rprx-vision"
               }
@@ -328,9 +238,99 @@
         "tcpSettings": {},
         "security": "reality",
         "realitySettings": {
-          "serverName": "www.ya.ru",
-          "publicKey": "o2SrzDoX5tfMpju7B-RSxsb7eo6-hdV1vRFP8VA-dUA",
-          "shortId": "",
+          "serverName": "rbc.ru",
+          "publicKey": "_0HnraldEtXmJMu7t3nEm8VmQXkMWF7dX1Dmz5KceSw",
+          "shortId": "b4f3a05896b60039",
+          "fingerprint": "chrome"
+        }
+      }
+    },
+    {
+      "tag": "n3g10-18",
+      "protocol": "vless",
+      "settings": {
+        "vnext": [
+          {
+            "address": "154.91.157.61",
+            "port": 8443,
+            "users": [
+              {
+                "id": "89db56bf-9379-40b5-9244-43b401d836c5",
+                "encryption": "none",
+                "flow": "xtls-rprx-vision"
+              }
+            ]
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "tcp",
+        "tcpSettings": {},
+        "security": "reality",
+        "realitySettings": {
+          "serverName": "rbc.ru",
+          "publicKey": "_0HnraldEtXmJMu7t3nEm8VmQXkMWF7dX1Dmz5KceSw",
+          "shortId": "b4f3a05896b60039",
+          "fingerprint": "chrome"
+        }
+      }
+    },
+    {
+      "tag": "n3g10-19",
+      "protocol": "vless",
+      "settings": {
+        "vnext": [
+          {
+            "address": "br-m247-01.com",
+            "port": 443,
+            "users": [
+              {
+                "id": "89db56bf-9379-40b5-9244-43b401d836c5",
+                "encryption": "none",
+                "flow": "xtls-rprx-vision"
+              }
+            ]
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "tcp",
+        "tcpSettings": {},
+        "security": "reality",
+        "realitySettings": {
+          "serverName": "rbc.ru",
+          "publicKey": "_0HnraldEtXmJMu7t3nEm8VmQXkMWF7dX1Dmz5KceSw",
+          "shortId": "e3152b486a086f4e",
+          "fingerprint": "chrome"
+        }
+      }
+    },
+    {
+      "tag": "n3g10-20",
+      "protocol": "vless",
+      "settings": {
+        "vnext": [
+          {
+            "address": "br-m247-01.com",
+            "port": 8443,
+            "users": [
+              {
+                "id": "89db56bf-9379-40b5-9244-43b401d836c5",
+                "encryption": "none",
+                "flow": "xtls-rprx-vision"
+              }
+            ]
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "tcp",
+        "tcpSettings": {},
+        "security": "reality",
+        "realitySettings": {
+          "serverName": "rbc.ru",
+          "publicKey": "_0HnraldEtXmJMu7t3nEm8VmQXkMWF7dX1Dmz5KceSw",
+          "shortId": "57f5917841a2178f",
           "fingerprint": "chrome"
         }
       }
@@ -354,14 +354,14 @@
       "connectivity": ""
     },
     "subjectSelector": [
-      "n8g2-8",
-      "n8g2-9",
-      "n8g2-14",
-      "n8g2-15",
-      "n8g2-16",
-      "n8g2-17",
-      "n8g2-19",
-      "n8g2-20"
+      "n3g10-13",
+      "n3g10-14",
+      "n3g10-15",
+      "n3g10-16",
+      "n3g10-17",
+      "n3g10-18",
+      "n3g10-19",
+      "n3g10-20"
     ]
   }
 }

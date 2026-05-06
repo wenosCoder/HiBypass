@@ -1,5 +1,5 @@
 {
-  "remarks": "LTE | Авто 7.4",
+  "remarks": "LTE | Auto 7.4",
   "dns": {
     "servers": [
       "1.1.1.1",
@@ -24,22 +24,22 @@
           "socks",
           "http"
         ],
-        "balancerTag": "AUTO-n7g4"
+        "balancerTag": "AUTO-BAL"
       }
     ],
     "balancers": [
       {
-        "tag": "AUTO-n7g4",
+        "tag": "AUTO-BAL",
         "selector": [
-          "n7g4-1",
-          "n7g4-2",
           "n7g4-3",
           "n7g4-4",
           "n7g4-5",
           "n7g4-6",
-          "n7g4-7",
           "n7g4-8",
-          "n7g4-9"
+          "n7g4-9",
+          "n7g4-10",
+          "n7g4-11",
+          "n7g4-12"
         ],
         "strategy": {
           "type": "leastPing",
@@ -97,7 +97,7 @@
   ],
   "outbounds": [
     {
-      "tag": "n7g4-1",
+      "tag": "n7g4-3",
       "protocol": "vless",
       "settings": {
         "vnext": [
@@ -127,7 +127,7 @@
       }
     },
     {
-      "tag": "n7g4-2",
+      "tag": "n7g4-4",
       "protocol": "vless",
       "settings": {
         "vnext": [
@@ -157,67 +157,67 @@
       }
     },
     {
-      "tag": "n7g4-3",
-      "protocol": "vless",
-      "settings": {
-        "vnext": [
-          {
-            "address": "153.76.116.21",
-            "port": 443,
-            "users": [
-              {
-                "id": "ae25bb41-dac8-48f0-89a9-f649459ad6ff",
-                "encryption": "none",
-                "flow": "xtls-rprx-vision"
-              }
-            ]
-          }
-        ]
-      },
-      "streamSettings": {
-        "network": "grpc",
-        "tcpSettings": {},
-        "security": "reality",
-        "realitySettings": {
-          "serverName": "hostoff.net",
-          "publicKey": "q3sMB7EjGa7fU5yyFVuMaaJ9gRDxNrMyyyeFh7yjJCA",
-          "shortId": "9ac9e73ec9c3d4d6",
-          "fingerprint": "safari"
-        }
-      }
-    },
-    {
-      "tag": "n7g4-4",
-      "protocol": "vless",
-      "settings": {
-        "vnext": [
-          {
-            "address": "153.76.116.21",
-            "port": 443,
-            "users": [
-              {
-                "id": "ae25bb41-dac8-48f0-89a9-f649459ad6ff",
-                "encryption": "none",
-                "flow": "xtls-rprx-vision"
-              }
-            ]
-          }
-        ]
-      },
-      "streamSettings": {
-        "network": "grpc",
-        "tcpSettings": {},
-        "security": "reality",
-        "realitySettings": {
-          "serverName": "hostoff.net",
-          "publicKey": "q3sMB7EjGa7fU5yyFVuMaaJ9gRDxNrMyyyeFh7yjJCA",
-          "shortId": "9ac9e73ec9c3d4d6",
-          "fingerprint": "safari"
-        }
-      }
-    },
-    {
       "tag": "n7g4-5",
+      "protocol": "vless",
+      "settings": {
+        "vnext": [
+          {
+            "address": "153.76.116.21",
+            "port": 443,
+            "users": [
+              {
+                "id": "ae25bb41-dac8-48f0-89a9-f649459ad6ff",
+                "encryption": "none",
+                "flow": "xtls-rprx-vision"
+              }
+            ]
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "grpc",
+        "tcpSettings": {},
+        "security": "reality",
+        "realitySettings": {
+          "serverName": "hostoff.net",
+          "publicKey": "q3sMB7EjGa7fU5yyFVuMaaJ9gRDxNrMyyyeFh7yjJCA",
+          "shortId": "9ac9e73ec9c3d4d6",
+          "fingerprint": "safari"
+        }
+      }
+    },
+    {
+      "tag": "n7g4-6",
+      "protocol": "vless",
+      "settings": {
+        "vnext": [
+          {
+            "address": "153.76.116.21",
+            "port": 443,
+            "users": [
+              {
+                "id": "ae25bb41-dac8-48f0-89a9-f649459ad6ff",
+                "encryption": "none",
+                "flow": "xtls-rprx-vision"
+              }
+            ]
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "grpc",
+        "tcpSettings": {},
+        "security": "reality",
+        "realitySettings": {
+          "serverName": "hostoff.net",
+          "publicKey": "q3sMB7EjGa7fU5yyFVuMaaJ9gRDxNrMyyyeFh7yjJCA",
+          "shortId": "9ac9e73ec9c3d4d6",
+          "fingerprint": "safari"
+        }
+      }
+    },
+    {
+      "tag": "n7g4-8",
       "protocol": "vless",
       "settings": {
         "vnext": [
@@ -247,7 +247,7 @@
       }
     },
     {
-      "tag": "n7g4-6",
+      "tag": "n7g4-9",
       "protocol": "vless",
       "settings": {
         "vnext": [
@@ -277,7 +277,7 @@
       }
     },
     {
-      "tag": "n7g4-7",
+      "tag": "n7g4-10",
       "protocol": "vless",
       "settings": {
         "vnext": [
@@ -307,7 +307,7 @@
       }
     },
     {
-      "tag": "n7g4-8",
+      "tag": "n7g4-11",
       "protocol": "vless",
       "settings": {
         "vnext": [
@@ -337,7 +337,7 @@
       }
     },
     {
-      "tag": "n7g4-9",
+      "tag": "n7g4-12",
       "protocol": "vless",
       "settings": {
         "vnext": [
@@ -385,15 +385,15 @@
       "connectivity": ""
     },
     "subjectSelector": [
-      "n7g4-1",
-      "n7g4-2",
       "n7g4-3",
       "n7g4-4",
       "n7g4-5",
       "n7g4-6",
-      "n7g4-7",
       "n7g4-8",
-      "n7g4-9"
+      "n7g4-9",
+      "n7g4-10",
+      "n7g4-11",
+      "n7g4-12"
     ]
   }
 }

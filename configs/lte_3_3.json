@@ -1,5 +1,5 @@
 {
-  "remarks": "LTE | Авто 3.3",
+  "remarks": "LTE | Auto 3.3",
   "dns": {
     "servers": [
       "1.1.1.1",
@@ -24,12 +24,12 @@
           "socks",
           "http"
         ],
-        "balancerTag": "AUTO-n3g3"
+        "balancerTag": "AUTO-BAL"
       }
     ],
     "balancers": [
       {
-        "tag": "AUTO-n3g3",
+        "tag": "AUTO-BAL",
         "selector": [
           "n3g3-1",
           "n3g3-2",
@@ -39,14 +39,12 @@
           "n3g3-6",
           "n3g3-7",
           "n3g3-8",
-          "n3g3-9",
-          "n3g3-10",
-          "n3g3-11",
-          "n3g3-12",
-          "n3g3-13",
-          "n3g3-14",
           "n3g3-15",
-          "n3g3-16"
+          "n3g3-16",
+          "n3g3-17",
+          "n3g3-18",
+          "n3g3-19",
+          "n3g3-20"
         ],
         "strategy": {
           "type": "leastPing",
@@ -109,7 +107,7 @@
       "settings": {
         "vnext": [
           {
-            "address": "193.163.203.53",
+            "address": "193.163.203.47",
             "port": 443,
             "users": [
               {
@@ -139,7 +137,7 @@
       "settings": {
         "vnext": [
           {
-            "address": "193.163.203.53",
+            "address": "193.163.203.52",
             "port": 443,
             "users": [
               {
@@ -169,7 +167,7 @@
       "settings": {
         "vnext": [
           {
-            "address": "193.163.203.53",
+            "address": "193.163.203.52",
             "port": 443,
             "users": [
               {
@@ -199,7 +197,7 @@
       "settings": {
         "vnext": [
           {
-            "address": "193.163.203.53",
+            "address": "193.163.203.52",
             "port": 443,
             "users": [
               {
@@ -259,11 +257,11 @@
       "settings": {
         "vnext": [
           {
-            "address": "47.81.36.248",
+            "address": "193.163.203.53",
             "port": 443,
             "users": [
               {
-                "id": "3e7f67de-648e-4871-b51a-a225214d41ee",
+                "id": "3d243df5-9cda-4aac-89d5-354de77d79e2",
                 "encryption": "none",
                 "flow": "xtls-rprx-vision"
               }
@@ -276,9 +274,9 @@
         "tcpSettings": {},
         "security": "reality",
         "realitySettings": {
-          "serverName": "api.digital-help-prd.autodesk.com",
-          "publicKey": "TRP10HqKUXEQ3O-cfsq93DycfBmbJe9KM36yvSa8Mmw",
-          "shortId": "",
+          "serverName": "mirror.yandex.ru",
+          "publicKey": "IarU4xicX8qiVO5nqzeHc6MK9A_Vw9YaAtnPHB4DswU",
+          "shortId": "916a",
           "fingerprint": "chrome"
         }
       }
@@ -289,11 +287,11 @@
       "settings": {
         "vnext": [
           {
-            "address": "47.81.36.248",
+            "address": "193.163.203.53",
             "port": 443,
             "users": [
               {
-                "id": "3e7f67de-648e-4871-b51a-a225214d41ee",
+                "id": "3d243df5-9cda-4aac-89d5-354de77d79e2",
                 "encryption": "none",
                 "flow": "xtls-rprx-vision"
               }
@@ -306,9 +304,9 @@
         "tcpSettings": {},
         "security": "reality",
         "realitySettings": {
-          "serverName": "api.digital-help-prd.autodesk.com",
-          "publicKey": "TRP10HqKUXEQ3O-cfsq93DycfBmbJe9KM36yvSa8Mmw",
-          "shortId": "",
+          "serverName": "mirror.yandex.ru",
+          "publicKey": "IarU4xicX8qiVO5nqzeHc6MK9A_Vw9YaAtnPHB4DswU",
+          "shortId": "916a",
           "fingerprint": "chrome"
         }
       }
@@ -319,11 +317,11 @@
       "settings": {
         "vnext": [
           {
-            "address": "47.81.39.100",
+            "address": "193.163.203.53",
             "port": 443,
             "users": [
               {
-                "id": "3e7f67de-648e-4871-b51a-a225214d41ee",
+                "id": "3d243df5-9cda-4aac-89d5-354de77d79e2",
                 "encryption": "none",
                 "flow": "xtls-rprx-vision"
               }
@@ -336,189 +334,9 @@
         "tcpSettings": {},
         "security": "reality",
         "realitySettings": {
-          "serverName": "api.digital-help-prd.autodesk.com",
-          "publicKey": "TRP10HqKUXEQ3O-cfsq93DycfBmbJe9KM36yvSa8Mmw",
-          "shortId": "",
-          "fingerprint": "random"
-        }
-      }
-    },
-    {
-      "tag": "n3g3-9",
-      "protocol": "vless",
-      "settings": {
-        "vnext": [
-          {
-            "address": "217.168.240.172",
-            "port": 2443,
-            "users": [
-              {
-                "id": "45907257-0e7a-42bf-9c3c-7c034e70d6f8",
-                "encryption": "none",
-                "flow": "xtls-rprx-vision"
-              }
-            ]
-          }
-        ]
-      },
-      "streamSettings": {
-        "network": "xhttp",
-        "tcpSettings": {},
-        "security": "reality",
-        "realitySettings": {
-          "serverName": "travel.yandex.ru",
-          "publicKey": "XqH-gNEL9eJfr1pglaI8WU3OvE654_5duXYBS35UXlM",
-          "shortId": "abcdef0123456789",
-          "fingerprint": "chrome"
-        }
-      }
-    },
-    {
-      "tag": "n3g3-10",
-      "protocol": "vless",
-      "settings": {
-        "vnext": [
-          {
-            "address": "217.168.240.172",
-            "port": 2443,
-            "users": [
-              {
-                "id": "45907257-0e7a-42bf-9c3c-7c034e70d6f8",
-                "encryption": "none",
-                "flow": "xtls-rprx-vision"
-              }
-            ]
-          }
-        ]
-      },
-      "streamSettings": {
-        "network": "xhttp",
-        "tcpSettings": {},
-        "security": "reality",
-        "realitySettings": {
-          "serverName": "travel.yandex.ru",
-          "publicKey": "XqH-gNEL9eJfr1pglaI8WU3OvE654_5duXYBS35UXlM",
-          "shortId": "abcdef0123456789",
-          "fingerprint": "chrome"
-        }
-      }
-    },
-    {
-      "tag": "n3g3-11",
-      "protocol": "vless",
-      "settings": {
-        "vnext": [
-          {
-            "address": "87.242.118.99",
-            "port": 443,
-            "users": [
-              {
-                "id": "45907257-0e7a-42bf-9c3c-7c034e70d6f8",
-                "encryption": "none",
-                "flow": "xtls-rprx-vision"
-              }
-            ]
-          }
-        ]
-      },
-      "streamSettings": {
-        "network": "xhttp",
-        "tcpSettings": {},
-        "security": "reality",
-        "realitySettings": {
-          "serverName": "travel.yandex.ru",
-          "publicKey": "XqH-gNEL9eJfr1pglaI8WU3OvE654_5duXYBS35UXlM",
-          "shortId": "abcdef0123456789",
-          "fingerprint": "firefox"
-        }
-      }
-    },
-    {
-      "tag": "n3g3-12",
-      "protocol": "vless",
-      "settings": {
-        "vnext": [
-          {
-            "address": "87.242.118.99",
-            "port": 443,
-            "users": [
-              {
-                "id": "45907257-0e7a-42bf-9c3c-7c034e70d6f8",
-                "encryption": "none",
-                "flow": "xtls-rprx-vision"
-              }
-            ]
-          }
-        ]
-      },
-      "streamSettings": {
-        "network": "xhttp",
-        "tcpSettings": {},
-        "security": "reality",
-        "realitySettings": {
-          "serverName": "vk.com",
-          "publicKey": "OvzRQOJMpkup7bhUmQicdBxrB0Pm8adQHLbTxgNorlo",
-          "shortId": "abcdef0123456789",
-          "fingerprint": "chrome"
-        }
-      }
-    },
-    {
-      "tag": "n3g3-13",
-      "protocol": "vless",
-      "settings": {
-        "vnext": [
-          {
-            "address": "217.168.240.252",
-            "port": 9443,
-            "users": [
-              {
-                "id": "4649d681-7f26-4959-a3f2-02eb8866230f",
-                "encryption": "none",
-                "flow": "xtls-rprx-vision"
-              }
-            ]
-          }
-        ]
-      },
-      "streamSettings": {
-        "network": "tcp",
-        "tcpSettings": {},
-        "security": "reality",
-        "realitySettings": {
-          "serverName": "yahoo.com",
-          "publicKey": "wAYsJ6RJXFy94w_WaTIhp1ZfCePAPoZmP27RarvUqXg",
-          "shortId": "2344766a270a6298",
-          "fingerprint": "chrome"
-        }
-      }
-    },
-    {
-      "tag": "n3g3-14",
-      "protocol": "vless",
-      "settings": {
-        "vnext": [
-          {
-            "address": "217.168.240.172",
-            "port": 2443,
-            "users": [
-              {
-                "id": "48e2d2c4-4863-4bd2-8ca6-0a3286d31c71",
-                "encryption": "none",
-                "flow": "xtls-rprx-vision"
-              }
-            ]
-          }
-        ]
-      },
-      "streamSettings": {
-        "network": "xhttp",
-        "tcpSettings": {},
-        "security": "reality",
-        "realitySettings": {
-          "serverName": "travel.yandex.ru",
-          "publicKey": "XqH-gNEL9eJfr1pglaI8WU3OvE654_5duXYBS35UXlM",
-          "shortId": "ab",
+          "serverName": "mirror.yandex.ru",
+          "publicKey": "IarU4xicX8qiVO5nqzeHc6MK9A_Vw9YaAtnPHB4DswU",
+          "shortId": "916a",
           "fingerprint": "chrome"
         }
       }
@@ -533,7 +351,7 @@
             "port": 2443,
             "users": [
               {
-                "id": "48e2d2c4-4863-4bd2-8ca6-0a3286d31c71",
+                "id": "45907257-0e7a-42bf-9c3c-7c034e70d6f8",
                 "encryption": "none",
                 "flow": "xtls-rprx-vision"
               }
@@ -548,7 +366,7 @@
         "realitySettings": {
           "serverName": "travel.yandex.ru",
           "publicKey": "XqH-gNEL9eJfr1pglaI8WU3OvE654_5duXYBS35UXlM",
-          "shortId": "ab",
+          "shortId": "abcdef0123456789",
           "fingerprint": "chrome"
         }
       }
@@ -559,11 +377,11 @@
       "settings": {
         "vnext": [
           {
-            "address": "87.242.118.99",
-            "port": 443,
+            "address": "109.73.199.48",
+            "port": 8454,
             "users": [
               {
-                "id": "48e2d2c4-4863-4bd2-8ca6-0a3286d31c71",
+                "id": "48fb0504-87c4-4f06-b0a5-115ea2a9b61c",
                 "encryption": "none",
                 "flow": "xtls-rprx-vision"
               }
@@ -572,14 +390,134 @@
         ]
       },
       "streamSettings": {
-        "network": "xhttp",
+        "network": "tcp",
         "tcpSettings": {},
         "security": "reality",
         "realitySettings": {
-          "serverName": "vk.com",
-          "publicKey": "OvzRQOJMpkup7bhUmQicdBxrB0Pm8adQHLbTxgNorlo",
-          "shortId": "ab",
-          "fingerprint": "chrome"
+          "serverName": "jobinvest.ru",
+          "publicKey": "SbVKOEMjK0sIlbwg4akyBg5mL5KZwwB-ed4eEE7YnRc",
+          "shortId": "",
+          "fingerprint": "qq"
+        }
+      }
+    },
+    {
+      "tag": "n3g3-17",
+      "protocol": "vless",
+      "settings": {
+        "vnext": [
+          {
+            "address": "176.124.211.23",
+            "port": 8446,
+            "users": [
+              {
+                "id": "48fb0504-87c4-4f06-b0a5-115ea2a9b61c",
+                "encryption": "none",
+                "flow": "xtls-rprx-vision"
+              }
+            ]
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "tcp",
+        "tcpSettings": {},
+        "security": "reality",
+        "realitySettings": {
+          "serverName": "jobinvest.ru",
+          "publicKey": "SbVKOEMjK0sIlbwg4akyBg5mL5KZwwB-ed4eEE7YnRc",
+          "shortId": "",
+          "fingerprint": "qq"
+        }
+      }
+    },
+    {
+      "tag": "n3g3-18",
+      "protocol": "vless",
+      "settings": {
+        "vnext": [
+          {
+            "address": "176.124.211.23",
+            "port": 8454,
+            "users": [
+              {
+                "id": "48fb0504-87c4-4f06-b0a5-115ea2a9b61c",
+                "encryption": "none",
+                "flow": "xtls-rprx-vision"
+              }
+            ]
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "tcp",
+        "tcpSettings": {},
+        "security": "reality",
+        "realitySettings": {
+          "serverName": "jobinvest.ru",
+          "publicKey": "SbVKOEMjK0sIlbwg4akyBg5mL5KZwwB-ed4eEE7YnRc",
+          "shortId": "",
+          "fingerprint": "qq"
+        }
+      }
+    },
+    {
+      "tag": "n3g3-19",
+      "protocol": "vless",
+      "settings": {
+        "vnext": [
+          {
+            "address": "188.130.154.56",
+            "port": 443,
+            "users": [
+              {
+                "id": "48fb0504-87c4-4f06-b0a5-115ea2a9b61c",
+                "encryption": "none",
+                "flow": "xtls-rprx-vision"
+              }
+            ]
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "tcp",
+        "tcpSettings": {},
+        "security": "reality",
+        "realitySettings": {
+          "serverName": "jobinvest.ru",
+          "publicKey": "SbVKOEMjK0sIlbwg4akyBg5mL5KZwwB-ed4eEE7YnRc",
+          "shortId": "",
+          "fingerprint": "qq"
+        }
+      }
+    },
+    {
+      "tag": "n3g3-20",
+      "protocol": "vless",
+      "settings": {
+        "vnext": [
+          {
+            "address": "176.124.211.23",
+            "port": 8446,
+            "users": [
+              {
+                "id": "4c5167a1-af2c-4960-ad05-d26b71360bf4",
+                "encryption": "none",
+                "flow": "xtls-rprx-vision"
+              }
+            ]
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "tcp",
+        "tcpSettings": {},
+        "security": "reality",
+        "realitySettings": {
+          "serverName": "jobinvest.ru",
+          "publicKey": "SbVKOEMjK0sIlbwg4akyBg5mL5KZwwB-ed4eEE7YnRc",
+          "shortId": "",
+          "fingerprint": "qq"
         }
       }
     },
@@ -610,14 +548,12 @@
       "n3g3-6",
       "n3g3-7",
       "n3g3-8",
-      "n3g3-9",
-      "n3g3-10",
-      "n3g3-11",
-      "n3g3-12",
-      "n3g3-13",
-      "n3g3-14",
       "n3g3-15",
-      "n3g3-16"
+      "n3g3-16",
+      "n3g3-17",
+      "n3g3-18",
+      "n3g3-19",
+      "n3g3-20"
     ]
   }
 }

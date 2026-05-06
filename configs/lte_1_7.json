@@ -1,5 +1,5 @@
 {
-  "remarks": "LTE | Авто 1.7",
+  "remarks": "LTE | Auto 1.7",
   "dns": {
     "servers": [
       "1.1.1.1",
@@ -24,12 +24,12 @@
           "socks",
           "http"
         ],
-        "balancerTag": "AUTO-n1g7"
+        "balancerTag": "AUTO-BAL"
       }
     ],
     "balancers": [
       {
-        "tag": "AUTO-n1g7",
+        "tag": "AUTO-BAL",
         "selector": [
           "n1g7-1",
           "n1g7-2",
@@ -41,12 +41,12 @@
           "n1g7-8",
           "n1g7-9",
           "n1g7-10",
-          "n1g7-11",
-          "n1g7-12",
-          "n1g7-13",
-          "n1g7-14",
           "n1g7-15",
-          "n1g7-16"
+          "n1g7-16",
+          "n1g7-17",
+          "n1g7-18",
+          "n1g7-19",
+          "n1g7-20"
         ],
         "strategy": {
           "type": "leastPing",
@@ -404,7 +404,7 @@
       }
     },
     {
-      "tag": "n1g7-11",
+      "tag": "n1g7-15",
       "protocol": "vless",
       "settings": {
         "vnext": [
@@ -434,7 +434,7 @@
       }
     },
     {
-      "tag": "n1g7-12",
+      "tag": "n1g7-16",
       "protocol": "vless",
       "settings": {
         "vnext": [
@@ -464,7 +464,7 @@
       }
     },
     {
-      "tag": "n1g7-13",
+      "tag": "n1g7-17",
       "protocol": "vless",
       "settings": {
         "vnext": [
@@ -494,7 +494,7 @@
       }
     },
     {
-      "tag": "n1g7-14",
+      "tag": "n1g7-18",
       "protocol": "vless",
       "settings": {
         "vnext": [
@@ -524,7 +524,7 @@
       }
     },
     {
-      "tag": "n1g7-15",
+      "tag": "n1g7-19",
       "protocol": "vless",
       "settings": {
         "vnext": [
@@ -554,7 +554,7 @@
       }
     },
     {
-      "tag": "n1g7-16",
+      "tag": "n1g7-20",
       "protocol": "vless",
       "settings": {
         "vnext": [
@@ -612,12 +612,12 @@
       "n1g7-8",
       "n1g7-9",
       "n1g7-10",
-      "n1g7-11",
-      "n1g7-12",
-      "n1g7-13",
-      "n1g7-14",
       "n1g7-15",
-      "n1g7-16"
+      "n1g7-16",
+      "n1g7-17",
+      "n1g7-18",
+      "n1g7-19",
+      "n1g7-20"
     ]
   }
 }

@@ -1,5 +1,5 @@
 {
-  "remarks": "LTE | Auto 5.3",
+  "remarks": "LTE | Auto 3.13",
   "dns": {
     "servers": [
       "1.1.1.1",
@@ -31,26 +31,26 @@
       {
         "tag": "AUTO-BAL",
         "selector": [
-          "n5g3-1",
-          "n5g3-2",
-          "n5g3-3",
-          "n5g3-4",
-          "n5g3-5",
-          "n5g3-6",
-          "n5g3-7",
-          "n5g3-8",
-          "n5g3-9",
-          "n5g3-10",
-          "n5g3-11",
-          "n5g3-12",
-          "n5g3-13",
-          "n5g3-14",
-          "n5g3-15",
-          "n5g3-16",
-          "n5g3-17",
-          "n5g3-18",
-          "n5g3-19",
-          "n5g3-20"
+          "n3g13-1",
+          "n3g13-2",
+          "n3g13-3",
+          "n3g13-4",
+          "n3g13-5",
+          "n3g13-6",
+          "n3g13-7",
+          "n3g13-8",
+          "n3g13-9",
+          "n3g13-10",
+          "n3g13-11",
+          "n3g13-12",
+          "n3g13-13",
+          "n3g13-14",
+          "n3g13-15",
+          "n3g13-16",
+          "n3g13-17",
+          "n3g13-18",
+          "n3g13-19",
+          "n3g13-20"
         ],
         "strategy": {
           "type": "leastPing",
@@ -108,16 +108,16 @@
   ],
   "outbounds": [
     {
-      "tag": "n5g3-1",
+      "tag": "n3g13-1",
       "protocol": "vless",
       "settings": {
         "vnext": [
           {
-            "address": "fast.pilates.rodeo",
+            "address": "23.177.185.168",
             "port": 443,
             "users": [
               {
-                "id": "3d243df5-9cda-4aac-89d5-354de77d79e2",
+                "id": "c35f8079-2baa-4011-af58-ac52fcd9b561",
                 "encryption": "none",
                 "flow": "xtls-rprx-vision"
               }
@@ -130,24 +130,24 @@
         "tcpSettings": {},
         "security": "reality",
         "realitySettings": {
-          "serverName": "mirror.yandex.ru",
-          "publicKey": "IarU4xicX8qiVO5nqzeHc6MK9A_Vw9YaAtnPHB4DswU",
-          "shortId": "916a",
+          "serverName": "disk.yandex.ru",
+          "publicKey": "OxoUEY80ZIYn3kwbksAklEhs98qhA-awIrWKv_nxvXI",
+          "shortId": "70f1222b",
           "fingerprint": "chrome"
         }
       }
     },
     {
-      "tag": "n5g3-2",
+      "tag": "n3g13-2",
       "protocol": "vless",
       "settings": {
         "vnext": [
           {
-            "address": "45.149.114.30",
-            "port": 8443,
+            "address": "79.137.198.154",
+            "port": 443,
             "users": [
               {
-                "id": "5ad9f8f3-40dc-457b-942b-d210825d7627",
+                "id": "cd34aece-f7f5-421c-a3d5-13002429a6b7",
                 "encryption": "none",
                 "flow": "xtls-rprx-vision"
               }
@@ -156,28 +156,28 @@
         ]
       },
       "streamSettings": {
-        "network": "tcp",
+        "network": "grpc",
         "tcpSettings": {},
         "security": "reality",
         "realitySettings": {
-          "serverName": "sun6-22.userapi.com",
-          "publicKey": "3JGwSDrfkiCPdU3rvQP5m0z4Ag_UB_2w8Qq3VMXmo28",
-          "shortId": "abc323",
+          "serverName": "ads.x5.ru",
+          "publicKey": "XrXK3qb2CKCBP80Vkg3WfNBB4gpy4YOADmQ7mhHfDWE",
+          "shortId": "",
           "fingerprint": "chrome"
         }
       }
     },
     {
-      "tag": "n5g3-3",
+      "tag": "n3g13-3",
       "protocol": "vless",
       "settings": {
         "vnext": [
           {
-            "address": "45.149.114.30",
-            "port": 8443,
+            "address": "83.147.255.201",
+            "port": 443,
             "users": [
               {
-                "id": "5ad9f8f3-40dc-457b-942b-d210825d7627",
+                "id": "cd34aece-f7f5-421c-a3d5-13002429a6b7",
                 "encryption": "none",
                 "flow": "xtls-rprx-vision"
               }
@@ -190,24 +190,54 @@
         "tcpSettings": {},
         "security": "reality",
         "realitySettings": {
-          "serverName": "sun6-22.userapi.com",
-          "publicKey": "3JGwSDrfkiCPdU3rvQP5m0z4Ag_UB_2w8Qq3VMXmo28",
-          "shortId": "abc323",
+          "serverName": "telegavpn.com",
+          "publicKey": "WvNaAxI0W__qfUKbtysH4IwF155YENlv3PG6crCmPkA",
+          "shortId": "",
+          "fingerprint": "chrome"
+        }
+      }
+    },
+    {
+      "tag": "n3g13-4",
+      "protocol": "vless",
+      "settings": {
+        "vnext": [
+          {
+            "address": "176.124.211.23",
+            "port": 8446,
+            "users": [
+              {
+                "id": "cf0cae47-4624-4c83-bcd4-d81579a7392f",
+                "encryption": "none",
+                "flow": "xtls-rprx-vision"
+              }
+            ]
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "tcp",
+        "tcpSettings": {},
+        "security": "reality",
+        "realitySettings": {
+          "serverName": "jobinvest.ru",
+          "publicKey": "SbVKOEMjK0sIlbwg4akyBg5mL5KZwwB-ed4eEE7YnRc",
+          "shortId": "",
           "fingerprint": "qq"
         }
       }
     },
     {
-      "tag": "n5g3-4",
+      "tag": "n3g13-5",
       "protocol": "vless",
       "settings": {
         "vnext": [
           {
-            "address": "india.boot-lee.ru",
-            "port": 8443,
+            "address": "176.124.211.23",
+            "port": 8454,
             "users": [
               {
-                "id": "5ad9f8f3-40dc-457b-942b-d210825d7627",
+                "id": "cf0cae47-4624-4c83-bcd4-d81579a7392f",
                 "encryption": "none",
                 "flow": "xtls-rprx-vision"
               }
@@ -220,24 +250,24 @@
         "tcpSettings": {},
         "security": "reality",
         "realitySettings": {
-          "serverName": "sun6-22.userapi.com",
-          "publicKey": "3JGwSDrfkiCPdU3rvQP5m0z4Ag_UB_2w8Qq3VMXmo28",
-          "shortId": "abc323",
+          "serverName": "jobinvest.ru",
+          "publicKey": "SbVKOEMjK0sIlbwg4akyBg5mL5KZwwB-ed4eEE7YnRc",
+          "shortId": "",
           "fingerprint": "qq"
         }
       }
     },
     {
-      "tag": "n5g3-5",
+      "tag": "n3g13-6",
       "protocol": "vless",
       "settings": {
         "vnext": [
           {
-            "address": "kazakhstan.boot-lee.ru",
-            "port": 8443,
+            "address": "188.130.154.56",
+            "port": 443,
             "users": [
               {
-                "id": "5ad9f8f3-40dc-457b-942b-d210825d7627",
+                "id": "cf0cae47-4624-4c83-bcd4-d81579a7392f",
                 "encryption": "none",
                 "flow": "xtls-rprx-vision"
               }
@@ -250,24 +280,24 @@
         "tcpSettings": {},
         "security": "reality",
         "realitySettings": {
-          "serverName": "sun6-22.userapi.com",
-          "publicKey": "3JGwSDrfkiCPdU3rvQP5m0z4Ag_UB_2w8Qq3VMXmo28",
-          "shortId": "abc323",
+          "serverName": "jobinvest.ru",
+          "publicKey": "SbVKOEMjK0sIlbwg4akyBg5mL5KZwwB-ed4eEE7YnRc",
+          "shortId": "",
           "fingerprint": "qq"
         }
       }
     },
     {
-      "tag": "n5g3-6",
+      "tag": "n3g13-7",
       "protocol": "vless",
       "settings": {
         "vnext": [
           {
-            "address": "lithuania.boot-lee.ru",
-            "port": 8443,
+            "address": "51.250.94.95",
+            "port": 443,
             "users": [
               {
-                "id": "5ad9f8f3-40dc-457b-942b-d210825d7627",
+                "id": "cf0cae47-4624-4c83-bcd4-d81579a7392f",
                 "encryption": "none",
                 "flow": "xtls-rprx-vision"
               }
@@ -280,24 +310,24 @@
         "tcpSettings": {},
         "security": "reality",
         "realitySettings": {
-          "serverName": "sun6-22.userapi.com",
-          "publicKey": "3JGwSDrfkiCPdU3rvQP5m0z4Ag_UB_2w8Qq3VMXmo28",
-          "shortId": "abc323",
+          "serverName": "ads.x5.ru",
+          "publicKey": "SbVKOEMjK0sIlbwg4akyBg5mL5KZwwB-ed4eEE7YnRc",
+          "shortId": "",
           "fingerprint": "qq"
         }
       }
     },
     {
-      "tag": "n5g3-7",
+      "tag": "n3g13-8",
       "protocol": "vless",
       "settings": {
         "vnext": [
           {
-            "address": "pl-free-1.amnesia.pw",
+            "address": "5.42.107.14",
             "port": 443,
             "users": [
               {
-                "id": "5b6a67cc-684e-448d-a93d-3335a61be810",
+                "id": "cf5718f5-c0f3-4b63-8fbf-1de69c1299c5",
                 "encryption": "none",
                 "flow": "xtls-rprx-vision"
               }
@@ -310,24 +340,24 @@
         "tcpSettings": {},
         "security": "reality",
         "realitySettings": {
-          "serverName": "www.ozon.ru",
-          "publicKey": "TGiarWayhvAmTy5Z26bfEtnmHtRS4YVn03VdRxtm1Es",
+          "serverName": "ads.x5.ru",
+          "publicKey": "qB_eMu3ZO_wGITnyIqJ7Kt39-h9oHFnHlQQEqA-r3VA",
           "shortId": "",
           "fingerprint": "chrome"
         }
       }
     },
     {
-      "tag": "n5g3-8",
+      "tag": "n3g13-9",
       "protocol": "vless",
       "settings": {
         "vnext": [
           {
-            "address": "pl-free-2.amnesia.pw",
+            "address": "90.156.218.67",
             "port": 443,
             "users": [
               {
-                "id": "5b6a67cc-684e-448d-a93d-3335a61be810",
+                "id": "cf5718f5-c0f3-4b63-8fbf-1de69c1299c5",
                 "encryption": "none",
                 "flow": "xtls-rprx-vision"
               }
@@ -340,24 +370,24 @@
         "tcpSettings": {},
         "security": "reality",
         "realitySettings": {
-          "serverName": "www.ozon.ru",
-          "publicKey": "TGiarWayhvAmTy5Z26bfEtnmHtRS4YVn03VdRxtm1Es",
+          "serverName": "sun2-11.userapi.com",
+          "publicKey": "qB_eMu3ZO_wGITnyIqJ7Kt39-h9oHFnHlQQEqA-r3VA",
           "shortId": "",
           "fingerprint": "chrome"
         }
       }
     },
     {
-      "tag": "n5g3-9",
+      "tag": "n3g13-10",
       "protocol": "vless",
       "settings": {
         "vnext": [
           {
-            "address": "pl-free-2.amnesia.pw",
+            "address": "90.156.218.67",
             "port": 443,
             "users": [
               {
-                "id": "5b6a67cc-684e-448d-a93d-3335a61be810",
+                "id": "cf5718f5-c0f3-4b63-8fbf-1de69c1299c5",
                 "encryption": "none",
                 "flow": "xtls-rprx-vision"
               }
@@ -370,24 +400,24 @@
         "tcpSettings": {},
         "security": "reality",
         "realitySettings": {
-          "serverName": "www.ozon.ru",
-          "publicKey": "TGiarWayhvAmTy5Z26bfEtnmHtRS4YVn03VdRxtm1Es",
+          "serverName": "sun2-11.userapi.com",
+          "publicKey": "qB_eMu3ZO_wGITnyIqJ7Kt39-h9oHFnHlQQEqA-r3VA",
           "shortId": "",
           "fingerprint": "chrome"
         }
       }
     },
     {
-      "tag": "n5g3-10",
+      "tag": "n3g13-11",
       "protocol": "vless",
       "settings": {
         "vnext": [
           {
-            "address": "pl-free-2.amnesia.pw",
+            "address": "147.45.183.83",
             "port": 443,
             "users": [
               {
-                "id": "5b6a67cc-684e-448d-a93d-3335a61be810",
+                "id": "d428091c-e6eb-48f9-9a07-b44eb886ac90",
                 "encryption": "none",
                 "flow": "xtls-rprx-vision"
               }
@@ -400,24 +430,24 @@
         "tcpSettings": {},
         "security": "reality",
         "realitySettings": {
-          "serverName": "www.ozon.ru",
-          "publicKey": "TGiarWayhvAmTy5Z26bfEtnmHtRS4YVn03VdRxtm1Es",
-          "shortId": "",
+          "serverName": "mydogcollections.com",
+          "publicKey": "RsG53RnTZKpPwbKt0mnj3963DinwNFHpk3eWaHH6oG4",
+          "shortId": "653253254366",
           "fingerprint": "chrome"
         }
       }
     },
     {
-      "tag": "n5g3-11",
+      "tag": "n3g13-12",
       "protocol": "vless",
       "settings": {
         "vnext": [
           {
-            "address": "pl-free-2.amnesia.pw",
+            "address": "147.45.183.83",
             "port": 443,
             "users": [
               {
-                "id": "5b6a67cc-684e-448d-a93d-3335a61be810",
+                "id": "d428091c-e6eb-48f9-9a07-b44eb886ac90",
                 "encryption": "none",
                 "flow": "xtls-rprx-vision"
               }
@@ -430,24 +460,54 @@
         "tcpSettings": {},
         "security": "reality",
         "realitySettings": {
-          "serverName": "www.ozon.ru",
-          "publicKey": "TGiarWayhvAmTy5Z26bfEtnmHtRS4YVn03VdRxtm1Es",
-          "shortId": "",
+          "serverName": "mydogcollections.com",
+          "publicKey": "RsG53RnTZKpPwbKt0mnj3963DinwNFHpk3eWaHH6oG4",
+          "shortId": "653253254366",
+          "fingerprint": "random"
+        }
+      }
+    },
+    {
+      "tag": "n3g13-13",
+      "protocol": "vless",
+      "settings": {
+        "vnext": [
+          {
+            "address": "178.253.42.96",
+            "port": 443,
+            "users": [
+              {
+                "id": "d428091c-e6eb-48f9-9a07-b44eb886ac90",
+                "encryption": "none",
+                "flow": "xtls-rprx-vision"
+              }
+            ]
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "tcp",
+        "tcpSettings": {},
+        "security": "reality",
+        "realitySettings": {
+          "serverName": "mydogcollections.com",
+          "publicKey": "RsG53RnTZKpPwbKt0mnj3963DinwNFHpk3eWaHH6oG4",
+          "shortId": "653253254366",
           "fingerprint": "chrome"
         }
       }
     },
     {
-      "tag": "n5g3-12",
+      "tag": "n3g13-14",
       "protocol": "vless",
       "settings": {
         "vnext": [
           {
-            "address": "pl-free-2.amnesia.pw",
+            "address": "178.253.42.96",
             "port": 443,
             "users": [
               {
-                "id": "5b6a67cc-684e-448d-a93d-3335a61be810",
+                "id": "d428091c-e6eb-48f9-9a07-b44eb886ac90",
                 "encryption": "none",
                 "flow": "xtls-rprx-vision"
               }
@@ -460,24 +520,84 @@
         "tcpSettings": {},
         "security": "reality",
         "realitySettings": {
-          "serverName": "www.ozon.ru",
-          "publicKey": "TGiarWayhvAmTy5Z26bfEtnmHtRS4YVn03VdRxtm1Es",
-          "shortId": "",
+          "serverName": "mydogcollections.com",
+          "publicKey": "RsG53RnTZKpPwbKt0mnj3963DinwNFHpk3eWaHH6oG4",
+          "shortId": "653253254366",
+          "fingerprint": "random"
+        }
+      }
+    },
+    {
+      "tag": "n3g13-15",
+      "protocol": "vless",
+      "settings": {
+        "vnext": [
+          {
+            "address": "217.18.61.215",
+            "port": 443,
+            "users": [
+              {
+                "id": "d428091c-e6eb-48f9-9a07-b44eb886ac90",
+                "encryption": "none",
+                "flow": "xtls-rprx-vision"
+              }
+            ]
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "tcp",
+        "tcpSettings": {},
+        "security": "reality",
+        "realitySettings": {
+          "serverName": "mydogcollections.com",
+          "publicKey": "RsG53RnTZKpPwbKt0mnj3963DinwNFHpk3eWaHH6oG4",
+          "shortId": "653253254366",
+          "fingerprint": "random"
+        }
+      }
+    },
+    {
+      "tag": "n3g13-16",
+      "protocol": "vless",
+      "settings": {
+        "vnext": [
+          {
+            "address": "217.18.61.243",
+            "port": 443,
+            "users": [
+              {
+                "id": "d428091c-e6eb-48f9-9a07-b44eb886ac90",
+                "encryption": "none",
+                "flow": "xtls-rprx-vision"
+              }
+            ]
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "tcp",
+        "tcpSettings": {},
+        "security": "reality",
+        "realitySettings": {
+          "serverName": "mydogcollections.com",
+          "publicKey": "RsG53RnTZKpPwbKt0mnj3963DinwNFHpk3eWaHH6oG4",
+          "shortId": "653253254366",
           "fingerprint": "chrome"
         }
       }
     },
     {
-      "tag": "n5g3-13",
+      "tag": "n3g13-17",
       "protocol": "vless",
       "settings": {
         "vnext": [
           {
-            "address": "pl-free-2.amnesia.pw",
+            "address": "217.18.61.243",
             "port": 443,
             "users": [
               {
-                "id": "5b6a67cc-684e-448d-a93d-3335a61be810",
+                "id": "d428091c-e6eb-48f9-9a07-b44eb886ac90",
                 "encryption": "none",
                 "flow": "xtls-rprx-vision"
               }
@@ -486,28 +606,58 @@
         ]
       },
       "streamSettings": {
-        "network": "xhttp",
+        "network": "tcp",
         "tcpSettings": {},
         "security": "reality",
         "realitySettings": {
-          "serverName": "www.ozon.ru",
-          "publicKey": "bgMZOw_CKZSQrjk2qOmd8apRhRe5CxFQD-mJwqoVTww",
-          "shortId": "",
+          "serverName": "mydogcollections.com",
+          "publicKey": "RsG53RnTZKpPwbKt0mnj3963DinwNFHpk3eWaHH6oG4",
+          "shortId": "653253254366",
+          "fingerprint": "random"
+        }
+      }
+    },
+    {
+      "tag": "n3g13-18",
+      "protocol": "vless",
+      "settings": {
+        "vnext": [
+          {
+            "address": "45.153.71.12",
+            "port": 443,
+            "users": [
+              {
+                "id": "d428091c-e6eb-48f9-9a07-b44eb886ac90",
+                "encryption": "none",
+                "flow": "xtls-rprx-vision"
+              }
+            ]
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "tcp",
+        "tcpSettings": {},
+        "security": "reality",
+        "realitySettings": {
+          "serverName": "mydogcollections.com",
+          "publicKey": "RsG53RnTZKpPwbKt0mnj3963DinwNFHpk3eWaHH6oG4",
+          "shortId": "653253254366",
           "fingerprint": "chrome"
         }
       }
     },
     {
-      "tag": "n5g3-14",
+      "tag": "n3g13-19",
       "protocol": "vless",
       "settings": {
         "vnext": [
           {
-            "address": "pl-free-3.amnesia.pw",
+            "address": "45.153.71.12",
             "port": 443,
             "users": [
               {
-                "id": "5b6a67cc-684e-448d-a93d-3335a61be810",
+                "id": "d428091c-e6eb-48f9-9a07-b44eb886ac90",
                 "encryption": "none",
                 "flow": "xtls-rprx-vision"
               }
@@ -520,24 +670,24 @@
         "tcpSettings": {},
         "security": "reality",
         "realitySettings": {
-          "serverName": "www.ozon.ru",
-          "publicKey": "TGiarWayhvAmTy5Z26bfEtnmHtRS4YVn03VdRxtm1Es",
-          "shortId": "",
-          "fingerprint": "chrome"
+          "serverName": "mydogcollections.com",
+          "publicKey": "RsG53RnTZKpPwbKt0mnj3963DinwNFHpk3eWaHH6oG4",
+          "shortId": "653253254366",
+          "fingerprint": "random"
         }
       }
     },
     {
-      "tag": "n5g3-15",
+      "tag": "n3g13-20",
       "protocol": "vless",
       "settings": {
         "vnext": [
           {
-            "address": "pl-free-3.amnesia.pw",
+            "address": "45.153.71.184",
             "port": 443,
             "users": [
               {
-                "id": "5b6a67cc-684e-448d-a93d-3335a61be810",
+                "id": "d428091c-e6eb-48f9-9a07-b44eb886ac90",
                 "encryption": "none",
                 "flow": "xtls-rprx-vision"
               }
@@ -550,159 +700,9 @@
         "tcpSettings": {},
         "security": "reality",
         "realitySettings": {
-          "serverName": "www.ozon.ru",
-          "publicKey": "TGiarWayhvAmTy5Z26bfEtnmHtRS4YVn03VdRxtm1Es",
-          "shortId": "",
-          "fingerprint": "chrome"
-        }
-      }
-    },
-    {
-      "tag": "n5g3-16",
-      "protocol": "vless",
-      "settings": {
-        "vnext": [
-          {
-            "address": "45.198.87.205",
-            "port": 443,
-            "users": [
-              {
-                "id": "62ee45f2-d85c-485b-8d6e-534358f601b8",
-                "encryption": "none",
-                "flow": "xtls-rprx-vision"
-              }
-            ]
-          }
-        ]
-      },
-      "streamSettings": {
-        "network": "tcp",
-        "tcpSettings": {},
-        "security": "reality",
-        "realitySettings": {
-          "serverName": "rbc.ru",
-          "publicKey": "7zd9mJilgjOrg_ohtw23Vmio-pdnYqeP_r-kiWt87Cg",
-          "shortId": "8ba12e75110b7a9c",
-          "fingerprint": ""
-        }
-      }
-    },
-    {
-      "tag": "n5g3-17",
-      "protocol": "vless",
-      "settings": {
-        "vnext": [
-          {
-            "address": "45.198.87.205",
-            "port": 443,
-            "users": [
-              {
-                "id": "62ee45f2-d85c-485b-8d6e-534358f601b8",
-                "encryption": "none",
-                "flow": "xtls-rprx-vision"
-              }
-            ]
-          }
-        ]
-      },
-      "streamSettings": {
-        "network": "tcp",
-        "tcpSettings": {},
-        "security": "reality",
-        "realitySettings": {
-          "serverName": "rbc.ru",
-          "publicKey": "7zd9mJilgjOrg_ohtw23Vmio-pdnYqeP_r-kiWt87Cg",
-          "shortId": "8ba12e75110b7a9c",
-          "fingerprint": "chrome"
-        }
-      }
-    },
-    {
-      "tag": "n5g3-18",
-      "protocol": "vless",
-      "settings": {
-        "vnext": [
-          {
-            "address": "45.198.87.205",
-            "port": 443,
-            "users": [
-              {
-                "id": "62ee45f2-d85c-485b-8d6e-534358f601b8",
-                "encryption": "none",
-                "flow": "xtls-rprx-vision"
-              }
-            ]
-          }
-        ]
-      },
-      "streamSettings": {
-        "network": "tcp",
-        "tcpSettings": {},
-        "security": "reality",
-        "realitySettings": {
-          "serverName": "rbc.ru",
-          "publicKey": "7zd9mJilgjOrg_ohtw23Vmio-pdnYqeP_r-kiWt87Cg",
-          "shortId": "8ba12e75110b7a9c",
-          "fingerprint": "chrome"
-        }
-      }
-    },
-    {
-      "tag": "n5g3-19",
-      "protocol": "vless",
-      "settings": {
-        "vnext": [
-          {
-            "address": "45.198.87.205",
-            "port": 8443,
-            "users": [
-              {
-                "id": "62ee45f2-d85c-485b-8d6e-534358f601b8",
-                "encryption": "none",
-                "flow": "xtls-rprx-vision"
-              }
-            ]
-          }
-        ]
-      },
-      "streamSettings": {
-        "network": "tcp",
-        "tcpSettings": {},
-        "security": "reality",
-        "realitySettings": {
-          "serverName": "rbc.ru",
-          "publicKey": "7zd9mJilgjOrg_ohtw23Vmio-pdnYqeP_r-kiWt87Cg",
-          "shortId": "f4b4a6365558ea2e",
-          "fingerprint": ""
-        }
-      }
-    },
-    {
-      "tag": "n5g3-20",
-      "protocol": "vless",
-      "settings": {
-        "vnext": [
-          {
-            "address": "45.198.87.205",
-            "port": 8443,
-            "users": [
-              {
-                "id": "62ee45f2-d85c-485b-8d6e-534358f601b8",
-                "encryption": "none",
-                "flow": "xtls-rprx-vision"
-              }
-            ]
-          }
-        ]
-      },
-      "streamSettings": {
-        "network": "tcp",
-        "tcpSettings": {},
-        "security": "reality",
-        "realitySettings": {
-          "serverName": "rbc.ru",
-          "publicKey": "7zd9mJilgjOrg_ohtw23Vmio-pdnYqeP_r-kiWt87Cg",
-          "shortId": "f4b4a6365558ea2e",
+          "serverName": "mydogcollections.com",
+          "publicKey": "RsG53RnTZKpPwbKt0mnj3963DinwNFHpk3eWaHH6oG4",
+          "shortId": "653253254366",
           "fingerprint": "chrome"
         }
       }
@@ -726,26 +726,26 @@
       "connectivity": ""
     },
     "subjectSelector": [
-      "n5g3-1",
-      "n5g3-2",
-      "n5g3-3",
-      "n5g3-4",
-      "n5g3-5",
-      "n5g3-6",
-      "n5g3-7",
-      "n5g3-8",
-      "n5g3-9",
-      "n5g3-10",
-      "n5g3-11",
-      "n5g3-12",
-      "n5g3-13",
-      "n5g3-14",
-      "n5g3-15",
-      "n5g3-16",
-      "n5g3-17",
-      "n5g3-18",
-      "n5g3-19",
-      "n5g3-20"
+      "n3g13-1",
+      "n3g13-2",
+      "n3g13-3",
+      "n3g13-4",
+      "n3g13-5",
+      "n3g13-6",
+      "n3g13-7",
+      "n3g13-8",
+      "n3g13-9",
+      "n3g13-10",
+      "n3g13-11",
+      "n3g13-12",
+      "n3g13-13",
+      "n3g13-14",
+      "n3g13-15",
+      "n3g13-16",
+      "n3g13-17",
+      "n3g13-18",
+      "n3g13-19",
+      "n3g13-20"
     ]
   }
 }

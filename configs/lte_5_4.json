@@ -1,5 +1,5 @@
 {
-  "remarks": "LTE | Авто 5.4",
+  "remarks": "LTE | Auto 5.4",
   "dns": {
     "servers": [
       "1.1.1.1",
@@ -24,12 +24,12 @@
           "socks",
           "http"
         ],
-        "balancerTag": "AUTO-n5g4"
+        "balancerTag": "AUTO-BAL"
       }
     ],
     "balancers": [
       {
-        "tag": "AUTO-n5g4",
+        "tag": "AUTO-BAL",
         "selector": [
           "n5g4-1",
           "n5g4-2",
@@ -703,7 +703,7 @@
           "serverName": "api-maps.yandex.ru",
           "publicKey": "FJ4KCJmIbZw_lLKrIueo8yUEP959xvvCOVXUEc2Zclo",
           "shortId": "a1b2c3d4e5f6",
-          "fingerprint": "chrome"
+          "fingerprint": ""
         }
       }
     },
