@@ -18,8 +18,163 @@ jobs:
 
       - name: Fetch and build configs
         run: |
-          chmod +x scripts/build_configs.sh
-          bash scripts/build_configs.sh
+          set -euo pipefail
+
+          GROUP_SIZE=20
+          OUTPUT_DIR="configs"
+          VLESS_TXT="vlees.txt"
+
+          mkdir -p "$OUTPUT_DIR"
+
+          printf '#profile-title: HiBypass | LTE FREE 🏳🇷🇺\n#profile-update-interval: 6\n#support-url: https://t.me/Hibypass\n#profile-web-page-url: https://t.me/Hibypass\n#announce: Бесплатный обход белых списков РФ 🏳🇷🇺 | ТГ : @Hibypass\n#traffic-limit: ∞\n#traffic-remaining: ∞\n' > "$VLESS_TXT"
+
+          parse_vless() {
+            local uri="$1"
+            local body="${uri#vless://}"
+            local uuid="${body%%@*}"
+            local rest="${body#*@}"
+            local hostport="${rest%%\?*}"
+            local host="${hostport%%:*}"
+            local port="${hostport##*:}"
+            local params="${rest#*\?}"
+            params="${params%%#*}"
+            local flow sni pbk fp sid net
+            flow=$(echo "$params" | tr '&' '\n' | grep '^flow='     | cut -d= -f2 | head -1)
+            sni=$(echo  "$params" | tr '&' '\n' | grep '^sni='      | cut -d= -f2 | head -1)
+            pbk=$(echo  "$params" | tr '&' '\n' | grep '^pbk='      | cut -d= -f2 | head -1)
+            fp=$(echo   "$params" | tr '&' '\n' | grep '^fp='       | cut -d= -f2 | head -1)
+            sid=$(echo  "$params" | tr '&' '\n' | grep '^sid='      | cut -d= -f2 | head -1)
+            net=$(echo  "$params" | tr '&' '\n' | grep '^type='     | cut -d= -f2 | head -1)
+            [[ -z "$flow" ]] && flow="xtls-rprx-vision"
+            [[ -z "$fp"   ]] && fp="chrome"
+            [[ -z "$net"  ]] && net="tcp"
+            [[ -z "$sni"  ]] && sni="$host"
+            printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s' \
+              "$uuid" "$host" "$port" "$flow" "$sni" "$pbk" "$fp" "$sid" "$net"
+          }
+
+          generate_xray_config() {
+            local LABEL="$1"
+            local LINES_FILE="$2"
+            local TAG_PREFIX="$3"
+            local OUT_FILE="$4"
+            local OUTBOUNDS_JSON="[]"
+            local TAGS_JSON="[]"
+            local idx=1
+
+            while IFS= read -r line; do
+              [[ -z "$line" ]] && continue
+              local fields uuid host port flow sni pbk fp sid net
+              fields=$(parse_vless "$line")
+              IFS=$'\t' read -r uuid host port flow sni pbk fp sid net <<< "$fields"
+              [[ -z "$host" || -z "$uuid" || -z "$pbk" ]] && continue
+              local tag="${TAG_PREFIX}-${idx}"
+              local ob
+              ob=$(jq -n \
+                --arg tag "$tag" --arg uuid "$uuid" --arg host "$host" \
+                --argjson port "$port" --arg flow "$flow" --arg sni "$sni" \
+                --arg pbk "$pbk" --arg fp "$fp" --arg sid "$sid" --arg net "$net" \
+              '{tag:$tag,protocol:"vless",settings:{vnext:[{address:$host,port:($port|tonumber),users:[{id:$uuid,encryption:"none",flow:$flow}]}]},streamSettings:{network:$net,tcpSettings:{},security:"reality",realitySettings:{serverName:$sni,publicKey:$pbk,shortId:$sid,fingerprint:$fp}}}')
+              OUTBOUNDS_JSON=$(echo "$OUTBOUNDS_JSON" | jq ". + [$ob]")
+              TAGS_JSON=$(echo "$TAGS_JSON" | jq ". + [\"$tag\"]")
+              idx=$((idx + 1))
+            done < "$LINES_FILE"
+
+            local count
+            count=$(echo "$TAGS_JSON" | jq 'length')
+            [[ "$count" -eq 0 ]] && return
+
+            OUTBOUNDS_JSON=$(echo "$OUTBOUNDS_JSON" | jq '. + [{"tag":"direct","protocol":"freedom"},{"tag":"block","protocol":"blackhole"}]')
+
+            jq -n \
+              --arg remarks "$LABEL" \
+              --arg balTag  "AUTO-${TAG_PREFIX}" \
+              --argjson tags "$TAGS_JSON" \
+              --argjson outs "$OUTBOUNDS_JSON" \
+            '{
+              remarks:$remarks,
+              dns:{servers:["1.1.1.1","1.0.0.1"],queryStrategy:"UseIP"},
+              routing:{
+                domainMatcher:"hybrid",domainStrategy:"IPIfNonMatch",
+                rules:[
+                  {type:"field",protocol:["bittorrent"],outboundTag:"direct"},
+                  {type:"field",inboundTag:["socks","http"],balancerTag:$balTag}
+                ],
+                balancers:[{
+                  tag:$balTag,selector:$tags,
+                  strategy:{type:"leastPing",settings:{maxRTT:"2000ms",expected:3,baselines:["1200ms"],tolerance:0.1}},
+                  fallbackTag:"direct"
+                }]
+              },
+              inbounds:[
+                {tag:"socks",port:10808,listen:"127.0.0.1",protocol:"socks",settings:{udp:true,auth:"noauth"},sniffing:{enabled:true,routeOnly:false,destOverride:["http","tls","quic"]}},
+                {tag:"http",port:10809,listen:"127.0.0.1",protocol:"http",settings:{allowTransparent:false},sniffing:{enabled:true,routeOnly:false,destOverride:["http","tls","quic"]}}
+              ],
+              outbounds:$outs,
+              burstObservatory:{pingConfig:{timeout:"2s",interval:"10s",sampling:2,httpMethod:"GET",destination:"https://www.gstatic.com/generate_204",connectivity:""},subjectSelector:$tags}
+            }' > "$OUT_FILE"
+
+            echo "  ✅ $OUT_FILE ($count конфигов)"
+          }
+
+          SOURCES=(
+            "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/Vless-Reality-White-Lists-Rus-Mobile-2.txt"
+            "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/Vless-Reality-White-Lists-Rus-Mobile.txt"
+            "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/WHITE-CIDR-RU-all.txt"
+            "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/WHITE-CIDR-RU-checked.txt"
+            "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/WHITE-SNI-RU-all.txt"
+            "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/BLACK_SS%2BAll_RUS.txt"
+            "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/BLACK_VLESS_RUS.txt"
+            "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/BLACK_VLESS_RUS_mobile.txt"
+          )
+
+          BLOCK=1
+          for URL in "${SOURCES[@]}"; do
+            echo "📥 Блок $BLOCK: $URL"
+            TMP_RAW=$(mktemp)
+            curl -fsSL "$URL" | grep -E '^vless://' | sort -u > "$TMP_RAW" || true
+            TOTAL=$(wc -l < "$TMP_RAW")
+            echo "   Найдено: $TOTAL конфигов"
+
+            if [[ "$TOTAL" -eq 0 ]]; then
+              echo "   ⚠️  Пусто, пропускаем"
+              BLOCK=$((BLOCK + 1))
+              rm -f "$TMP_RAW"
+              continue
+            fi
+
+            GROUP=1
+            TMP_CHUNK=$(mktemp)
+
+            while IFS= read -r line; do
+              echo "$line" >> "$TMP_CHUNK"
+              CHUNK_LEN=$(wc -l < "$TMP_CHUNK")
+              if [[ "$CHUNK_LEN" -ge "$GROUP_SIZE" ]]; then
+                LABEL="LTE | Авто ${BLOCK}.${GROUP}"
+                FNAME="${OUTPUT_DIR}/lte_${BLOCK}_${GROUP}.json"
+                generate_xray_config "$LABEL" "$TMP_CHUNK" "n${BLOCK}g${GROUP}" "$FNAME"
+                while IFS= read -r vline; do
+                  echo "${vline%%#*}#🇪🇺${LABEL}" >> "$VLESS_TXT"
+                done < "$TMP_CHUNK"
+                > "$TMP_CHUNK"
+                GROUP=$((GROUP + 1))
+              fi
+            done < "$TMP_RAW"
+
+            if [[ -s "$TMP_CHUNK" ]]; then
+              LABEL="LTE | Авто ${BLOCK}.${GROUP}"
+              FNAME="${OUTPUT_DIR}/lte_${BLOCK}_${GROUP}.json"
+              generate_xray_config "$LABEL" "$TMP_CHUNK" "n${BLOCK}g${GROUP}" "$FNAME"
+              while IFS= read -r vline; do
+                echo "${vline%%#*}#🇪🇺${LABEL}" >> "$VLESS_TXT"
+              done < "$TMP_CHUNK"
+            fi
+
+            rm -f "$TMP_RAW" "$TMP_CHUNK"
+            BLOCK=$((BLOCK + 1))
+          done
+
+          echo "✅ Готово! JSON: $(find "$OUTPUT_DIR" -name '*.json' | wc -l) | vlees: $(wc -l < "$VLESS_TXT") строк"
 
       - name: Commit and push
         run: |
