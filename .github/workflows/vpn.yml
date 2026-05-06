@@ -16,189 +16,146 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install dependencies
-        run: sudo apt-get install -y netcat-openbsd jq
+        run: sudo apt-get install -y netcat-openbsd curl openssl
 
       - name: Fetch and merge configs
         run: |
-          TMPALL=$(mktemp)
+          printf '%s\n' \
+            '#profile-title: HiBypass | LTE FREE 🏳🇷🇺' \
+            '#profile-update-interval: 6' \
+            '#support-url: https://t.me/Hibypass' \
+            '#profile-web-page-url: https://t.me/Hibypass' \
+            '#announce: Бесплатный обход белых списков РФ 🏳🇷🇺 | ТГ : @Hibypass' \
+            '#traffic-limit: ∞' \
+            '#traffic-remaining: ∞' \
+            > vlees.txt
+
+          SNI_DOMAINS="ads.x5.ru max.ru vk.ru yandex.com ya.ru"
+
+          CONFIGS_TMP=$(mktemp)
+          SEEN_HOSTS=$(mktemp)
+
+          check_server() {
+            local HOST="$1"
+            local PORT="$2"
+            nc -z -w 5 "$HOST" "$PORT" 2>/dev/null
+            return $?
+          }
+
+          check_sni() {
+            local HOST="$1"
+            local PORT="$2"
+            for SNI in $SNI_DOMAINS; do
+              RESULT=$(echo "" | timeout 5 openssl s_client \
+                -connect "${HOST}:${PORT}" \
+                -servername "$SNI" \
+                -alpn h2 \
+                2>/dev/null | head -5)
+              if echo "$RESULT" | grep -q "CONNECTED"; then
+                echo "SNI OK: $HOST:$PORT -> $SNI" >&2
+                return 0
+              fi
+            done
+            echo "SNI FAIL: $HOST:$PORT" >&2
+            return 1
+          }
+
+          measure_ping() {
+            local HOST="$1"
+            local PORT="$2"
+            local TOTAL=0
+            local COUNT=0
+            for i in 1 2 3; do
+              START=$(date +%s%3N)
+              if nc -z -w 3 "$HOST" "$PORT" 2>/dev/null; then
+                END=$(date +%s%3N)
+                TOTAL=$((TOTAL + END - START))
+                COUNT=$((COUNT + 1))
+              fi
+            done
+            if [ "$COUNT" -eq 0 ]; then
+              echo "99999"
+            else
+              echo $((TOTAL / COUNT))
+            fi
+          }
 
           process_source() {
             local URL="$1"
-            curl -fsSL --max-time 30 --connect-timeout 10 "$URL" 2>/dev/null | \
-              grep -E '^vless://' | sort -u >> "$TMPALL" || \
-              echo "WARN: failed $URL" >&2
-          }
+            local PREFIX="$2"
+            local TMPFILE
+            TMPFILE=$(mktemp)
+            curl -fsSL --max-time 30 --connect-timeout 10 "$URL" > "$TMPFILE" 2>/dev/null || {
+              echo "WARN: failed to fetch $URL" >&2
+              rm -f "$TMPFILE"
+              return
+            }
 
-          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/Vless-Reality-White-Lists-Rus-Mobile-2.txt"
-          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/Vless-Reality-White-Lists-Rus-Mobile.txt"
-          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/WHITE-CIDR-RU-all.txt"
-          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/WHITE-CIDR-RU-checked.txt"
-          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/WHITE-SNI-RU-all.txt"
-          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/BLACK_SS%2BAll_RUS.txt"
-          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/BLACK_VLESS_RUS.txt"
-          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/BLACK_VLESS_RUS_mobile.txt"
-          process_source "https://raw.githubusercontent.com/zieng2/wl/refs/heads/main/vless_universal.txt"
-          process_source "https://raw.githubusercontent.com/zieng2/wl/refs/heads/main/vless_lite.txt"
-          process_source "https://raw.githubusercontent.com/whoahaow/rjsxrd/refs/heads/main/githubmirror/bypass/bypass-all.txt"
-          process_source "https://raw.githubusercontent.com/whoahaow/rjsxrd/refs/heads/main/githubmirror/bypass-unsecure/bypass-unsecure-all.txt"
-          process_source "https://raw.githubusercontent.com/whoahaow/rjsxrd/refs/heads/main/githubmirror/split-by-protocols/vless-secure.txt"
-          process_source "https://raw.githubusercontent.com/whoahaow/rjsxrd/refs/heads/main/githubmirror/split-by-protocols/vless.txt"
+            grep -E '^vless://' "$TMPFILE" | sort -u | while IFS= read -r line; do
+              BASE=$(echo "$line" | sed 's/#.*//')
+              HOST=$(echo "$BASE" | sed 's/.*@//' | sed 's/[:/].*//')
 
-          # Парсим vless URI и строим outbounds массив
-          python3 << 'PYEOF'
-          import json, re, sys, subprocess, os
+              if echo "$HOST" | grep -qE '^(84|89)\.'; then
+                PORT=$(echo "$BASE" | sed 's/.*@[^:]*://' | sed 's/[/?].*//')
+                HOSTPORT="${HOST}:${PORT}"
 
-          tmpall = os.environ.get('TMPALL') or '/tmp/all_vless.txt'
-
-          with open(os.environ['TMPALL']) as f:
-              lines = [l.strip() for l in f if l.strip().startswith('vless://')]
-
-          outbounds = []
-          tags = []
-          seen = set()
-
-          for line in lines:
-              try:
-                  # vless://UUID@HOST:PORT?params#name
-                  m = re.match(r'vless://([^@]+)@([^:]+):(\d+)\??([^#]*)(?:#(.*))?', line)
-                  if not m:
-                      continue
-                  uuid, host, port, params, name = m.groups()
-                  port = int(port)
-
-                  # Фильтр IP
-                  if not re.match(r'^(84|89)\.', host):
-                      continue
-
-                  key = f"{host}:{port}"
-                  if key in seen:
-                      continue
-                  seen.add(key)
-
-                  # Парсим параметры
-                  p = {}
-                  for kv in params.split('&'):
-                      if '=' in kv:
-                          k, v = kv.split('=', 1)
-                          p[k] = v
-
-                  tag = name.strip() if name else key
-                  tag = re.sub(r'[^\w\s\.\-]', '', tag)[:50] or key
-
-                  # Убедимся что тег уникальный
-                  base_tag = tag
-                  i = 1
-                  while tag in tags:
-                      tag = f"{base_tag}_{i}"
-                      i += 1
-
-                  ob = {
-                      "type": "vless",
-                      "tag": tag,
-                      "server": host,
-                      "server_port": port,
-                      "uuid": uuid,
-                      "flow": p.get("flow", ""),
-                      "tls": {
-                          "enabled": True,
-                          "server_name": p.get("sni", p.get("host", host)),
-                          "utls": {
-                              "enabled": True,
-                              "fingerprint": p.get("fp", "chrome")
-                          },
-                          "reality": {
-                              "enabled": p.get("security", "") == "reality",
-                              "public_key": p.get("pbk", ""),
-                              "short_id": p.get("sid", "")
-                          }
-                      },
-                      "transport": {}
-                  }
-
-                  # Transport
-                  net = p.get("type", "tcp")
-                  if net == "ws":
-                      ob["transport"] = {
-                          "type": "ws",
-                          "path": p.get("path", "/"),
-                          "headers": {"Host": p.get("host", host)}
-                      }
-                  elif net == "grpc":
-                      ob["transport"] = {
-                          "type": "grpc",
-                          "service_name": p.get("serviceName", "")
-                      }
-                  elif net == "tcp" or net == "":
-                      ob.pop("transport")
-
-                  tags.append(tag)
-                  outbounds.append(ob)
-
-              except Exception as e:
-                  print(f"SKIP line error: {e}", file=sys.stderr)
+                if grep -qF "$HOSTPORT" "$SEEN_HOSTS" 2>/dev/null; then
+                  echo "DUP: $HOSTPORT — пропускаем" >&2
                   continue
+                fi
 
-          print(f"Итого серверов: {len(tags)}", file=sys.stderr)
+                if ! check_server "$HOST" "$PORT"; then
+                  echo "SKIP TCP: $HOSTPORT недоступен" >&2
+                  continue
+                fi
 
-          config = {
-              "log": {"level": "info"},
-              "dns": {
-                  "servers": [
-                      {"tag": "google", "address": "8.8.8.8"},
-                      {"tag": "local", "address": "local"}
-                  ]
-              },
-              "inbounds": [
-                  {
-                      "type": "tun",
-                      "tag": "tun-in",
-                      "inet4_address": "172.19.0.1/30",
-                      "auto_route": True,
-                      "strict_route": True,
-                      "sniff": True
-                  }
-              ],
-              "outbounds": [
-                  {
-                      "type": "urltest",
-                      "tag": "🇪🇺 LTE АВТО",
-                      "outbounds": tags,
-                      "url": "https://www.gstatic.com/generate_204",
-                      "interval": "3m",
-                      "tolerance": 50
-                  },
-                  {
-                      "type": "direct",
-                      "tag": "direct"
-                  },
-                  {
-                      "type": "block",
-                      "tag": "block"
-                  }
-              ] + outbounds,
-              "route": {
-                  "rules": [
-                      {"geoip": "private", "outbound": "direct"}
-                  ],
-                  "final": "🇪🇺 LTE АВТО",
-                  "auto_detect_interface": True
-              }
+                if ! check_sni "$HOST" "$PORT"; then
+                  echo "SKIP SNI: $HOSTPORT не прошёл SNI" >&2
+                  continue
+                fi
+
+                PING=$(measure_ping "$HOST" "$PORT")
+                echo "PING $HOSTPORT = ${PING}ms" >&2
+
+                printf '%s\t%s\t%s\n' "$PING" "$BASE" "$PREFIX" >> "$CONFIGS_TMP"
+                echo "$HOSTPORT" >> "$SEEN_HOSTS"
+              fi
+            done
+            rm -f "$TMPFILE"
           }
 
-          with open('config.json', 'w', encoding='utf-8') as f:
-              json.dump(config, f, ensure_ascii=False, indent=2)
+          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/Vless-Reality-White-Lists-Rus-Mobile-2.txt" "1"
+          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/Vless-Reality-White-Lists-Rus-Mobile.txt" "2"
+          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/WHITE-CIDR-RU-all.txt" "3"
+          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/WHITE-CIDR-RU-checked.txt" "4"
+          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/WHITE-SNI-RU-all.txt" "5"
+          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/BLACK_SS%2BAll_RUS.txt" "6"
+          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/BLACK_VLESS_RUS.txt" "7"
+          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/BLACK_VLESS_RUS_mobile.txt" "8"
+          process_source "https://raw.githubusercontent.com/zieng2/wl/refs/heads/main/vless_universal.txt" "9"
+          process_source "https://raw.githubusercontent.com/zieng2/wl/refs/heads/main/vless_lite.txt" "10"
+          process_source "https://raw.githubusercontent.com/whoahaow/rjsxrd/refs/heads/main/githubmirror/bypass/bypass-all.txt" "11"
+          process_source "https://raw.githubusercontent.com/whoahaow/rjsxrd/refs/heads/main/githubmirror/bypass-unsecure/bypass-unsecure-all.txt" "12"
+          process_source "https://raw.githubusercontent.com/whoahaow/rjsxrd/refs/heads/main/githubmirror/split-by-protocols/vless-secure.txt" "13"
+          process_source "https://raw.githubusercontent.com/whoahaow/rjsxrd/refs/heads/main/githubmirror/split-by-protocols/vless.txt" "14"
 
-          print("config.json записан", file=sys.stderr)
-          PYEOF
+          echo "--- Сортировка по пингу ---" >&2
+          COUNTER=1
+          sort -t$'\t' -k1 -n "$CONFIGS_TMP" | while IFS=$'\t' read -r PING BASE PREFIX; do
+            LABEL="🇪🇺LTE | ${PREFIX}.${COUNTER}"
+            echo "${BASE}#${LABEL}" >> vlees.txt
+            COUNTER=$((COUNTER + 1))
+          done
 
-          rm -f "$TMPALL"
-        env:
-          TMPALL: /tmp/all_vless.txt
+          rm -f "$CONFIGS_TMP" "$SEEN_HOSTS"
+
+          TOTAL=$(grep -cE '^vless://' vlees.txt || echo 0)
+          echo "✅ Всего рабочих VLESS конфигов: $TOTAL"
 
       - name: Commit and push
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add config.json
+          git add vlees.txt
           git diff --staged --quiet || git commit -m "Auto: обновление $(date -u '+%Y-%m-%d %H:%M UTC')"
           git push
