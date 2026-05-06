@@ -17,15 +17,15 @@ jobs:
 
       - name: Fetch and merge configs
         run: |
-          cat > vlees.txt << 'EOF'
-#profile-title: HiBypass | LTE FREE 🏳🇷🇺
-#profile-update-interval: 6
-#support-url: https://t.me/Hibypass
-#profile-web-page-url: https://t.me/Hibypass
-#announce: Бесплатный обход белых списков РФ 🏳🇷🇺 | ТГ : @Hibypass
-#traffic-limit: ∞
-#traffic-remaining: ∞
-EOF
+          printf '%s\n' \
+            '#profile-title: HiBypass | LTE FREE 🏳🇷🇺' \
+            '#profile-update-interval: 6' \
+            '#support-url: https://t.me/Hibypass' \
+            '#profile-web-page-url: https://t.me/Hibypass' \
+            '#announce: Бесплатный обход белых списков РФ 🏳🇷🇺 | ТГ : @Hibypass' \
+            '#traffic-limit: ∞' \
+            '#traffic-remaining: ∞' \
+            > vlees.txt
 
           process_source() {
             local URL="$1"
@@ -47,7 +47,6 @@ EOF
             rm -f "$TMPFILE"
           }
 
-          # igareck sources
           process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/Vless-Reality-White-Lists-Rus-Mobile-2.txt" "1" >> vlees.txt
           process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/Vless-Reality-White-Lists-Rus-Mobile.txt" "2" >> vlees.txt
           process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/WHITE-CIDR-RU-all.txt" "3" >> vlees.txt
@@ -56,12 +55,8 @@ EOF
           process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/BLACK_SS%2BAll_RUS.txt" "6" >> vlees.txt
           process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/BLACK_VLESS_RUS.txt" "7" >> vlees.txt
           process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/BLACK_VLESS_RUS_mobile.txt" "8" >> vlees.txt
-
-          # zieng2 sources
           process_source "https://raw.githubusercontent.com/zieng2/wl/refs/heads/main/vless_universal.txt" "9" >> vlees.txt
           process_source "https://raw.githubusercontent.com/zieng2/wl/refs/heads/main/vless_lite.txt" "10" >> vlees.txt
-
-          # whoahaow sources
           process_source "https://raw.githubusercontent.com/whoahaow/rjsxrd/refs/heads/main/githubmirror/bypass/bypass-all.txt" "11" >> vlees.txt
           process_source "https://raw.githubusercontent.com/whoahaow/rjsxrd/refs/heads/main/githubmirror/bypass-unsecure/bypass-unsecure-all.txt" "12" >> vlees.txt
           process_source "https://raw.githubusercontent.com/whoahaow/rjsxrd/refs/heads/main/githubmirror/split-by-protocols/vless-secure.txt" "13" >> vlees.txt
