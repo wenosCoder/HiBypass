@@ -1,4 +1,4 @@
-name: AUTO VLESS CLEAN
+name: Merge VLESS Configs
 
 on:
   schedule:
@@ -6,136 +6,52 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  merge:
     runs-on: ubuntu-latest
-
+    
     steps:
-      - name: Checkout
+      - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Install jq
-        run: sudo apt-get update && sudo apt-get install -y jq
-
-      - name: Fetch sources
+      - name: Fetch and merge VLESS configs
         run: |
-          SOURCES=(
-            "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/Vless-Reality-White-Lists-Rus-Mobile-2.txt"
-            "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/Vless-Reality-White-Lists-Rus-Mobile.txt"
-            "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/WHITE-CIDR-RU-all.txt"
-            "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/WHITE-CIDR-RU-checked.txt"
-          )
+          # Заголовки для v2rayTun
+          cat > vlees.txt << 'EOF'
+          #profile-title: HiBypass | LTE FREE 🏳🇷🇺
+          #profile-update-interval: 6
+          #support-url: https://t.me/Hibypass
+          #profile-web-page-url: https://t.me/Hibypass
+          #announce: Бесплатный обход белых списков РФ 🏳🇷🇺 | ТГ : @Hibypass
+          #traffic-limit: ∞
+          #traffic-remaining: ∞
+          EOF
 
-          > raw.txt
-          for URL in "${SOURCES[@]}"; do
-            curl -fsSL "$URL" | grep '^vless://' >> raw.txt
-          done
+          process_source() {
+            local URL="$1"
+            local PREFIX="$2"
+            local COUNTER=1
+            curl -fsSL "$URL" | grep -E '^vless://' | sort -u | while IFS= read -r line; do
+              BASE=$(echo "$line" | sed 's/#.*//')
+              echo "${BASE}#🇪🇺LTE | ${PREFIX}.${COUNTER}"
+              COUNTER=$((COUNTER + 1))
+            done
+          }
 
-      - name: Clean & deduplicate
+          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/Vless-Reality-White-Lists-Rus-Mobile-2.txt" "1" >> vlees.txt
+          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/Vless-Reality-White-Lists-Rus-Mobile.txt" "2" >> vlees.txt
+          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/WHITE-CIDR-RU-all.txt" "3" >> vlees.txt
+          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/WHITE-CIDR-RU-checked.txt" "4" >> vlees.txt
+          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/WHITE-SNI-RU-all.txt" "5" >> vlees.txt
+          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/BLACK_SS%2BAll_RUS.txt" "6" >> vlees.txt
+          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/BLACK_VLESS_RUS.txt" "7" >> vlees.txt
+          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/BLACK_VLESS_RUS_mobile.txt" "8" >> vlees.txt
+
+          echo "Всего конфигов: $(wc -l < vlees.txt)"
+
+      - name: Commit and push
         run: |
-          sed 's/#.*//' raw.txt > clean.txt
-          awk -F'[@:]' '!seen[$2":"$3]++' clean.txt > unique.txt
-          head -n 50 unique.txt > final.txt
-          echo "После очистки: $(wc -l < final.txt)"
-
-      - name: Build outbounds
-        run: |
-          echo "[]" > outbounds.json
-
-          while read -r line; do
-            UUID=$(echo "$line" | sed -n 's|vless://\([^@]*\)@.*|\1|p')
-            HOST=$(echo "$line" | sed -n 's|vless://[^@]*@\([^:]*\):.*|\1|p')
-            PORT=$(echo "$line" | sed -n 's|.*:\([0-9]*\)?.*|\1|p')
-
-            SNI=$(echo "$line" | grep -o 'sni=[^&]*' | cut -d= -f2)
-            PBK=$(echo "$line" | grep -o 'pbk=[^&]*' | cut -d= -f2)
-            SID=$(echo "$line" | grep -o 'sid=[^&]*' | cut -d= -f2)
-
-            [ -z "$SNI" ] && SNI="$HOST"
-
-            if [ -z "$PBK" ]; then
-              continue
-            fi
-
-            jq --arg host "$HOST" \
-               --arg port "$PORT" \
-               --arg uuid "$UUID" \
-               --arg sni "$SNI" \
-               --arg pbk "$PBK" \
-               --arg sid "$SID" \
-               '. += [{
-                 "tag": "cheap",
-                 "protocol": "vless",
-                 "settings": {
-                   "vnext": [{
-                     "address": $host,
-                     "port": ($port|tonumber),
-                     "users": [{
-                       "id": $uuid,
-                       "encryption": "none",
-                       "flow": "xtls-rprx-vision"
-                     }]
-                   }]
-                 },
-                 "streamSettings": {
-                   "network": "tcp",
-                   "security": "reality",
-                   "realitySettings": {
-                     "serverName": $sni,
-                     "publicKey": $pbk,
-                     "shortId": $sid,
-                     "fingerprint": "chrome"
-                   }
-                 }
-               }]' outbounds.json > tmp.json && mv tmp.json outbounds.json
-
-          done < final.txt
-
-          echo "Outbounds: $(jq length outbounds.json)"
-
-      - name: Build config.json
-        run: |
-          jq -n \
-          --slurpfile outs outbounds.json \
-          '{
-            "log": { "loglevel": "warning" },
-            "inbounds": [{
-              "port": 10808,
-              "protocol": "socks",
-              "settings": { "udp": true }
-            }],
-            "outbounds": (
-              $outs[0] + [
-                { "tag": "direct", "protocol": "freedom" }
-              ]
-            ),
-            "routing": {
-              "rules": [{
-                "type": "field",
-                "balancerTag": "AUTO"
-              }],
-              "balancers": [{
-                "tag": "AUTO",
-                "selector": ["cheap"],
-                "strategy": {
-                  "type": "leastPing"
-                }
-              }]
-            },
-            "burstObservatory": {
-              "pingConfig": {
-                "destination": "http://connectivitycheck.gstatic.com/generate_204",
-                "interval": "5s",
-                "timeout": "1s"
-              },
-              "subjectSelector": ["cheap"]
-            },
-            "remarks": "💎 AUTO CLEAN VLESS ⚡"
-          }' > config.json
-
-      - name: Commit
-        run: |
-          git config user.name "github-actions"
-          git config user.email "actions@github.com"
-          git add config.json
-          git commit -m "AUTO CLEAN $(date -u)" || echo "no changes"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add vlees.txt
+          git diff --staged --quiet || git commit -m "Auto: обновление $(date -u '+%Y-%m-%d %H:%M UTC')"
           git push
