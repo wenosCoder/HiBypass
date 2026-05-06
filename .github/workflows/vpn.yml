@@ -13,57 +13,18 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Fetch and merge VLESS configs
+      - name: Install dependencies
+        run: sudo apt-get install -y jq curl
+
+      - name: Fetch and build configs
         run: |
-          cat > vlees.txt << 'EOF'
-          #profile-title: HiBypass | LTE FREE 🏳🇷🇺
-          #profile-update-interval: 6
-          #support-url: https://t.me/Hibypass
-          #profile-web-page-url: https://t.me/Hibypass
-          #announce: Бесплатный обход белых списков РФ 🏳🇷🇺 | ТГ : @Hibypass
-          #traffic-limit: ∞
-          #traffic-remaining: ∞
-          EOF
-
-          process_source() {
-            local URL="$1"
-            local BLOCK="$2"
-            local BATCH_SIZE=20
-            local COUNTER=1
-            local BATCH=1
-            local BATCH_COUNT=0
-
-            # Скачиваем и фильтруем только vless:// строки, убираем дубликаты
-            CONFIGS=$(curl -fsSL "$URL" | grep -E '^vless://' | sort -u)
-
-            while IFS= read -r line; do
-              BASE=$(echo "$line" | sed 's/#.*//')
-              echo "${BASE}#🇪🇺LTE | ${BLOCK}.${BATCH} — №${COUNTER}"
-              BATCH_COUNT=$((BATCH_COUNT + 1))
-              COUNTER=$((COUNTER + 1))
-
-              if [ "$BATCH_COUNT" -ge "$BATCH_SIZE" ]; then
-                BATCH=$((BATCH + 1))
-                BATCH_COUNT=0
-              fi
-            done <<< "$CONFIGS"
-          }
-
-          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/Vless-Reality-White-Lists-Rus-Mobile-2.txt" "1" >> vlees.txt
-          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/Vless-Reality-White-Lists-Rus-Mobile.txt" "2" >> vlees.txt
-          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/WHITE-CIDR-RU-all.txt" "3" >> vlees.txt
-          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/WHITE-CIDR-RU-checked.txt" "4" >> vlees.txt
-          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/WHITE-SNI-RU-all.txt" "5" >> vlees.txt
-          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/BLACK_SS%2BAll_RUS.txt" "6" >> vlees.txt
-          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/BLACK_VLESS_RUS.txt" "7" >> vlees.txt
-          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/BLACK_VLESS_RUS_mobile.txt" "8" >> vlees.txt
-
-          echo "Всего конфигов: $(grep -c '^vless://' vlees.txt)"
+          chmod +x scripts/build_configs.sh
+          bash scripts/build_configs.sh
 
       - name: Commit and push
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add vlees.txt
+          git add configs/ vlees.txt
           git diff --staged --quiet || git commit -m "Auto: обновление $(date -u '+%Y-%m-%d %H:%M UTC')"
           git push
