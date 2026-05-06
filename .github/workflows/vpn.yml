@@ -5,6 +5,9 @@ on:
     - cron: '0 */6 * * *'
   workflow_dispatch:
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   merge:
     runs-on: ubuntu-latest
@@ -14,32 +17,51 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install jq
-        run: sudo apt-get install -y jq
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq
+          jq --version
 
       - name: Convert VLESS to JSON and split by 20
         run: |
-          # Функция: парсинг vless:// ссылки в JSON outbound
+          # Функция парсинга VLESS ссылки
           parse_vless() {
             local URL="$1"
             local REMARK="$2"
             
-            # Извлекаем компоненты из vless://
-            # Формат: vless://UUID@ADDRESS:PORT?encryption=none&flow=...&security=reality&sni=...&fp=...&pbk=...#REMARK
-            local TEMP=$(echo "$URL" | sed 's/^vless:\/\///')
-            local UUID=$(echo "$TEMP" | cut -d'@' -f1)
-            local REST=$(echo "$TEMP" | cut -d'@' -f2)
-            local ADDRESS=$(echo "$REST" | cut -d':' -f1)
-            local PORT=$(echo "$REST" | cut -d':' -f2 | cut -d'?' -f1)
-            local QUERY=$(echo "$REST" | cut -d'?' -f2 | cut -d'#' -f1)
-            local FRAGMENT=$(echo "$REST" | cut -d'#' -f2)
+            # Убираем префикс vless://
+            local CLEAN="${URL#vless://}"
             
-            # Парсим параметры
-            local ENCRYPTION=$(echo "$QUERY" | grep -o 'encryption=[^&]*' | cut -d'=' -f2)
-            local FLOW=$(echo "$QUERY" | grep -o 'flow=[^&]*' | cut -d'=' -f2)
-            local SECURITY=$(echo "$QUERY" | grep -o 'security=[^&]*' | cut -d'=' -f2)
-            local SNI=$(echo "$QUERY" | grep -o 'sni=[^&]*' | cut -d'=' -f2)
-            local FP=$(echo "$QUERY" | grep -o 'fp=[^&]*' | cut -d'=' -f2)
-            local PBK=$(echo "$QUERY" | grep -o 'pbk=[^&]*' | cut -d'=' -f2)
+            # Извлекаем UUID (всё до @)
+            local UUID="${CLEAN%%@*}"
+            local REST="${CLEAN#*@}"
+            
+            # Извлекаем адрес (всё до :)
+
+            local ADDRESS="${REST%%:*}"
+            local PORT_AND_QUERY="${REST#*:}"
+            
+            # Извлекаем порт (всё до ?)
+            local PORT="${PORT_AND_QUERY%%\?*}"
+            local QUERY="${PORT_AND_QUERY#*\?}"
+            
+            # Убираем fragment если есть
+            QUERY="${QUERY%%\#*}"
+            
+            # Парсим параметры через sed
+            local ENCRYPTION=$(echo "$QUERY" | sed -n 's/.*encryption=\([^&]*\).*/\1/p')
+            local FLOW=$(echo "$QUERY" | sed -n 's/.*flow=\([^&]*\).*/\1/p')
+            local SECURITY=$(echo "$QUERY" | sed -n 's/.*security=\([^&]*\).*/\1/p')
+            local SNI=$(echo "$QUERY" | sed -n 's/.*sni=\([^&]*\).*/\1/p')
+            local FP=$(echo "$QUERY" | sed -n 's/.*fp=\([^&]*\).*/\1/p')
+            local PBK=$(echo "$QUERY" | sed -n 's/.*pbk=\([^&]*\).*/\1/p')
+            
+            # Значения по умолчанию
+            ENCRYPTION=${ENCRYPTION:-"none"}
+            FLOW=${FLOW:-"xtls-rprx-vision"}
+            SECURITY=${SECURITY:-"reality"}
+            SNI=${SNI:-"ads.x5.ru"}
+            FP=${FP:-"chrome"}
             
             # Формируем JSON
             jq -n \
@@ -81,7 +103,7 @@ jobs:
               }'
           }
 
-          # Базовый шаблон конфига
+          # Создаём базовый шаблон
           cat > base_config.json << 'EOF'
           {
             "dns": {
@@ -118,11 +140,11 @@ jobs:
               }
             ],
             "outbounds": [],
-            "remarks": "🇪🇺 LTE | НОМЕР"
+            "remarks": ""
           }
           EOF
 
-          # Обработка каждого источника
+          # Функция обработки источника
           process_source() {
             local URL="$1"
             local BLOCK_NUM="$2"
@@ -131,26 +153,27 @@ jobs:
             local COUNT=0
             local BATCH=1
             
-            # Читаем все vless ссылки
-            while IFS= read -r line; do
-              # Пропускаем пустые строки
+            echo "Обработка блока $BLOCK_NUM из $URL"
+            
+            # Скачиваем и фильтруем vless ссылки
+            curl -fsSL "$URL" | grep -E '^vless://' | sort -u | while IFS= read -r line; do
               [ -z "$line" ] && continue
               
               CONFIGS+=("$line")
               COUNT=$((COUNT + 1))
               
-              # Если набрали 20 или это конец
               if [ $COUNT -eq 20 ]; then
-                # Создаём JSON файл
                 OUTPUT_FILE="lte_${BLOCK_NUM}_${BATCH}.json"
                 cp base_config.json "$OUTPUT_FILE"
                 
-                # Добавляем outbounds
+                # Добавляем каждый конфиг в outbounds
                 for i in "${!CONFIGS[@]}"; do
                   REMARK="🇪🇺 LTE | ${BLOCK_NUM}.${BATCH} | node$((i+1))"
-                  parse_vless "${CONFIGS[$i]}" "$REMARK" | \
-                    jq --argjson existing "$(jq '.outbounds' "$OUTPUT_FILE")" \
-                      '.outbounds = ($existing + [.])' > "$OUTPUT_FILE.tmp"
+                  parse_vless "${CONFIGS[$i]}" "$REMARK" > /tmp/outbound.json
+                  
+                  # Объединяем с основным JSON
+                  jq --argjson new "$(cat /tmp/outbound.json)" \
+                    '.outbounds = .outbounds + [$new]' "$OUTPUT_FILE" > "$OUTPUT_FILE.tmp"
                   mv "$OUTPUT_FILE.tmp" "$OUTPUT_FILE"
                 done
                 
@@ -159,25 +182,26 @@ jobs:
                   '.remarks = $r' "$OUTPUT_FILE" > "$OUTPUT_FILE.tmp"
                 mv "$OUTPUT_FILE.tmp" "$OUTPUT_FILE"
                 
-                echo "Создан: $OUTPUT_FILE (20 конфигов)"
+                echo "✅ Создан: $OUTPUT_FILE"
                 
                 # Сбрасываем для следующей пачки
                 CONFIGS=()
                 COUNT=0
                 BATCH=$((BATCH + 1))
               fi
-            done < <(curl -fsSL "$URL" | grep -E '^vless://' | sort -u)
+            done
             
-            # Обрабатываем остаток (если меньше 20)
+            # Обрабатываем последнюю неполную пачку
             if [ ${#CONFIGS[@]} -gt 0 ]; then
               OUTPUT_FILE="lte_${BLOCK_NUM}_${BATCH}.json"
               cp base_config.json "$OUTPUT_FILE"
               
               for i in "${!CONFIGS[@]}"; do
                 REMARK="🇪🇺 LTE | ${BLOCK_NUM}.${BATCH} | node$((i+1))"
-                parse_vless "${CONFIGS[$i]}" "$REMARK" | \
-                  jq --argjson existing "$(jq '.outbounds' "$OUTPUT_FILE")" \
-                    '.outbounds = ($existing + [.])' > "$OUTPUT_FILE.tmp"
+                parse_vless "${CONFIGS[$i]}" "$REMARK" > /tmp/outbound.json
+                
+                jq --argjson new "$(cat /tmp/outbound.json)" \
+                  '.outbounds = .outbounds + [$new]' "$OUTPUT_FILE" > "$OUTPUT_FILE.tmp"
                 mv "$OUTPUT_FILE.tmp" "$OUTPUT_FILE"
               done
               
@@ -185,7 +209,7 @@ jobs:
                 '.remarks = $r' "$OUTPUT_FILE" > "$OUTPUT_FILE.tmp"
               mv "$OUTPUT_FILE.tmp" "$OUTPUT_FILE"
               
-              echo "Создан: $OUTPUT_FILE (${#CONFIGS[@]} конфигов)"
+              echo "✅ Создан: $OUTPUT_FILE (${#CONFIGS[@]} конфигов)"
             fi
           }
 
@@ -202,7 +226,10 @@ jobs:
           process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/BLACK_VLESS_RUS.txt" "7"
           process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/BLACK_VLESS_RUS_mobile.txt" "8"
 
+          echo ""
+          echo "📊 Статистика:"
           echo "Всего создано JSON-файлов: $(ls lte_*.json 2>/dev/null | wc -l)"
+          ls -la lte_*.json 2>/dev/null | head -20
 
       - name: Commit and push
         run: |
