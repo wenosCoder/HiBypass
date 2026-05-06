@@ -5,6 +5,9 @@ on:
     - cron: '0 */6 * * *'
   workflow_dispatch:
 
+env:
+  REPO_RAW: "https://raw.githubusercontent.com/${{ github.repository }}/main/configs"
+
 jobs:
   merge:
     runs-on: ubuntu-latest
@@ -19,7 +22,7 @@ jobs:
       - name: Build configs
         run: |
           python3 << 'PYEOF'
-          import os, subprocess, json, re, urllib.request, tempfile
+          import os, json, re, urllib.request
 
           GROUP_SIZE = 20
           OUTPUT_DIR = "configs"
@@ -63,73 +66,50 @@ jobs:
 
           def make_outbound(tag, p):
             return {
-              "tag": tag,
-              "protocol": "vless",
-              "settings": {
-                "vnext": [{
-                  "address": p["host"],
-                  "port": p["port"],
-                  "users": [{"id": p["uuid"], "encryption": "none", "flow": p["flow"]}]
-                }]
-              },
-              "streamSettings": {
-                "network": p["net"],
-                "tcpSettings": {},
-                "security": "reality",
-                "realitySettings": {
-                  "serverName": p["sni"],
-                  "publicKey":  p["pbk"],
-                  "shortId":    p["sid"],
-                  "fingerprint": p["fp"]
-                }
-              }
+              "tag": tag, "protocol": "vless",
+              "settings": {"vnext": [{"address": p["host"], "port": p["port"],
+                "users": [{"id": p["uuid"], "encryption": "none", "flow": p["flow"]}]}]},
+              "streamSettings": {"network": p["net"], "tcpSettings": {}, "security": "reality",
+                "realitySettings": {"serverName": p["sni"], "publicKey": p["pbk"],
+                  "shortId": p["sid"], "fingerprint": p["fp"]}}
             }
 
           def make_config(label, outbounds, tags):
+            bal_tag = "AUTO-BAL"
             return {
               "remarks": label,
               "dns": {"servers": ["1.1.1.1", "1.0.0.1"], "queryStrategy": "UseIP"},
               "routing": {
-                "domainMatcher": "hybrid",
-                "domainStrategy": "IPIfNonMatch",
+                "domainMatcher": "hybrid", "domainStrategy": "IPIfNonMatch",
                 "rules": [
                   {"type": "field", "protocol": ["bittorrent"], "outboundTag": "direct"},
-                  {"type": "field", "inboundTag": ["socks", "http"], "balancerTag": "AUTO-BAL"}
+                  {"type": "field", "inboundTag": ["socks", "http"], "balancerTag": bal_tag}
                 ],
-                "balancers": [{
-                  "tag": "AUTO-BAL",
-                  "selector": tags,
-                  "strategy": {
-                    "type": "leastPing",
-                    "settings": {"maxRTT": "2000ms", "expected": 3, "baselines": ["1200ms"], "tolerance": 0.1}
-                  },
-                  "fallbackTag": "direct"
-                }]
+                "balancers": [{"tag": bal_tag, "selector": tags,
+                  "strategy": {"type": "leastPing",
+                    "settings": {"maxRTT": "2000ms", "expected": 3, "baselines": ["1200ms"], "tolerance": 0.1}},
+                  "fallbackTag": "direct"}]
               },
               "inbounds": [
                 {"tag": "socks", "port": 10808, "listen": "127.0.0.1", "protocol": "socks",
                  "settings": {"udp": True, "auth": "noauth"},
-                 "sniffing": {"enabled": True, "routeOnly": False, "destOverride": ["http", "tls", "quic"]}},
+                 "sniffing": {"enabled": True, "routeOnly": False, "destOverride": ["http","tls","quic"]}},
                 {"tag": "http", "port": 10809, "listen": "127.0.0.1", "protocol": "http",
                  "settings": {"allowTransparent": False},
-                 "sniffing": {"enabled": True, "routeOnly": False, "destOverride": ["http", "tls", "quic"]}}
+                 "sniffing": {"enabled": True, "routeOnly": False, "destOverride": ["http","tls","quic"]}}
               ],
               "outbounds": outbounds + [
                 {"tag": "direct", "protocol": "freedom"},
                 {"tag": "block",  "protocol": "blackhole"}
               ],
               "burstObservatory": {
-                "pingConfig": {
-                  "timeout": "2s", "interval": "10s", "sampling": 2,
-                  "httpMethod": "GET",
-                  "destination": "https://www.gstatic.com/generate_204",
-                  "connectivity": ""
-                },
+                "pingConfig": {"timeout": "2s", "interval": "10s", "sampling": 2,
+                  "httpMethod": "GET", "destination": "https://www.gstatic.com/generate_204", "connectivity": ""},
                 "subjectSelector": tags
               }
             }
 
-          # === header for vlees.txt ===
+          # vlees.txt header
           with open(VLESS_TXT, "w") as f:
             f.write("#profile-title: HiBypass | LTE FREE\n")
             f.write("#profile-update-interval: 6\n")
@@ -137,7 +117,7 @@ jobs:
             f.write("#traffic-limit: inf\n")
             f.write("#traffic-remaining: inf\n")
 
-          all_nodes = []   # для LTE_ALL
+          generated_files = []  # список сгенерированных json файлов
 
           for block_idx, url in enumerate(SOURCES, 1):
             print(f"--- Block {block_idx}: {url}")
@@ -145,7 +125,7 @@ jobs:
               with urllib.request.urlopen(url, timeout=30) as r:
                 lines = r.read().decode("utf-8", errors="ignore").splitlines()
             except Exception as e:
-              print(f"    ERROR fetching: {e}")
+              print(f"    ERROR: {e}")
               continue
 
             vless_lines = sorted(set(l.strip() for l in lines if l.strip().startswith("vless://")))
@@ -153,13 +133,11 @@ jobs:
             if not vless_lines:
               continue
 
-            # split into groups of GROUP_SIZE
             chunks = [vless_lines[i:i+GROUP_SIZE] for i in range(0, len(vless_lines), GROUP_SIZE)]
 
             for group_idx, chunk in enumerate(chunks, 1):
               label = f"LTE | Auto {block_idx}.{group_idx}"
-              outbounds = []
-              tags = []
+              outbounds, tags = [], []
 
               for node_idx, uri in enumerate(chunk, 1):
                 p = parse_vless(uri)
@@ -168,43 +146,51 @@ jobs:
                 tag = f"n{block_idx}g{group_idx}-{node_idx}"
                 outbounds.append(make_outbound(tag, p))
                 tags.append(tag)
-                all_nodes.append((uri, p))
 
               if not tags:
                 continue
 
               cfg = make_config(label, outbounds, tags)
-              fname = os.path.join(OUTPUT_DIR, f"lte_{block_idx}_{group_idx}.json")
-              with open(fname, "w") as f:
+              fname = f"lte_{block_idx}_{group_idx}.json"
+              fpath = os.path.join(OUTPUT_DIR, fname)
+              with open(fpath, "w") as f:
                 json.dump(cfg, f, ensure_ascii=False, indent=2)
 
-              # append to vlees.txt
+              generated_files.append(fname)
+
               with open(VLESS_TXT, "a") as f:
                 for uri in chunk:
                   base = uri.split("#")[0]
                   f.write(f"{base}#{label}\n")
 
-              print(f"    OK {fname} ({len(tags)} nodes)")
+              print(f"    OK {fpath} ({len(tags)} nodes)")
 
-          # === LTE_ALL.json ===
-          print(f"\n--- Building LTE_ALL.json ({len(all_nodes)} total nodes)")
-          all_outbounds = []
-          all_tags = []
-          for i, (uri, p) in enumerate(all_nodes, 1):
-            tag = f"all-{i}"
-            all_outbounds.append(make_outbound(tag, p))
-            all_tags.append(tag)
+          print(f"\nTotal JSON files: {len(generated_files)}")
 
-          if all_tags:
-            cfg_all = make_config("LTE | Auto ALL", all_outbounds, all_tags)
-            fname_all = os.path.join(OUTPUT_DIR, "LTE_ALL.json")
-            with open(fname_all, "w") as f:
-              json.dump(cfg_all, f, ensure_ascii=False, indent=2)
-            print(f"    OK {fname_all} ({len(all_tags)} nodes)")
+          # сохраняем список файлов для следующего шага
+          with open("/tmp/generated_files.txt", "w") as f:
+            for fname in generated_files:
+              f.write(fname + "\n")
 
-          total_json = len([x for x in os.listdir(OUTPUT_DIR) if x.endswith(".json")])
-          print(f"\nDone! JSON files: {total_json}")
           PYEOF
+
+      - name: Build subscription index
+        run: |
+          REPO_RAW="https://raw.githubusercontent.com/${{ github.repository }}/main/configs"
+
+          # subscription.txt — список raw-ссылок на каждый lte_X_Y.json
+          # Hiddify/v2rayTun могут импортировать его как набор конфигов
+          {
+            echo "#profile-title: HiBypass | LTE ALL CONFIGS"
+            echo "#profile-update-interval: 6"
+            echo "#support-url: https://t.me/Hibypass"
+            while IFS= read -r fname; do
+              echo "${REPO_RAW}/${fname}"
+            done < /tmp/generated_files.txt
+          } > configs/subscription.txt
+
+          echo "--- subscription.txt ---"
+          cat configs/subscription.txt
 
       - name: Commit and push
         run: |
