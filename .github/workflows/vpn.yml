@@ -8,50 +8,206 @@ on:
 jobs:
   merge:
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Fetch and merge VLESS configs
-        run: |
-          # Заголовки для v2rayTun
-          cat > vlees.txt << 'EOF'
-          #profile-title: HiBypass | LTE FREE 🏳🇷🇺
-          #profile-update-interval: 6
-          #support-url: https://t.me/Hibypass
-          #profile-web-page-url: https://t.me/Hibypass
-          #announce: Бесплатный обход белых списков РФ 🏳🇷🇺 | ТГ : @Hibypass
-          #traffic-limit: ∞
-          #traffic-remaining: ∞
-          EOF
+      - name: Install jq
+        run: sudo apt-get install -y jq
 
-          process_source() {
+      - name: Convert VLESS to JSON and split by 20
+        run: |
+          # Функция: парсинг vless:// ссылки в JSON outbound
+          parse_vless() {
             local URL="$1"
-            local PREFIX="$2"
-            local COUNTER=1
-            curl -fsSL "$URL" | grep -E '^vless://' | sort -u | while IFS= read -r line; do
-              BASE=$(echo "$line" | sed 's/#.*//')
-              echo "${BASE}#🇪🇺LTE | ${PREFIX}.${COUNTER}"
-              COUNTER=$((COUNTER + 1))
-            done
+            local REMARK="$2"
+            
+            # Извлекаем компоненты из vless://
+            # Формат: vless://UUID@ADDRESS:PORT?encryption=none&flow=...&security=reality&sni=...&fp=...&pbk=...#REMARK
+            local TEMP=$(echo "$URL" | sed 's/^vless:\/\///')
+            local UUID=$(echo "$TEMP" | cut -d'@' -f1)
+            local REST=$(echo "$TEMP" | cut -d'@' -f2)
+            local ADDRESS=$(echo "$REST" | cut -d':' -f1)
+            local PORT=$(echo "$REST" | cut -d':' -f2 | cut -d'?' -f1)
+            local QUERY=$(echo "$REST" | cut -d'?' -f2 | cut -d'#' -f1)
+            local FRAGMENT=$(echo "$REST" | cut -d'#' -f2)
+            
+            # Парсим параметры
+            local ENCRYPTION=$(echo "$QUERY" | grep -o 'encryption=[^&]*' | cut -d'=' -f2)
+            local FLOW=$(echo "$QUERY" | grep -o 'flow=[^&]*' | cut -d'=' -f2)
+            local SECURITY=$(echo "$QUERY" | grep -o 'security=[^&]*' | cut -d'=' -f2)
+            local SNI=$(echo "$QUERY" | grep -o 'sni=[^&]*' | cut -d'=' -f2)
+            local FP=$(echo "$QUERY" | grep -o 'fp=[^&]*' | cut -d'=' -f2)
+            local PBK=$(echo "$QUERY" | grep -o 'pbk=[^&]*' | cut -d'=' -f2)
+            
+            # Формируем JSON
+            jq -n \
+              --arg tag "proxy" \
+              --arg protocol "vless" \
+              --arg address "$ADDRESS" \
+              --arg port "$PORT" \
+              --arg id "$UUID" \
+              --arg encryption "$ENCRYPTION" \
+              --arg flow "$FLOW" \
+              --arg security "$SECURITY" \
+              --arg sni "$SNI" \
+              --arg fp "$FP" \
+              --arg pbk "$PBK" \
+              --arg remark "$REMARK" \
+              '{
+                tag: $tag,
+                protocol: $protocol,
+                settings: {
+                  vnext: [{
+                    address: $address,
+                    port: ($port | tonumber),
+                    users: [{
+                      id: $id,
+                      encryption: $encryption,
+                      flow: $flow
+                    }]
+                  }]
+                },
+                streamSettings: {
+                  network: "tcp",
+                  security: $security,
+                  realitySettings: {
+                    serverName: $sni,
+                    publicKey: $pbk,
+                    fingerprint: $fp
+                  }
+                }
+              }'
           }
 
-          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/Vless-Reality-White-Lists-Rus-Mobile-2.txt" "1" >> vlees.txt
-          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/Vless-Reality-White-Lists-Rus-Mobile.txt" "2" >> vlees.txt
-          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/WHITE-CIDR-RU-all.txt" "3" >> vlees.txt
-          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/WHITE-CIDR-RU-checked.txt" "4" >> vlees.txt
-          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/WHITE-SNI-RU-all.txt" "5" >> vlees.txt
-          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/BLACK_SS%2BAll_RUS.txt" "6" >> vlees.txt
-          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/BLACK_VLESS_RUS.txt" "7" >> vlees.txt
-          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/BLACK_VLESS_RUS_mobile.txt" "8" >> vlees.txt
+          # Базовый шаблон конфига
+          cat > base_config.json << 'EOF'
+          {
+            "dns": {
+              "servers": ["1.1.1.1", "1.0.0.1"],
+              "queryStrategy": "UseIP"
+            },
+            "routing": {
+              "rules": [
+                {
+                  "type": "field",
+                  "protocol": ["bittorrent"],
+                  "outboundTag": "direct"
+                }
+              ],
+              "domainMatcher": "hybrid",
+              "domainStrategy": "IPIfNonMatch"
+            },
+            "inbounds": [
+              {
+                "tag": "socks",
+                "port": 10808,
+                "listen": "127.0.0.1",
+                "protocol": "socks",
+                "settings": { "udp": true, "auth": "noauth" },
+                "sniffing": { "enabled": true, "routeOnly": false, "destOverride": ["http", "tls", "quic"] }
+              },
+              {
+                "tag": "http",
+                "port": 10809,
+                "listen": "127.0.0.1",
+                "protocol": "http",
+                "settings": { "allowTransparent": false },
+                "sniffing": { "enabled": true, "routeOnly": false, "destOverride": ["http", "tls", "quic"] }
+              }
+            ],
+            "outbounds": [],
+            "remarks": "🇪🇺 LTE | НОМЕР"
+          }
+          EOF
 
-          echo "Всего конфигов: $(wc -l < vlees.txt)"
+          # Обработка каждого источника
+          process_source() {
+            local URL="$1"
+            local BLOCK_NUM="$2"
+            
+            local CONFIGS=()
+            local COUNT=0
+            local BATCH=1
+            
+            # Читаем все vless ссылки
+            while IFS= read -r line; do
+              # Пропускаем пустые строки
+              [ -z "$line" ] && continue
+              
+              CONFIGS+=("$line")
+              COUNT=$((COUNT + 1))
+              
+              # Если набрали 20 или это конец
+              if [ $COUNT -eq 20 ]; then
+                # Создаём JSON файл
+                OUTPUT_FILE="lte_${BLOCK_NUM}_${BATCH}.json"
+                cp base_config.json "$OUTPUT_FILE"
+                
+                # Добавляем outbounds
+                for i in "${!CONFIGS[@]}"; do
+                  REMARK="🇪🇺 LTE | ${BLOCK_NUM}.${BATCH} | node$((i+1))"
+                  parse_vless "${CONFIGS[$i]}" "$REMARK" | \
+                    jq --argjson existing "$(jq '.outbounds' "$OUTPUT_FILE")" \
+                      '.outbounds = ($existing + [.])' > "$OUTPUT_FILE.tmp"
+                  mv "$OUTPUT_FILE.tmp" "$OUTPUT_FILE"
+                done
+                
+                # Обновляем remarks
+                jq --arg r "🇪🇺 LTE | ${BLOCK_NUM}.${BATCH} (20 nodes)" \
+                  '.remarks = $r' "$OUTPUT_FILE" > "$OUTPUT_FILE.tmp"
+                mv "$OUTPUT_FILE.tmp" "$OUTPUT_FILE"
+                
+                echo "Создан: $OUTPUT_FILE (20 конфигов)"
+                
+                # Сбрасываем для следующей пачки
+                CONFIGS=()
+                COUNT=0
+                BATCH=$((BATCH + 1))
+              fi
+            done < <(curl -fsSL "$URL" | grep -E '^vless://' | sort -u)
+            
+            # Обрабатываем остаток (если меньше 20)
+            if [ ${#CONFIGS[@]} -gt 0 ]; then
+              OUTPUT_FILE="lte_${BLOCK_NUM}_${BATCH}.json"
+              cp base_config.json "$OUTPUT_FILE"
+              
+              for i in "${!CONFIGS[@]}"; do
+                REMARK="🇪🇺 LTE | ${BLOCK_NUM}.${BATCH} | node$((i+1))"
+                parse_vless "${CONFIGS[$i]}" "$REMARK" | \
+                  jq --argjson existing "$(jq '.outbounds' "$OUTPUT_FILE")" \
+                    '.outbounds = ($existing + [.])' > "$OUTPUT_FILE.tmp"
+                mv "$OUTPUT_FILE.tmp" "$OUTPUT_FILE"
+              done
+              
+              jq --arg r "🇪🇺 LTE | ${BLOCK_NUM}.${BATCH} (${#CONFIGS[@]} nodes)" \
+                '.remarks = $r' "$OUTPUT_FILE" > "$OUTPUT_FILE.tmp"
+              mv "$OUTPUT_FILE.tmp" "$OUTPUT_FILE"
+              
+              echo "Создан: $OUTPUT_FILE (${#CONFIGS[@]} конфигов)"
+            fi
+          }
+
+          # Удаляем старые файлы
+          rm -f lte_*.json
+
+          # Обрабатываем все 8 источников
+          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/Vless-Reality-White-Lists-Rus-Mobile-2.txt" "1"
+          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/Vless-Reality-White-Lists-Rus-Mobile.txt" "2"
+          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/WHITE-CIDR-RU-all.txt" "3"
+          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/WHITE-CIDR-RU-checked.txt" "4"
+          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/WHITE-SNI-RU-all.txt" "5"
+          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/BLACK_SS%2BAll_RUS.txt" "6"
+          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/BLACK_VLESS_RUS.txt" "7"
+          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/BLACK_VLESS_RUS_mobile.txt" "8"
+
+          echo "Всего создано JSON-файлов: $(ls lte_*.json 2>/dev/null | wc -l)"
 
       - name: Commit and push
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add vlees.txt
+          git add lte_*.json
           git diff --staged --quiet || git commit -m "Auto: обновление $(date -u '+%Y-%m-%d %H:%M UTC')"
           git push
