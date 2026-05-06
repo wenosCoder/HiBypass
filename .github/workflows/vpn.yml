@@ -15,39 +15,34 @@ jobs:
 
       - name: Fetch and merge VLESS configs
         run: |
-          SOURCES=(
-            "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/Vless-Reality-White-Lists-Rus-Mobile-2.txt"
-            "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/Vless-Reality-White-Lists-Rus-Mobile.txt"
-            "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/WHITE-CIDR-RU-all.txt"
-            "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/WHITE-CIDR-RU-checked.txt"
-            "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/WHITE-SNI-RU-all.txt"
-            "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/BLACK_SS%2BAll_RUS.txt"
-            "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/BLACK_VLESS_RUS.txt"
-            "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/BLACK_VLESS_RUS_mobile.txt"
-          )
-          
-          > raw-vless.txt
-          
-          for URL in "${SOURCES[@]}"; do
-            curl -fsSL "$URL" | grep -E '^vless://' >> raw-vless.txt || true
-          done
-          
-          sort -u raw-vless.txt > dedup-vless.txt
-          
           > merged-vless.txt
-          COUNTER=1
-          while IFS= read -r line; do
-            BASE=$(echo "$line" | sed 's/#.*//')
-            echo "${BASE}#🇪🇺LTE | 1.${COUNTER}" >> merged-vless.txt
-            COUNTER=$((COUNTER + 1))
-          done < dedup-vless.txt
-          
+
+          process_source() {
+            local URL="$1"
+            local PREFIX="$2"
+            local COUNTER=1
+            curl -fsSL "$URL" | grep -E '^vless://' | sort -u | while IFS= read -r line; do
+              BASE=$(echo "$line" | sed 's/#.*//')
+              echo "${BASE}#🇪🇺LTE | ${PREFIX}.${COUNTER}"
+              COUNTER=$((COUNTER + 1))
+            done
+          }
+
+          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/Vless-Reality-White-Lists-Rus-Mobile-2.txt" "1" >> merged-vless.txt
+          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/Vless-Reality-White-Lists-Rus-Mobile.txt" "2" >> merged-vless.txt
+          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/WHITE-CIDR-RU-all.txt" "3" >> merged-vless.txt
+          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/WHITE-CIDR-RU-checked.txt" "4" >> merged-vless.txt
+          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/WHITE-SNI-RU-all.txt" "5" >> merged-vless.txt
+          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/BLACK_SS%2BAll_RUS.txt" "6" >> merged-vless.txt
+          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/BLACK_VLESS_RUS.txt" "7" >> merged-vless.txt
+          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/BLACK_VLESS_RUS_mobile.txt" "8" >> merged-vless.txt
+
           echo "Всего конфигов: $(wc -l < merged-vless.txt)"
 
       - name: Generate subscription file
         run: |
           base64 -w 0 merged-vless.txt > vlees.txt
-          echo "Файл подписки готов"
+          echo "Готово"
 
       - name: Commit and push
         run: |
