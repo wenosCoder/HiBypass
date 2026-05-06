@@ -1,141 +1,149 @@
-name: Build AUTO V2Ray Config
+name: Build V2Ray AUTO Config
 
 on:
-  schedule:
-    - cron: '0 */6 * * *'
-  workflow_dispatch:
+schedule:
+- cron: '0 */6 * * *'
+workflow_dispatch:
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
+build:
+runs-on: ubuntu-latest
 
-    steps:
-      - uses: actions/checkout@v4
+steps:
+  - name: Checkout
+    uses: actions/checkout@v4
 
-      - name: Install tools
-        run: |
-          sudo apt update
-          sudo apt install -y jq
+  - name: Install jq
+    run: sudo apt-get update && sudo apt-get install -y jq
 
-      - name: Fetch VLESS and build config.json
-        run: |
-          SOURCES=(
-            "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/Vless-Reality-White-Lists-Rus-Mobile-2.txt"
-            "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/Vless-Reality-White-Lists-Rus-Mobile.txt"
-            "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/WHITE-CIDR-RU-all.txt"
-            "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/WHITE-CIDR-RU-checked.txt"
-          )
+  - name: Fetch VLESS sources
+    run: |
+      SOURCES=(
+        "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/Vless-Reality-White-Lists-Rus-Mobile-2.txt"
+        "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/Vless-Reality-White-Lists-Rus-Mobile.txt"
+        "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/WHITE-CIDR-RU-all.txt"
+        "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/WHITE-CIDR-RU-checked.txt"
+      )
 
-          > raw.txt
-          for URL in "${SOURCES[@]}"; do
-            curl -fsSL "$URL" | grep '^vless://' >> raw.txt
-          done
+      > raw.txt
+      for URL in "${SOURCES[@]}"; do
+        curl -fsSL "$URL" | grep '^vless://' >> raw.txt
+      done
 
-          sort -u raw.txt > unique.txt
+      sort -u raw.txt > unique.txt
+      echo "Найдено конфигов: $(wc -l < unique.txt)"
 
-          echo "[]" > outbounds.json
+  - name: Build outbounds.json
+    run: |
+      echo "[]" > outbounds.json
 
-          while read -r line; do
-            BASE=$(echo "$line" | sed 's/#.*//')
+      while read -r line; do
+        BASE=$(echo "$line" | sed 's/#.*//')
 
-            # Парсим VLESS
-            UUID=$(echo "$BASE" | sed -n 's|vless://\([^@]*\)@.*|\1|p')
-            HOST=$(echo "$BASE" | sed -n 's|vless://[^@]*@\([^:]*\):.*|\1|p')
-            PORT=$(echo "$BASE" | sed -n 's|.*:\([0-9]*\)?.*|\1|p')
+        UUID=$(echo "$BASE" | sed -n 's|vless://[^@]*@.*|\1|p')
+        HOST=$(echo "$BASE" | sed -n 's|vless://[^@]*@[^:]*:.*|\1|p')
+        PORT=$(echo "$BASE" | sed -n 's|.*:[0-9]*?.*|\1|p')
 
-            SNI=$(echo "$BASE" | grep -o 'sni=[^&]*' | cut -d= -f2)
-            PBK=$(echo "$BASE" | grep -o 'pbk=[^&]*' | cut -d= -f2)
-            SID=$(echo "$BASE" | grep -o 'sid=[^&]*' | cut -d= -f2)
+        SNI=$(echo "$BASE" | grep -o 'sni=[^&]*' | cut -d= -f2)
+        PBK=$(echo "$BASE" | grep -o 'pbk=[^&]*' | cut -d= -f2)
+        SID=$(echo "$BASE" | grep -o 'sid=[^&]*' | cut -d= -f2)
 
-            [ -z "$SNI" ] && SNI="$HOST"
+        [ -z "$SNI" ] && SNI="$HOST"
 
-            jq --arg host "$HOST" \
-               --arg port "$PORT" \
-               --arg uuid "$UUID" \
-               --arg sni "$SNI" \
-               --arg pbk "$PBK" \
-               --arg sid "$SID" \
-               '. += [{
-                 "tag": "cheap",
-                 "protocol": "vless",
-                 "settings": {
-                   "vnext": [{
-                     "address": $host,
-                     "port": ($port|tonumber),
-                     "users": [{
-                       "id": $uuid,
-                       "encryption": "none",
-                       "flow": "xtls-rprx-vision"
-                     }]
-                   }]
-                 },
-                 "streamSettings": {
-                   "network": "tcp",
-                   "security": "reality",
-                   "realitySettings": {
-                     "serverName": $sni,
-                     "publicKey": $pbk,
-                     "shortId": $sid,
-                     "fingerprint": "chrome"
-                   }
-                 }
-               }]' outbounds.json > tmp.json && mv tmp.json outbounds.json
+        # пропуск если нет ключа (важно)
+        if [ -z "$PBK" ]; then
+          continue
+        fi
 
-          done < unique.txt
+        jq --arg host "$HOST" \
+           --arg port "$PORT" \
+           --arg uuid "$UUID" \
+           --arg sni "$SNI" \
+           --arg pbk "$PBK" \
+           --arg sid "$SID" \
+           '. += [{
+             "tag": "cheap",
+             "protocol": "vless",
+             "settings": {
+               "vnext": [{
+                 "address": $host,
+                 "port": ($port|tonumber),
+                 "users": [{
+                   "id": $uuid,
+                   "encryption": "none",
+                   "flow": "xtls-rprx-vision"
+                 }]
+               }]
+             },
+             "streamSettings": {
+               "network": "tcp",
+               "security": "reality",
+               "realitySettings": {
+                 "serverName": $sni,
+                 "publicKey": $pbk,
+                 "shortId": $sid,
+                 "fingerprint": "chrome"
+               }
+             }
+           }]' outbounds.json > tmp.json && mv tmp.json outbounds.json
 
-          # Финальный config
-          jq -n \
-          --slurpfile outs outbounds.json \
-          '{
-            "log": { "loglevel": "warning" },
+      done < unique.txt
 
-            "inbounds": [{
-              "tag": "socks",
-              "port": 10808,
-              "listen": "127.0.0.1",
-              "protocol": "socks",
-              "settings": { "udp": true }
-            }],
+      echo "Собрано outbounds: $(jq length outbounds.json)"
 
-            "outbounds": (
-              $outs[0] + [
-                {
-                  "tag": "auto",
-                  "protocol": "freedom"
-                }
-              ]
-            ),
+  - name: Build final config.json
+    run: |
+      jq -n \
+      --slurpfile outs outbounds.json \
+      '{
+        "log": { "loglevel": "warning" },
 
-            "routing": {
-              "rules": [{
-                "type": "field",
-                "balancerTag": "AUTO"
-              }],
-              "balancers": [{
-                "tag": "AUTO",
-                "selector": ["cheap"],
-                "strategy": {
-                  "type": "leastPing"
-                }
-              }]
-            },
+        "inbounds": [{
+          "tag": "socks",
+          "port": 10808,
+          "listen": "127.0.0.1",
+          "protocol": "socks",
+          "settings": { "udp": true }
+        }],
 
-            "burstObservatory": {
-              "pingConfig": {
-                "destination": "https://www.gstatic.com/generate_204",
-                "interval": "10s",
-                "timeout": "2s"
-              },
-              "subjectSelector": ["cheap"]
+        "outbounds": (
+          $outs[0] + [
+            { "tag": "direct", "protocol": "freedom" }
+          ]
+        ),
+
+        "routing": {
+          "rules": [{
+            "type": "field",
+            "balancerTag": "AUTO"
+          }],
+          "balancers": [{
+            "tag": "AUTO",
+            "selector": ["cheap"],
+            "strategy": {
+              "type": "leastPing"
             }
-          }' > config.json
+          }]
+        },
 
-          echo "Готово. Серверов: $(jq length outbounds.json)"
+        "burstObservatory": {
+          "pingConfig": {
+            "destination": "http://connectivitycheck.gstatic.com/generate_204",
+            "interval": "5s",
+            "timeout": "1s"
+          },
+          "subjectSelector": ["cheap"]
+        },
 
-      - name: Commit
-        run: |
-          git config user.name "bot"
-          git config user.email "bot@github.com"
-          git add config.json
-          git commit -m "AUTO config $(date -u)" || echo "no changes"
-          git push
+        "remarks": "💎 AUTO VLESS ⚡"
+      }' > config.json
+
+      echo "Финальный config.json готов"
+
+  - name: Commit & push
+    run: |
+      git config user.name "github-actions"
+      git config user.email "actions@github.com"
+      git add config.json
+      git commit -m "AUTO config $(date -u)" || echo "no changes"
+      git push
