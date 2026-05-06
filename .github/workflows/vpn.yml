@@ -16,249 +16,195 @@ jobs:
       - name: Install dependencies
         run: sudo apt-get install -y jq curl
 
-      - name: Write build script
+      - name: Build configs
         run: |
-          python3 - << 'PYEOF'
-          script = r"""#!/usr/bin/env bash
-          set -euo pipefail
+          python3 << 'PYEOF'
+          import os, subprocess, json, re, urllib.request, tempfile
 
-          GROUP_SIZE=20
-          OUTPUT_DIR="configs"
-          VLESS_TXT="vlees.txt"
-          mkdir -p "$OUTPUT_DIR"
+          GROUP_SIZE = 20
+          OUTPUT_DIR = "configs"
+          VLESS_TXT  = "vlees.txt"
+          os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-          printf '#profile-title: HiBypass | LTE FREE\n' > "$VLESS_TXT"
-          printf '#profile-update-interval: 6\n'         >> "$VLESS_TXT"
-          printf '#support-url: https://t.me/Hibypass\n' >> "$VLESS_TXT"
-          printf '#traffic-limit: inf\n'                 >> "$VLESS_TXT"
-          printf '#traffic-remaining: inf\n'             >> "$VLESS_TXT"
+          SOURCES = [
+            "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/Vless-Reality-White-Lists-Rus-Mobile-2.txt",
+            "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/Vless-Reality-White-Lists-Rus-Mobile.txt",
+            "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/WHITE-CIDR-RU-all.txt",
+            "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/WHITE-CIDR-RU-checked.txt",
+            "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/WHITE-SNI-RU-all.txt",
+            "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/BLACK_SS%2BAll_RUS.txt",
+            "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/BLACK_VLESS_RUS.txt",
+            "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/BLACK_VLESS_RUS_mobile.txt",
+          ]
 
-          parse_vless() {
-            local uri="$1"
-            local body="${uri#vless://}"
-            local uuid="${body%%@*}"
-            local rest="${body#*@}"
-            local hostport="${rest%%\?*}"
-            local host="${hostport%%:*}"
-            local port="${hostport##*:}"
-            local params="${rest#*\?}"
-            params="${params%%#*}"
-            local flow sni pbk fp sid net
-            flow=$(printf '%s' "$params" | tr '&' '\n' | grep '^flow=' | cut -d= -f2 | head -1)
-            sni=$( printf '%s' "$params" | tr '&' '\n' | grep '^sni='  | cut -d= -f2 | head -1)
-            pbk=$( printf '%s' "$params" | tr '&' '\n' | grep '^pbk='  | cut -d= -f2 | head -1)
-            fp=$(  printf '%s' "$params" | tr '&' '\n' | grep '^fp='   | cut -d= -f2 | head -1)
-            sid=$( printf '%s' "$params" | tr '&' '\n' | grep '^sid='  | cut -d= -f2 | head -1)
-            net=$( printf '%s' "$params" | tr '&' '\n' | grep '^type=' | cut -d= -f2 | head -1)
-            [ -z "$flow" ] && flow="xtls-rprx-vision"
-            [ -z "$fp"   ] && fp="chrome"
-            [ -z "$net"  ] && net="tcp"
-            [ -z "$sni"  ] && sni="$host"
-            [ -z "$sid"  ] && sid=""
-            printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s' \
-              "$uuid" "$host" "$port" "$flow" "$sni" "$pbk" "$fp" "$sid" "$net"
-          }
+          def parse_vless(uri):
+            try:
+              body  = uri[len("vless://"):]
+              uuid  = body.split("@")[0]
+              rest  = body.split("@", 1)[1]
+              hostport = rest.split("?")[0]
+              host  = hostport.rsplit(":", 1)[0]
+              port  = hostport.rsplit(":", 1)[1]
+              params_raw = rest.split("?", 1)[1].split("#")[0] if "?" in rest else ""
+              params = dict(p.split("=", 1) for p in params_raw.split("&") if "=" in p)
+              return {
+                "uuid": uuid,
+                "host": host,
+                "port": int(port),
+                "flow": params.get("flow", "xtls-rprx-vision"),
+                "sni":  params.get("sni", host),
+                "pbk":  params.get("pbk", ""),
+                "fp":   params.get("fp", "chrome"),
+                "sid":  params.get("sid", ""),
+                "net":  params.get("type", "tcp"),
+              }
+            except Exception:
+              return None
 
-          generate_config() {
-            local LABEL="$1"
-            local LINES_FILE="$2"
-            local TAG_PREFIX="$3"
-            local OUT_FILE="$4"
-            local OUTBOUNDS_JSON="[]"
-            local TAGS_JSON="[]"
-            local idx=1
+          def make_outbound(tag, p):
+            return {
+              "tag": tag,
+              "protocol": "vless",
+              "settings": {
+                "vnext": [{
+                  "address": p["host"],
+                  "port": p["port"],
+                  "users": [{"id": p["uuid"], "encryption": "none", "flow": p["flow"]}]
+                }]
+              },
+              "streamSettings": {
+                "network": p["net"],
+                "tcpSettings": {},
+                "security": "reality",
+                "realitySettings": {
+                  "serverName": p["sni"],
+                  "publicKey":  p["pbk"],
+                  "shortId":    p["sid"],
+                  "fingerprint": p["fp"]
+                }
+              }
+            }
 
-            while IFS= read -r line; do
-              [ -z "$line" ] && continue
-              local fields uuid host port flow sni pbk fp sid net
-              fields=$(parse_vless "$line")
-              uuid=$(printf '%s' "$fields" | cut -f1)
-              host=$(printf '%s' "$fields" | cut -f2)
-              port=$(printf '%s' "$fields" | cut -f3)
-              flow=$(printf '%s' "$fields" | cut -f4)
-              sni=$( printf '%s' "$fields" | cut -f5)
-              pbk=$( printf '%s' "$fields" | cut -f6)
-              fp=$(  printf '%s' "$fields" | cut -f7)
-              sid=$( printf '%s' "$fields" | cut -f8)
-              net=$( printf '%s' "$fields" | cut -f9)
-              [ -z "$host" ] && continue
-              [ -z "$uuid" ] && continue
-              [ -z "$pbk"  ] && continue
-              printf '%s' "$port" | grep -qE '^[0-9]+$' || continue
-              local tag="${TAG_PREFIX}-${idx}"
-              local ob
-              ob=$(jq -n \
-                --arg tag "$tag" --arg uuid "$uuid" --arg host "$host" \
-                --argjson port "$port" --arg flow "$flow" --arg sni "$sni" \
-                --arg pbk "$pbk" --arg fp "$fp" --arg sid "$sid" --arg net "$net" \
-              '{tag:$tag,protocol:"vless",
-                settings:{vnext:[{address:$host,port:($port|tonumber),
-                  users:[{id:$uuid,encryption:"none",flow:$flow}]}]},
-                streamSettings:{network:$net,tcpSettings:{},security:"reality",
-                  realitySettings:{serverName:$sni,publicKey:$pbk,shortId:$sid,fingerprint:$fp}}}') || continue
-              OUTBOUNDS_JSON=$(printf '%s' "$OUTBOUNDS_JSON" | jq ". + [$ob]")
-              TAGS_JSON=$(printf '%s' "$TAGS_JSON" | jq ". + [\"$tag\"]")
-              idx=$((idx + 1))
-            done < "$LINES_FILE"
+          def make_config(label, outbounds, tags):
+            return {
+              "remarks": label,
+              "dns": {"servers": ["1.1.1.1", "1.0.0.1"], "queryStrategy": "UseIP"},
+              "routing": {
+                "domainMatcher": "hybrid",
+                "domainStrategy": "IPIfNonMatch",
+                "rules": [
+                  {"type": "field", "protocol": ["bittorrent"], "outboundTag": "direct"},
+                  {"type": "field", "inboundTag": ["socks", "http"], "balancerTag": "AUTO-BAL"}
+                ],
+                "balancers": [{
+                  "tag": "AUTO-BAL",
+                  "selector": tags,
+                  "strategy": {
+                    "type": "leastPing",
+                    "settings": {"maxRTT": "2000ms", "expected": 3, "baselines": ["1200ms"], "tolerance": 0.1}
+                  },
+                  "fallbackTag": "direct"
+                }]
+              },
+              "inbounds": [
+                {"tag": "socks", "port": 10808, "listen": "127.0.0.1", "protocol": "socks",
+                 "settings": {"udp": True, "auth": "noauth"},
+                 "sniffing": {"enabled": True, "routeOnly": False, "destOverride": ["http", "tls", "quic"]}},
+                {"tag": "http", "port": 10809, "listen": "127.0.0.1", "protocol": "http",
+                 "settings": {"allowTransparent": False},
+                 "sniffing": {"enabled": True, "routeOnly": False, "destOverride": ["http", "tls", "quic"]}}
+              ],
+              "outbounds": outbounds + [
+                {"tag": "direct", "protocol": "freedom"},
+                {"tag": "block",  "protocol": "blackhole"}
+              ],
+              "burstObservatory": {
+                "pingConfig": {
+                  "timeout": "2s", "interval": "10s", "sampling": 2,
+                  "httpMethod": "GET",
+                  "destination": "https://www.gstatic.com/generate_204",
+                  "connectivity": ""
+                },
+                "subjectSelector": tags
+              }
+            }
 
-            local count
-            count=$(printf '%s' "$TAGS_JSON" | jq 'length')
-            [ "$count" -eq 0 ] && { echo "  skip: no valid configs"; return 0; }
+          # === header for vlees.txt ===
+          with open(VLESS_TXT, "w") as f:
+            f.write("#profile-title: HiBypass | LTE FREE\n")
+            f.write("#profile-update-interval: 6\n")
+            f.write("#support-url: https://t.me/Hibypass\n")
+            f.write("#traffic-limit: inf\n")
+            f.write("#traffic-remaining: inf\n")
 
-            OUTBOUNDS_JSON=$(printf '%s' "$OUTBOUNDS_JSON" | jq \
-              '. + [{"tag":"direct","protocol":"freedom"},{"tag":"block","protocol":"blackhole"}]')
+          all_nodes = []   # для LTE_ALL
 
-            jq -n \
-              --arg remarks "$LABEL" \
-              --arg balTag "AUTO-${TAG_PREFIX}" \
-              --argjson tags "$TAGS_JSON" \
-              --argjson outs "$OUTBOUNDS_JSON" \
-            '{remarks:$remarks,
-              dns:{servers:["1.1.1.1","1.0.0.1"],queryStrategy:"UseIP"},
-              routing:{domainMatcher:"hybrid",domainStrategy:"IPIfNonMatch",
-                rules:[
-                  {type:"field",protocol:["bittorrent"],outboundTag:"direct"},
-                  {type:"field",inboundTag:["socks","http"],balancerTag:$balTag}],
-                balancers:[{tag:$balTag,selector:$tags,
-                  strategy:{type:"leastPing",
-                    settings:{maxRTT:"2000ms",expected:3,baselines:["1200ms"],tolerance:0.1}},
-                  fallbackTag:"direct"}]},
-              inbounds:[
-                {tag:"socks",port:10808,listen:"127.0.0.1",protocol:"socks",
-                  settings:{udp:true,auth:"noauth"},
-                  sniffing:{enabled:true,routeOnly:false,destOverride:["http","tls","quic"]}},
-                {tag:"http",port:10809,listen:"127.0.0.1",protocol:"http",
-                  settings:{allowTransparent:false},
-                  sniffing:{enabled:true,routeOnly:false,destOverride:["http","tls","quic"]}}],
-              outbounds:$outs,
-              burstObservatory:{
-                pingConfig:{timeout:"2s",interval:"10s",sampling:2,
-                  httpMethod:"GET",destination:"https://www.gstatic.com/generate_204",connectivity:""},
-                subjectSelector:$tags}}' > "$OUT_FILE"
-
-            echo "  OK $OUT_FILE ($count configs)"
-          }
-
-          SOURCES=(
-            "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/Vless-Reality-White-Lists-Rus-Mobile-2.txt"
-            "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/Vless-Reality-White-Lists-Rus-Mobile.txt"
-            "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/WHITE-CIDR-RU-all.txt"
-            "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/WHITE-CIDR-RU-checked.txt"
-            "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/WHITE-SNI-RU-all.txt"
-            "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/BLACK_SS%2BAll_RUS.txt"
-            "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/BLACK_VLESS_RUS.txt"
-            "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/BLACK_VLESS_RUS_mobile.txt"
-          )
-
-          BLOCK=1
-          for URL in "${SOURCES[@]}"; do
-            echo "--- Block $BLOCK: $URL"
-            TMP_RAW=$(mktemp)
-            curl -fsSL "$URL" | grep -E '^vless://' | sort -u > "$TMP_RAW" || true
-            TOTAL=$(wc -l < "$TMP_RAW")
-            echo "    found: $TOTAL"
-
-            if [ "$TOTAL" -eq 0 ]; then
-              BLOCK=$((BLOCK + 1))
-              rm -f "$TMP_RAW"
+          for block_idx, url in enumerate(SOURCES, 1):
+            print(f"--- Block {block_idx}: {url}")
+            try:
+              with urllib.request.urlopen(url, timeout=30) as r:
+                lines = r.read().decode("utf-8", errors="ignore").splitlines()
+            except Exception as e:
+              print(f"    ERROR fetching: {e}")
               continue
-            fi
 
-            GROUP=1
-            TMP_CHUNK=$(mktemp)
+            vless_lines = sorted(set(l.strip() for l in lines if l.strip().startswith("vless://")))
+            print(f"    found: {len(vless_lines)}")
+            if not vless_lines:
+              continue
 
-            while IFS= read -r line; do
-              printf '%s\n' "$line" >> "$TMP_CHUNK"
-              CHUNK_LEN=$(wc -l < "$TMP_CHUNK")
-              if [ "$CHUNK_LEN" -ge "$GROUP_SIZE" ]; then
-                LABEL="LTE | Auto ${BLOCK}.${GROUP}"
-                generate_config "$LABEL" "$TMP_CHUNK" "n${BLOCK}g${GROUP}" \
-                  "${OUTPUT_DIR}/lte_${BLOCK}_${GROUP}.json"
-                while IFS= read -r vline; do
-                  printf '%s#%s\n' "${vline%%#*}" "$LABEL" >> "$VLESS_TXT"
-                done < "$TMP_CHUNK"
-                > "$TMP_CHUNK"
-                GROUP=$((GROUP + 1))
-              fi
-            done < "$TMP_RAW"
+            # split into groups of GROUP_SIZE
+            chunks = [vless_lines[i:i+GROUP_SIZE] for i in range(0, len(vless_lines), GROUP_SIZE)]
 
-            if [ -s "$TMP_CHUNK" ]; then
-              LABEL="LTE | Auto ${BLOCK}.${GROUP}"
-              generate_config "$LABEL" "$TMP_CHUNK" "n${BLOCK}g${GROUP}" \
-                "${OUTPUT_DIR}/lte_${BLOCK}_${GROUP}.json"
-              while IFS= read -r vline; do
-                printf '%s#%s\n' "${vline%%#*}" "$LABEL" >> "$VLESS_TXT"
-              done < "$TMP_CHUNK"
-            fi
+            for group_idx, chunk in enumerate(chunks, 1):
+              label = f"LTE | Auto {block_idx}.{group_idx}"
+              outbounds = []
+              tags = []
 
-            rm -f "$TMP_RAW" "$TMP_CHUNK"
-            BLOCK=$((BLOCK + 1))
-          done
+              for node_idx, uri in enumerate(chunk, 1):
+                p = parse_vless(uri)
+                if not p or not p["pbk"]:
+                  continue
+                tag = f"n{block_idx}g{group_idx}-{node_idx}"
+                outbounds.append(make_outbound(tag, p))
+                tags.append(tag)
+                all_nodes.append((uri, p))
+
+              if not tags:
+                continue
+
+              cfg = make_config(label, outbounds, tags)
+              fname = os.path.join(OUTPUT_DIR, f"lte_{block_idx}_{group_idx}.json")
+              with open(fname, "w") as f:
+                json.dump(cfg, f, ensure_ascii=False, indent=2)
+
+              # append to vlees.txt
+              with open(VLESS_TXT, "a") as f:
+                for uri in chunk:
+                  base = uri.split("#")[0]
+                  f.write(f"{base}#{label}\n")
+
+              print(f"    OK {fname} ({len(tags)} nodes)")
 
           # === LTE_ALL.json ===
-          echo "--- Building LTE_ALL.json"
-          ALL_TAGS="[]"
-          ALL_OUTS="[]"
-          GLOBAL_IDX=1
+          print(f"\n--- Building LTE_ALL.json ({len(all_nodes)} total nodes)")
+          all_outbounds = []
+          all_tags = []
+          for i, (uri, p) in enumerate(all_nodes, 1):
+            tag = f"all-{i}"
+            all_outbounds.append(make_outbound(tag, p))
+            all_tags.append(tag)
 
-          for f in "$OUTPUT_DIR"/lte_*.json; do
-            [ -f "$f" ] || continue
-            while IFS= read -r ob; do
-              new_tag="all-${GLOBAL_IDX}"
-              ob=$(printf '%s' "$ob" | jq --arg t "$new_tag" '.tag = $t')
-              ALL_OUTS=$(printf '%s' "$ALL_OUTS" | jq ". + [$ob]")
-              ALL_TAGS=$(printf '%s' "$ALL_TAGS" | jq ". + [\"$new_tag\"]")
-              GLOBAL_IDX=$((GLOBAL_IDX + 1))
-            done < <(jq -c '.outbounds[] | select(.tag != "direct" and .tag != "block")' "$f")
-          done
+          if all_tags:
+            cfg_all = make_config("LTE | Auto ALL", all_outbounds, all_tags)
+            fname_all = os.path.join(OUTPUT_DIR, "LTE_ALL.json")
+            with open(fname_all, "w") as f:
+              json.dump(cfg_all, f, ensure_ascii=False, indent=2)
+            print(f"    OK {fname_all} ({len(all_tags)} nodes)")
 
-          COUNT=$(printf '%s' "$ALL_TAGS" | jq 'length')
-          echo "    total nodes: $COUNT"
-
-          if [ "$COUNT" -gt 0 ]; then
-            ALL_OUTS=$(printf '%s' "$ALL_OUTS" | jq \
-              '. + [{"tag":"direct","protocol":"freedom"},{"tag":"block","protocol":"blackhole"}]')
-            jq -n \
-              --arg remarks "LTE | Auto ALL" \
-              --argjson tags "$ALL_TAGS" \
-              --argjson outs "$ALL_OUTS" \
-            '{remarks:$remarks,
-              dns:{servers:["1.1.1.1","1.0.0.1"],queryStrategy:"UseIP"},
-              routing:{domainMatcher:"hybrid",domainStrategy:"IPIfNonMatch",
-                rules:[
-                  {type:"field",protocol:["bittorrent"],outboundTag:"direct"},
-                  {type:"field",inboundTag:["socks","http"],balancerTag:"AUTO-ALL"}],
-                balancers:[{tag:"AUTO-ALL",selector:$tags,
-                  strategy:{type:"leastPing",
-                    settings:{maxRTT:"2000ms",expected:3,baselines:["1200ms"],tolerance:0.1}},
-                  fallbackTag:"direct"}]},
-              inbounds:[
-                {tag:"socks",port:10808,listen:"127.0.0.1",protocol:"socks",
-                  settings:{udp:true,auth:"noauth"},
-                  sniffing:{enabled:true,routeOnly:false,destOverride:["http","tls","quic"]}},
-                {tag:"http",port:10809,listen:"127.0.0.1",protocol:"http",
-                  settings:{allowTransparent:false},
-                  sniffing:{enabled:true,routeOnly:false,destOverride:["http","tls","quic"]}}],
-              outbounds:$outs,
-              burstObservatory:{
-                pingConfig:{timeout:"2s",interval:"10s",sampling:2,
-                  httpMethod:"GET",destination:"https://www.gstatic.com/generate_204",connectivity:""},
-                subjectSelector:$tags}}' > "${OUTPUT_DIR}/LTE_ALL.json"
-            echo "  OK ${OUTPUT_DIR}/LTE_ALL.json ($COUNT nodes)"
-          fi
-
-          echo "Done. JSON files: $(find "$OUTPUT_DIR" -name '*.json' | wc -l)"
-          echo "Done. vlees lines: $(wc -l < "$VLESS_TXT")"
-          """
-          with open("/tmp/build.sh", "w") as f:
-              f.write(script)
-          import os, stat
-          os.chmod("/tmp/build.sh", stat.S_IRWXU | stat.S_IRGRP | stat.S_IXGRP | stat.S_IROTH | stat.S_IXOTH)
-          print("build.sh written and made executable")
+          total_json = len([x for x in os.listdir(OUTPUT_DIR) if x.endswith(".json")])
+          print(f"\nDone! JSON files: {total_json}")
           PYEOF
-
-      - name: Run build script
-        run: /bin/bash /tmp/build.sh
 
       - name: Commit and push
         run: |
