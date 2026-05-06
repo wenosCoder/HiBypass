@@ -41,7 +41,25 @@ jobs:
 
       - name: Generate subscription file
         run: |
-          base64 -w 0 merged-vless.txt > vlees.txt
+          # Заголовок для v2rayTun
+          TITLE="HiBypass | LTE FREE 🏳🇷🇺"
+          DESC="Бесплатный обход белых списков РФ 🏳🇷🇺 | ТГ : @Hibypass"
+          UPLOAD="unlimited"
+          DOWNLOAD="unlimited"
+          TOTAL="unlimited"
+
+          # Кодируем заголовок
+          HEADER=$(printf "profile-title: base64:%s\nprofile-update-interval: 6\nsubscription-userinfo: upload=0; download=0; total=0; expire=0\nprofile-web-page-url: https://t.me/Hibypass\nsupport-url: https://t.me/Hibypass\nprofile-short-info: base64:%s" \
+            "$(echo -n "$TITLE" | base64 -w 0)" \
+            "$(echo -n "$DESC" | base64 -w 0)")
+
+          # Кодируем конфиги в base64
+          CONFIGS=$(base64 -w 0 merged-vless.txt)
+
+          # Собираем финальный файл (заголовок + конфиги)
+          echo "$HEADER" > vlees.txt
+          echo "$CONFIGS" >> vlees.txt
+
           echo "Готово"
 
       - name: Commit and push
