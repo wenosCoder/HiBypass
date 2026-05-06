@@ -15,67 +15,190 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
+      - name: Install dependencies
+        run: sudo apt-get install -y netcat-openbsd jq
+
       - name: Fetch and merge configs
         run: |
-          printf '%s\n' \
-            '#profile-title: HiBypass | LTE FREE 🏳🇷🇺' \
-            '#profile-update-interval: 6' \
-            '#support-url: https://t.me/Hibypass' \
-            '#profile-web-page-url: https://t.me/Hibypass' \
-            '#announce: Бесплатный обход белых списков РФ 🏳🇷🇺 | ТГ : @Hibypass' \
-            '#traffic-limit: ∞' \
-            '#traffic-remaining: ∞' \
-            > vlees.txt
+          TMPALL=$(mktemp)
 
           process_source() {
             local URL="$1"
-            local PREFIX="$2"
-            local COUNTER=1
-            local TMPFILE
-            TMPFILE=$(mktemp)
-            curl -fsSL --max-time 30 "$URL" > "$TMPFILE" 2>/dev/null || { echo "WARN: failed $URL" >&2; rm -f "$TMPFILE"; return; }
-            grep -E '^(vless|vmess|trojan|ss|tuic|hysteria|hysteria2|hy2)://' "$TMPFILE" | sort -u | while IFS= read -r line; do
-              BASE=$(echo "$line" | sed 's/#.*//')
-              HOST=$(echo "$BASE" | sed 's/.*@//' | sed 's/[:/].*//')
-              if echo "$HOST" | grep -qE '^(84|89)\.'; then
-                PROTO=$(echo "$line" | sed 's/:.*//')
-                PROTO_UP=$(echo "$PROTO" | tr '[:lower:]' '[:upper:]')
-                echo "${BASE}#🇪🇺LTE | ${PROTO_UP} | ${PREFIX}.${COUNTER}"
-                COUNTER=$((COUNTER + 1))
-              fi
-            done
-            rm -f "$TMPFILE"
+            curl -fsSL --max-time 30 --connect-timeout 10 "$URL" 2>/dev/null | \
+              grep -E '^vless://' | sort -u >> "$TMPALL" || \
+              echo "WARN: failed $URL" >&2
           }
 
-          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/Vless-Reality-White-Lists-Rus-Mobile-2.txt" "1" >> vlees.txt
-          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/Vless-Reality-White-Lists-Rus-Mobile.txt" "2" >> vlees.txt
-          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/WHITE-CIDR-RU-all.txt" "3" >> vlees.txt
-          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/WHITE-CIDR-RU-checked.txt" "4" >> vlees.txt
-          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/WHITE-SNI-RU-all.txt" "5" >> vlees.txt
-          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/BLACK_SS%2BAll_RUS.txt" "6" >> vlees.txt
-          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/BLACK_VLESS_RUS.txt" "7" >> vlees.txt
-          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/BLACK_VLESS_RUS_mobile.txt" "8" >> vlees.txt
-          process_source "https://raw.githubusercontent.com/zieng2/wl/refs/heads/main/vless_universal.txt" "9" >> vlees.txt
-          process_source "https://raw.githubusercontent.com/zieng2/wl/refs/heads/main/vless_lite.txt" "10" >> vlees.txt
-          process_source "https://raw.githubusercontent.com/whoahaow/rjsxrd/refs/heads/main/githubmirror/bypass/bypass-all.txt" "11" >> vlees.txt
-          process_source "https://raw.githubusercontent.com/whoahaow/rjsxrd/refs/heads/main/githubmirror/bypass-unsecure/bypass-unsecure-all.txt" "12" >> vlees.txt
-          process_source "https://raw.githubusercontent.com/whoahaow/rjsxrd/refs/heads/main/githubmirror/split-by-protocols/vless-secure.txt" "13" >> vlees.txt
-          process_source "https://raw.githubusercontent.com/whoahaow/rjsxrd/refs/heads/main/githubmirror/split-by-protocols/vmess-secure.txt" "14" >> vlees.txt
-          process_source "https://raw.githubusercontent.com/whoahaow/rjsxrd/refs/heads/main/githubmirror/split-by-protocols/trojan-secure.txt" "15" >> vlees.txt
-          process_source "https://raw.githubusercontent.com/whoahaow/rjsxrd/refs/heads/main/githubmirror/split-by-protocols/ss-secure.txt" "16" >> vlees.txt
-          process_source "https://raw.githubusercontent.com/whoahaow/rjsxrd/refs/heads/main/githubmirror/split-by-protocols/tuic-secure.txt" "17" >> vlees.txt
-          process_source "https://raw.githubusercontent.com/whoahaow/rjsxrd/refs/heads/main/githubmirror/split-by-protocols/hysteria-secure.txt" "18" >> vlees.txt
-          process_source "https://raw.githubusercontent.com/whoahaow/rjsxrd/refs/heads/main/githubmirror/split-by-protocols/hysteria2-secure.txt" "19" >> vlees.txt
-          process_source "https://raw.githubusercontent.com/whoahaow/rjsxrd/refs/heads/main/githubmirror/split-by-protocols/hy2-secure.txt" "20" >> vlees.txt
-          process_source "https://raw.githubusercontent.com/whoahaow/rjsxrd/refs/heads/main/githubmirror/split-by-protocols/vless.txt" "21" >> vlees.txt
+          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/Vless-Reality-White-Lists-Rus-Mobile-2.txt"
+          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/Vless-Reality-White-Lists-Rus-Mobile.txt"
+          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/WHITE-CIDR-RU-all.txt"
+          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/WHITE-CIDR-RU-checked.txt"
+          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/WHITE-SNI-RU-all.txt"
+          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/BLACK_SS%2BAll_RUS.txt"
+          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/BLACK_VLESS_RUS.txt"
+          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/BLACK_VLESS_RUS_mobile.txt"
+          process_source "https://raw.githubusercontent.com/zieng2/wl/refs/heads/main/vless_universal.txt"
+          process_source "https://raw.githubusercontent.com/zieng2/wl/refs/heads/main/vless_lite.txt"
+          process_source "https://raw.githubusercontent.com/whoahaow/rjsxrd/refs/heads/main/githubmirror/bypass/bypass-all.txt"
+          process_source "https://raw.githubusercontent.com/whoahaow/rjsxrd/refs/heads/main/githubmirror/bypass-unsecure/bypass-unsecure-all.txt"
+          process_source "https://raw.githubusercontent.com/whoahaow/rjsxrd/refs/heads/main/githubmirror/split-by-protocols/vless-secure.txt"
+          process_source "https://raw.githubusercontent.com/whoahaow/rjsxrd/refs/heads/main/githubmirror/split-by-protocols/vless.txt"
 
-          TOTAL=$(grep -cE '^(vless|vmess|trojan|ss|tuic|hysteria|hysteria2|hy2)://' vlees.txt || echo 0)
-          echo "Всего конфигов: $TOTAL"
+          # Парсим vless URI и строим outbounds массив
+          python3 << 'PYEOF'
+          import json, re, sys, subprocess, os
+
+          tmpall = os.environ.get('TMPALL') or '/tmp/all_vless.txt'
+
+          with open(os.environ['TMPALL']) as f:
+              lines = [l.strip() for l in f if l.strip().startswith('vless://')]
+
+          outbounds = []
+          tags = []
+          seen = set()
+
+          for line in lines:
+              try:
+                  # vless://UUID@HOST:PORT?params#name
+                  m = re.match(r'vless://([^@]+)@([^:]+):(\d+)\??([^#]*)(?:#(.*))?', line)
+                  if not m:
+                      continue
+                  uuid, host, port, params, name = m.groups()
+                  port = int(port)
+
+                  # Фильтр IP
+                  if not re.match(r'^(84|89)\.', host):
+                      continue
+
+                  key = f"{host}:{port}"
+                  if key in seen:
+                      continue
+                  seen.add(key)
+
+                  # Парсим параметры
+                  p = {}
+                  for kv in params.split('&'):
+                      if '=' in kv:
+                          k, v = kv.split('=', 1)
+                          p[k] = v
+
+                  tag = name.strip() if name else key
+                  tag = re.sub(r'[^\w\s\.\-]', '', tag)[:50] or key
+
+                  # Убедимся что тег уникальный
+                  base_tag = tag
+                  i = 1
+                  while tag in tags:
+                      tag = f"{base_tag}_{i}"
+                      i += 1
+
+                  ob = {
+                      "type": "vless",
+                      "tag": tag,
+                      "server": host,
+                      "server_port": port,
+                      "uuid": uuid,
+                      "flow": p.get("flow", ""),
+                      "tls": {
+                          "enabled": True,
+                          "server_name": p.get("sni", p.get("host", host)),
+                          "utls": {
+                              "enabled": True,
+                              "fingerprint": p.get("fp", "chrome")
+                          },
+                          "reality": {
+                              "enabled": p.get("security", "") == "reality",
+                              "public_key": p.get("pbk", ""),
+                              "short_id": p.get("sid", "")
+                          }
+                      },
+                      "transport": {}
+                  }
+
+                  # Transport
+                  net = p.get("type", "tcp")
+                  if net == "ws":
+                      ob["transport"] = {
+                          "type": "ws",
+                          "path": p.get("path", "/"),
+                          "headers": {"Host": p.get("host", host)}
+                      }
+                  elif net == "grpc":
+                      ob["transport"] = {
+                          "type": "grpc",
+                          "service_name": p.get("serviceName", "")
+                      }
+                  elif net == "tcp" or net == "":
+                      ob.pop("transport")
+
+                  tags.append(tag)
+                  outbounds.append(ob)
+
+              except Exception as e:
+                  print(f"SKIP line error: {e}", file=sys.stderr)
+                  continue
+
+          print(f"Итого серверов: {len(tags)}", file=sys.stderr)
+
+          config = {
+              "log": {"level": "info"},
+              "dns": {
+                  "servers": [
+                      {"tag": "google", "address": "8.8.8.8"},
+                      {"tag": "local", "address": "local"}
+                  ]
+              },
+              "inbounds": [
+                  {
+                      "type": "tun",
+                      "tag": "tun-in",
+                      "inet4_address": "172.19.0.1/30",
+                      "auto_route": True,
+                      "strict_route": True,
+                      "sniff": True
+                  }
+              ],
+              "outbounds": [
+                  {
+                      "type": "urltest",
+                      "tag": "🇪🇺 LTE АВТО",
+                      "outbounds": tags,
+                      "url": "https://www.gstatic.com/generate_204",
+                      "interval": "3m",
+                      "tolerance": 50
+                  },
+                  {
+                      "type": "direct",
+                      "tag": "direct"
+                  },
+                  {
+                      "type": "block",
+                      "tag": "block"
+                  }
+              ] + outbounds,
+              "route": {
+                  "rules": [
+                      {"geoip": "private", "outbound": "direct"}
+                  ],
+                  "final": "🇪🇺 LTE АВТО",
+                  "auto_detect_interface": True
+              }
+          }
+
+          with open('config.json', 'w', encoding='utf-8') as f:
+              json.dump(config, f, ensure_ascii=False, indent=2)
+
+          print("config.json записан", file=sys.stderr)
+          PYEOF
+
+          rm -f "$TMPALL"
+        env:
+          TMPALL: /tmp/all_vless.txt
 
       - name: Commit and push
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add vlees.txt
+          git add config.json
           git diff --staged --quiet || git commit -m "Auto: обновление $(date -u '+%Y-%m-%d %H:%M UTC')"
           git push
