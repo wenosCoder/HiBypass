@@ -2,25 +2,44 @@ name: Merge VLESS Configs
 
 on:
   schedule:
-    - cron: '0 */6 * * *'
-  workflow_dispatch:
+    - cron: '0 */6 * * *'  # каждые 6 часов
+  workflow_dispatch:         # можно запустить вручную
 
 jobs:
   merge:
     runs-on: ubuntu-latest
+    
     steps:
-      - uses: actions/checkout@v4
-      - name: Fetch VLESS
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Fetch and merge VLESS configs
         run: |
-          curl -fsSL "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/BLACK_VLESS_RUS.txt" >> vlees.txt
-          curl -fsSL "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/BLACK_VLESS_RUS_mobile.txt" >> vlees.txt
-          curl -fsSL "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/Vless-Reality-White-Lists-Rus-Mobile.txt" >> vlees.txt
-          curl -fsSL "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/Vless-Reality-White-Lists-Rus-Mobile-2.txt" >> vlees.txt
-          sort -u vlees.txt -o vlees.txt
-      - name: Commit
+          SOURCES=(
+            "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/Vless-Reality-White-Lists-Rus-Mobile-2.txt"
+            "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/Vless-Reality-White-Lists-Rus-Mobile.txt"
+            "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/BLACK_VLESS_RUS.txt"
+            "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/BLACK_VLESS_RUS_mobile.txt"
+          )
+          
+          > merged-vless.txt  # очищаем файл
+          
+          for URL in "${SOURCES[@]}"; do
+            echo "# Источник: $URL" >> merged-vless.txt
+            curl -fsSL "$URL" | grep -E '^vless://' >> merged-vless.txt || echo "# Не удалось загрузить" >> merged-vless.txt
+            echo "" >> merged-vless.txt
+          done
+          
+          # Убираем дубликаты
+          grep -E '^vless://' merged-vless.txt | sort -u > merged-vless-clean.txt
+          mv merged-vless-clean.txt merged-vless.txt
+          
+          echo "Всего конфигов: $(wc -l < merged-vless.txt)"
+
+      - name: Commit and push
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add vlees.txt
-          git diff --staged --quiet || git commit -m "Auto update"
+          git add merged-vless.txt
+          git diff --staged --quiet || git commit -m "Auto: обновление VLESS конфигов $(date -u '+%Y-%m-%d %H:%M UTC')"
           git push
