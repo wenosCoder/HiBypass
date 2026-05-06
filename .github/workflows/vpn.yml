@@ -8,55 +8,46 @@ on:
 jobs:
   merge:
     runs-on: ubuntu-latest
-    
+    permissions:
+      contents: write
+
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Fetch and merge VLESS configs
+      - name: Fetch and merge configs
         run: |
-          # Заголовки для v2rayTun
           cat > vlees.txt << 'EOF'
-          #profile-title: HiBypass | LTE FREE 🏳🇷🇺
-          #profile-update-interval: 6
-          #support-url: https://t.me/Hibypass
-          #profile-web-page-url: https://t.me/Hibypass
-          #announce: Бесплатный обход белых списков РФ 🏳🇷🇺 | ТГ : @Hibypass
-          #traffic-limit: ∞
-          #traffic-remaining: ∞
-          EOF
+#profile-title: HiBypass | LTE FREE 🏳🇷🇺
+#profile-update-interval: 6
+#support-url: https://t.me/Hibypass
+#profile-web-page-url: https://t.me/Hibypass
+#announce: Бесплатный обход белых списков РФ 🏳🇷🇺 | ТГ : @Hibypass
+#traffic-limit: ∞
+#traffic-remaining: ∞
+EOF
 
           process_source() {
             local URL="$1"
             local PREFIX="$2"
             local COUNTER=1
-            curl -fsSL "$URL" | grep -E '^vless://' | sort -u | while IFS= read -r line; do
+            local TMPFILE
+            TMPFILE=$(mktemp)
+            curl -fsSL --max-time 30 "$URL" > "$TMPFILE" 2>/dev/null || { echo "WARN: failed $URL" >&2; rm -f "$TMPFILE"; return; }
+            grep -E '^(vless|vmess|trojan|ss|tuic|hysteria|hysteria2|hy2)://' "$TMPFILE" | sort -u | while IFS= read -r line; do
               BASE=$(echo "$line" | sed 's/#.*//')
-              HOST=$(echo "$BASE" | grep -oP '(?<=@)[^:/@]+')
+              HOST=$(echo "$BASE" | sed 's/.*@//' | sed 's/[:/].*//')
               if echo "$HOST" | grep -qE '^(84|89)\.'; then
-                echo "${BASE}#🇪🇺LTE | ${PREFIX}.${COUNTER}"
+                PROTO=$(echo "$line" | sed 's/:.*//')
+                PROTO_UP=$(echo "$PROTO" | tr '[:lower:]' '[:upper:]')
+                echo "${BASE}#🇪🇺LTE | ${PROTO_UP} | ${PREFIX}.${COUNTER}"
                 COUNTER=$((COUNTER + 1))
               fi
             done
+            rm -f "$TMPFILE"
           }
 
-          # Функция для источников с мульти-протоколами (vless/vmess/trojan/ss/tuic/hysteria/hy2)
-          process_source_multi() {
-            local URL="$1"
-            local PREFIX="$2"
-            local COUNTER=1
-            curl -fsSL "$URL" | grep -E '^(vless|vmess|trojan|ss|tuic|hysteria|hysteria2|hy2)://' | sort -u | while IFS= read -r line; do
-              BASE=$(echo "$line" | sed 's/#.*//')
-              HOST=$(echo "$BASE" | grep -oP '(?<=@)[^:/@]+')
-              if echo "$HOST" | grep -qE '^(84|89)\.'; then
-                PROTO=$(echo "$line" | grep -oP '^[^:]+')
-                echo "${BASE}#🇪🇺LTE | ${PROTO^^} | ${PREFIX}.${COUNTER}"
-                COUNTER=$((COUNTER + 1))
-              fi
-            done
-          }
-
-          # Оригинальные источники (только vless + фильтр IP)
+          # igareck sources
           process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/Vless-Reality-White-Lists-Rus-Mobile-2.txt" "1" >> vlees.txt
           process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/Vless-Reality-White-Lists-Rus-Mobile.txt" "2" >> vlees.txt
           process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/WHITE-CIDR-RU-all.txt" "3" >> vlees.txt
@@ -66,24 +57,25 @@ jobs:
           process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/BLACK_VLESS_RUS.txt" "7" >> vlees.txt
           process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/BLACK_VLESS_RUS_mobile.txt" "8" >> vlees.txt
 
-          # Новые источники zieng2 (только vless + фильтр IP)
+          # zieng2 sources
           process_source "https://raw.githubusercontent.com/zieng2/wl/refs/heads/main/vless_universal.txt" "9" >> vlees.txt
           process_source "https://raw.githubusercontent.com/zieng2/wl/refs/heads/main/vless_lite.txt" "10" >> vlees.txt
 
-          # Новые источники whoahaow (мульти-протокол + фильтр IP)
-          process_source_multi "https://raw.githubusercontent.com/whoahaow/rjsxrd/refs/heads/main/githubmirror/bypass/bypass-all.txt" "11" >> vlees.txt
-          process_source_multi "https://raw.githubusercontent.com/whoahaow/rjsxrd/refs/heads/main/githubmirror/bypass-unsecure/bypass-unsecure-all.txt" "12" >> vlees.txt
-          process_source_multi "https://raw.githubusercontent.com/whoahaow/rjsxrd/refs/heads/main/githubmirror/split-by-protocols/vless-secure.txt" "13" >> vlees.txt
-          process_source_multi "https://raw.githubusercontent.com/whoahaow/rjsxrd/refs/heads/main/githubmirror/split-by-protocols/vmess-secure.txt" "14" >> vlees.txt
-          process_source_multi "https://raw.githubusercontent.com/whoahaow/rjsxrd/refs/heads/main/githubmirror/split-by-protocols/trojan-secure.txt" "15" >> vlees.txt
-          process_source_multi "https://raw.githubusercontent.com/whoahaow/rjsxrd/refs/heads/main/githubmirror/split-by-protocols/ss-secure.txt" "16" >> vlees.txt
-          process_source_multi "https://raw.githubusercontent.com/whoahaow/rjsxrd/refs/heads/main/githubmirror/split-by-protocols/tuic-secure.txt" "17" >> vlees.txt
-          process_source_multi "https://raw.githubusercontent.com/whoahaow/rjsxrd/refs/heads/main/githubmirror/split-by-protocols/hysteria-secure.txt" "18" >> vlees.txt
-          process_source_multi "https://raw.githubusercontent.com/whoahaow/rjsxrd/refs/heads/main/githubmirror/split-by-protocols/hysteria2-secure.txt" "19" >> vlees.txt
-          process_source_multi "https://raw.githubusercontent.com/whoahaow/rjsxrd/refs/heads/main/githubmirror/split-by-protocols/hy2-secure.txt" "20" >> vlees.txt
-          process_source_multi "https://raw.githubusercontent.com/whoahaow/rjsxrd/refs/heads/main/githubmirror/split-by-protocols/vless.txt" "21" >> vlees.txt
+          # whoahaow sources
+          process_source "https://raw.githubusercontent.com/whoahaow/rjsxrd/refs/heads/main/githubmirror/bypass/bypass-all.txt" "11" >> vlees.txt
+          process_source "https://raw.githubusercontent.com/whoahaow/rjsxrd/refs/heads/main/githubmirror/bypass-unsecure/bypass-unsecure-all.txt" "12" >> vlees.txt
+          process_source "https://raw.githubusercontent.com/whoahaow/rjsxrd/refs/heads/main/githubmirror/split-by-protocols/vless-secure.txt" "13" >> vlees.txt
+          process_source "https://raw.githubusercontent.com/whoahaow/rjsxrd/refs/heads/main/githubmirror/split-by-protocols/vmess-secure.txt" "14" >> vlees.txt
+          process_source "https://raw.githubusercontent.com/whoahaow/rjsxrd/refs/heads/main/githubmirror/split-by-protocols/trojan-secure.txt" "15" >> vlees.txt
+          process_source "https://raw.githubusercontent.com/whoahaow/rjsxrd/refs/heads/main/githubmirror/split-by-protocols/ss-secure.txt" "16" >> vlees.txt
+          process_source "https://raw.githubusercontent.com/whoahaow/rjsxrd/refs/heads/main/githubmirror/split-by-protocols/tuic-secure.txt" "17" >> vlees.txt
+          process_source "https://raw.githubusercontent.com/whoahaow/rjsxrd/refs/heads/main/githubmirror/split-by-protocols/hysteria-secure.txt" "18" >> vlees.txt
+          process_source "https://raw.githubusercontent.com/whoahaow/rjsxrd/refs/heads/main/githubmirror/split-by-protocols/hysteria2-secure.txt" "19" >> vlees.txt
+          process_source "https://raw.githubusercontent.com/whoahaow/rjsxrd/refs/heads/main/githubmirror/split-by-protocols/hy2-secure.txt" "20" >> vlees.txt
+          process_source "https://raw.githubusercontent.com/whoahaow/rjsxrd/refs/heads/main/githubmirror/split-by-protocols/vless.txt" "21" >> vlees.txt
 
-          echo "Всего конфигов: $(wc -l < vlees.txt)"
+          TOTAL=$(grep -cE '^(vless|vmess|trojan|ss|tuic|hysteria|hysteria2|hy2)://' vlees.txt || echo 0)
+          echo "Всего конфигов: $TOTAL"
 
       - name: Commit and push
         run: |
