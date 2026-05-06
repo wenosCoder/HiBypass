@@ -13,146 +13,57 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Install tools
-        run: sudo apt-get update && sudo apt-get install -y jq curl
-
-      - name: Generate configs
+      - name: Fetch and merge VLESS configs
         run: |
-          set -euo pipefail
-
-          echo "🚀 Запуск генерации..."
-
-          parse_vless() {
-            local url="$1"
-            local remark="$2"
-            local temp="${url#vless://}"
-            local uuid="${temp%%@*}"
-            local rest="${temp#*@}"
-            local address="${rest%%:*}"
-            local port="\( {rest#*:}"; port=" \){port%%[?#]*}"
-
-            local query=""
-            [[ "\( rest" == *"?"* ]] && query=" \){rest#*\?}" && query="${query%%#*}"
-
-            local pbk=$(echo "$query" | grep -o 'pbk=[^&]*' | cut -d'=' -f2 || echo "")
-            local sni=$(echo "$query" | grep -o 'sni=[^&]*' | cut -d'=' -f2 || echo "$address")
-            local fp=$(echo "$query" | grep -o 'fp=[^&]*' | cut -d'=' -f2 || echo "chrome")
-            local flow=$(echo "$query" | grep -o 'flow=[^&]*' | cut -d'=' -f2 || echo "")
-
-            [[ -z "$pbk" ]] && return 1
-
-            jq -n \
-              --arg tag "proxy" \
-              --arg address "$address" \
-              --arg port "$port" \
-              --arg id "$uuid" \
-              --arg flow "$flow" \
-              --arg sni "$sni" \
-              --arg fp "$fp" \
-              --arg pbk "$pbk" \
-              '{
-                tag: $tag,
-                protocol: "vless",
-                settings: {
-                  vnext: [{
-                    address: $address,
-                    port: ($port | tonumber),
-                    users: [{ id: $id, encryption: "none", flow: $flow }]
-                  }]
-                },
-                streamSettings: {
-                  network: "tcp",
-                  security: "reality",
-                  realitySettings: {
-                    serverName: $sni,
-                    publicKey: $pbk,
-                    fingerprint: $fp,
-                    shortId: ""
-                  }
-                }
-              }'
-          }
-
-          # Базовый конфиг
-          cat > base.json << 'EOF'
-          {
-            "dns": {"servers": ["1.1.1.1", "1.0.0.1"]},
-            "routing": {
-              "rules": [{"type": "field", "protocol": ["bittorrent"], "outboundTag": "direct"}]
-            },
-            "inbounds": [
-              {"tag": "socks", "port": 10808, "listen": "127.0.0.1", "protocol": "socks", "settings": {"udp": true}},
-              {"tag": "http",  "port": 10809, "listen": "127.0.0.1", "protocol": "http"}
-            ],
-            "outbounds": [],
-            "remarks": "LTE Config"
-          }
+          cat > vlees.txt << 'EOF'
+          #profile-title: HiBypass | LTE FREE 🏳🇷🇺
+          #profile-update-interval: 6
+          #support-url: https://t.me/Hibypass
+          #profile-web-page-url: https://t.me/Hibypass
+          #announce: Бесплатный обход белых списков РФ 🏳🇷🇺 | ТГ : @Hibypass
+          #traffic-limit: ∞
+          #traffic-remaining: ∞
           EOF
 
-          process_batch() {
-            local block=$1 batch=$2
-            shift 2
-            local configs=("$@")
-            local file="lte_\( {block}_ \){batch}.json"
+          process_source() {
+            local URL="$1"
+            local BLOCK="$2"
+            local BATCH_SIZE=20
+            local COUNTER=1
+            local BATCH=1
+            local BATCH_COUNT=0
 
-            cp base.json "$file"
-            local count=0
+            # Скачиваем и фильтруем только vless:// строки, убираем дубликаты
+            CONFIGS=$(curl -fsSL "$URL" | grep -E '^vless://' | sort -u)
 
-            for i in "${!configs[@]}"; do
-              local rem="🇪🇺 LTE | \( {block}. \){batch} | node$((i+1))"
-              if parse_vless "${configs[$i]}" "$rem" >> "$file.tmp"; then
-                ((count++))
+            while IFS= read -r line; do
+              BASE=$(echo "$line" | sed 's/#.*//')
+              echo "${BASE}#🇪🇺LTE | ${BLOCK}.${BATCH} — №${COUNTER}"
+              BATCH_COUNT=$((BATCH_COUNT + 1))
+              COUNTER=$((COUNTER + 1))
+
+              if [ "$BATCH_COUNT" -ge "$BATCH_SIZE" ]; then
+                BATCH=$((BATCH + 1))
+                BATCH_COUNT=0
               fi
-            done
-
-            if [[ $count -gt 0 ]]; then
-              jq -s '.[0] as $base | $base + {outbounds: (.[1:])}' "$file" "$file.tmp" > "$file.new" && mv "$file.new" "$file"
-              jq --arg r "🇪🇺 LTE | \( {block}. \){batch} (${count} nodes)" '.remarks = $r' "$file" > "$file.new" && mv "$file.new" "$file"
-              echo "✅ $file — ${count} нод"
-            else
-              rm -f "$file"*
-            fi
-            rm -f "$file.tmp"
+            done <<< "$CONFIGS"
           }
 
-          rm -f lte_*.json
+          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/Vless-Reality-White-Lists-Rus-Mobile-2.txt" "1" >> vlees.txt
+          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/Vless-Reality-White-Lists-Rus-Mobile.txt" "2" >> vlees.txt
+          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/WHITE-CIDR-RU-all.txt" "3" >> vlees.txt
+          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/WHITE-CIDR-RU-checked.txt" "4" >> vlees.txt
+          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/WHITE-SNI-RU-all.txt" "5" >> vlees.txt
+          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/BLACK_SS%2BAll_RUS.txt" "6" >> vlees.txt
+          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/BLACK_VLESS_RUS.txt" "7" >> vlees.txt
+          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/BLACK_VLESS_RUS_mobile.txt" "8" >> vlees.txt
 
-          # === Источники ===
-          sources=(
-            "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/Vless-Reality-White-Lists-Rus-Mobile-2.txt|1"
-            "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/Vless-Reality-White-Lists-Rus-Mobile.txt|2"
-            "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/WHITE-CIDR-RU-all.txt|3"
-            "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/WHITE-CIDR-RU-checked.txt|4"
-            "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/WHITE-SNI-RU-all.txt|5"
-          )
+          echo "Всего конфигов: $(grep -c '^vless://' vlees.txt)"
 
-          for entry in "${sources[@]}"; do
-            url="${entry%%|*}"
-            block="${entry##*|}"
-            echo "📥 Загружаем источник $block..."
-            mapfile -t links < <(curl -fsSL "$url" 2>/dev/null | grep '^vless://' | sort -u)
-            echo "   Найдено: ${#links[@]}"
-
-            local i=0 batch=1
-            while (( i < ${#links[@]} )); do
-              local chunk=("${links[@]:i:20}")
-              process_batch "$block" "\( batch" " \){chunk[@]}"
-              ((batch++))
-              i=$((i+20))
-            done
-          done
-
-          echo "=== ГОТОВО ==="
-          ls lte_*.json 2>/dev/null | wc -l | xargs echo "Создано JSON файлов:"
-
-      - name: Commit & Push
+      - name: Commit and push
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add lte_*.json 2>/dev/null || true
-          if git diff --staged --quiet; then
-            echo "Нет новых изменений"
-          else
-            git commit -m "Auto update $(date -u '+%Y-%m-%d %H:%M UTC')"
-            git push
-          fi
+          git add vlees.txt
+          git diff --staged --quiet || git commit -m "Auto: обновление $(date -u '+%Y-%m-%d %H:%M UTC')"
+          git push
