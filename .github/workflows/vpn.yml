@@ -34,7 +34,6 @@ jobs:
           printf '#traffic-limit: ∞\n'                           >> "$VLESS_TXT"
           printf '#traffic-remaining: ∞\n'                       >> "$VLESS_TXT"
 
-          # ---------- парсим vless:// URI ----------
           parse_vless() {
             local uri="$1"
             local body="${uri#vless://}"
@@ -64,7 +63,6 @@ jobs:
               "$uuid" "$host" "$port" "$flow" "$sni" "$pbk" "$fp" "$sid" "$net"
           }
 
-          # ---------- генерируем один xray config.json ----------
           generate_config() {
             local LABEL="$1"
             local LINES_FILE="$2"
@@ -93,14 +91,9 @@ jobs:
               [ -z "$host" ] && continue
               [ -z "$uuid" ] && continue
               [ -z "$pbk"  ] && continue
-
-              # порт должен быть числом
-              if ! printf '%s' "$port" | grep -qE '^[0-9]+$'; then
-                continue
-              fi
+              printf '%s' "$port" | grep -qE '^[0-9]+$' || continue
 
               local tag="${TAG_PREFIX}-${idx}"
-
               local ob
               ob=$(jq -n \
                 --arg    tag  "$tag"  \
@@ -114,26 +107,11 @@ jobs:
                 --arg    sid  "$sid"  \
                 --arg    net  "$net"  \
               '{
-                tag: $tag,
-                protocol: "vless",
-                settings: {
-                  vnext: [{
-                    address: $host,
-                    port: ($port | tonumber),
-                    users: [{ id: $uuid, encryption: "none", flow: $flow }]
-                  }]
-                },
-                streamSettings: {
-                  network: $net,
-                  tcpSettings: {},
-                  security: "reality",
-                  realitySettings: {
-                    serverName: $sni,
-                    publicKey: $pbk,
-                    shortId: $sid,
-                    fingerprint: $fp
-                  }
-                }
+                tag: $tag, protocol: "vless",
+                settings: { vnext: [{ address: $host, port: ($port|tonumber),
+                  users: [{ id: $uuid, encryption: "none", flow: $flow }] }] },
+                streamSettings: { network: $net, tcpSettings: {}, security: "reality",
+                  realitySettings: { serverName: $sni, publicKey: $pbk, shortId: $sid, fingerprint: $fp } }
               }') || continue
 
               OUTBOUNDS_JSON=$(printf '%s' "$OUTBOUNDS_JSON" | jq ". + [$ob]")
@@ -149,62 +127,44 @@ jobs:
               '. + [{"tag":"direct","protocol":"freedom"},{"tag":"block","protocol":"blackhole"}]')
 
             local balTag="AUTO-${TAG_PREFIX}"
-
             jq -n \
               --arg    remarks "$LABEL"  \
               --arg    balTag  "$balTag" \
-              --argjson tags   "$TAGS_JSON"    \
+              --argjson tags   "$TAGS_JSON"      \
               --argjson outs   "$OUTBOUNDS_JSON" \
             '{
               remarks: $remarks,
               dns: { servers: ["1.1.1.1","1.0.0.1"], queryStrategy: "UseIP" },
               routing: {
-                domainMatcher: "hybrid",
-                domainStrategy: "IPIfNonMatch",
+                domainMatcher: "hybrid", domainStrategy: "IPIfNonMatch",
                 rules: [
                   { type: "field", protocol: ["bittorrent"], outboundTag: "direct" },
                   { type: "field", inboundTag: ["socks","http"], balancerTag: $balTag }
                 ],
-                balancers: [{
-                  tag: $balTag,
-                  selector: $tags,
-                  strategy: {
-                    type: "leastPing",
-                    settings: { maxRTT: "2000ms", expected: 3, baselines: ["1200ms"], tolerance: 0.1 }
-                  },
-                  fallbackTag: "direct"
-                }]
+                balancers: [{ tag: $balTag, selector: $tags,
+                  strategy: { type: "leastPing",
+                    settings: { maxRTT: "2000ms", expected: 3, baselines: ["1200ms"], tolerance: 0.1 } },
+                  fallbackTag: "direct" }]
               },
               inbounds: [
-                {
-                  tag: "socks", port: 10808, listen: "127.0.0.1",
-                  protocol: "socks",
+                { tag: "socks", port: 10808, listen: "127.0.0.1", protocol: "socks",
                   settings: { udp: true, auth: "noauth" },
-                  sniffing: { enabled: true, routeOnly: false, destOverride: ["http","tls","quic"] }
-                },
-                {
-                  tag: "http", port: 10809, listen: "127.0.0.1",
-                  protocol: "http",
+                  sniffing: { enabled: true, routeOnly: false, destOverride: ["http","tls","quic"] } },
+                { tag: "http", port: 10809, listen: "127.0.0.1", protocol: "http",
                   settings: { allowTransparent: false },
-                  sniffing: { enabled: true, routeOnly: false, destOverride: ["http","tls","quic"] }
-                }
+                  sniffing: { enabled: true, routeOnly: false, destOverride: ["http","tls","quic"] } }
               ],
               outbounds: $outs,
               burstObservatory: {
-                pingConfig: {
-                  timeout: "2s", interval: "10s", sampling: 2,
-                  httpMethod: "GET",
-                  destination: "https://www.gstatic.com/generate_204",
-                  connectivity: ""
-                },
-                subjectSelector: $tags
-              }
+                pingConfig: { timeout: "2s", interval: "10s", sampling: 2,
+                  httpMethod: "GET", destination: "https://www.gstatic.com/generate_204", connectivity: "" },
+                subjectSelector: $tags }
             }' > "$OUT_FILE"
 
             echo "  ✅ $OUT_FILE  ($count конфигов)"
           }
 
-          # ---------- источники ----------
+          # ========== ИСТОЧНИКИ ==========
           SOURCES=(
             "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/Vless-Reality-White-Lists-Rus-Mobile-2.txt"
             "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/Vless-Reality-White-Lists-Rus-Mobile.txt"
@@ -216,16 +176,12 @@ jobs:
             "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/BLACK_VLESS_RUS_mobile.txt"
           )
 
-          # ---------- основной цикл ----------
+          # ========== ОСНОВНОЙ ЦИКЛ ==========
           BLOCK=1
           for URL in "${SOURCES[@]}"; do
             echo "📥 Блок $BLOCK: $URL"
             TMP_RAW=$(mktemp)
-
-            curl -fsSL "$URL" \
-              | grep -E '^vless://' \
-              | sort -u > "$TMP_RAW" || true
-
+            curl -fsSL "$URL" | grep -E '^vless://' | sort -u > "$TMP_RAW" || true
             TOTAL=$(wc -l < "$TMP_RAW")
             echo "   Найдено: $TOTAL конфигов"
 
@@ -242,7 +198,6 @@ jobs:
             while IFS= read -r line; do
               printf '%s\n' "$line" >> "$TMP_CHUNK"
               CHUNK_LEN=$(wc -l < "$TMP_CHUNK")
-
               if [ "$CHUNK_LEN" -ge "$GROUP_SIZE" ]; then
                 LABEL="LTE | Авто ${BLOCK}.${GROUP}"
                 FNAME="${OUTPUT_DIR}/lte_${BLOCK}_${GROUP}.json"
@@ -255,7 +210,6 @@ jobs:
               fi
             done < "$TMP_RAW"
 
-            # остаток
             if [ -s "$TMP_CHUNK" ]; then
               LABEL="LTE | Авто ${BLOCK}.${GROUP}"
               FNAME="${OUTPUT_DIR}/lte_${BLOCK}_${GROUP}.json"
@@ -268,6 +222,71 @@ jobs:
             rm -f "$TMP_RAW" "$TMP_CHUNK"
             BLOCK=$((BLOCK + 1))
           done
+
+          # ========== СОБИРАЕМ LTE_ALL.JSON ==========
+          echo ""
+          echo "🔗 Собираем LTE_ALL.json из всех блоков..."
+
+          ALL_TAGS="[]"
+          ALL_OUTS="[]"
+          GLOBAL_IDX=1
+
+          for f in "$OUTPUT_DIR"/lte_*.json; do
+            [ -f "$f" ] || continue
+
+            # Берём все outbounds кроме direct и block, переименовываем теги чтобы не было дублей
+            while IFS= read -r ob; do
+              old_tag=$(printf '%s' "$ob" | jq -r '.tag')
+              new_tag="all-${GLOBAL_IDX}"
+              ob=$(printf '%s' "$ob" | jq --arg t "$new_tag" '.tag = $t')
+              ALL_OUTS=$(printf '%s' "$ALL_OUTS" | jq ". + [$ob]")
+              ALL_TAGS=$(printf '%s' "$ALL_TAGS" | jq ". + [\"$new_tag\"]")
+              GLOBAL_IDX=$((GLOBAL_IDX + 1))
+            done < <(jq -c '.outbounds[] | select(.tag != "direct" and .tag != "block")' "$f")
+          done
+
+          COUNT=$(printf '%s' "$ALL_TAGS" | jq 'length')
+          echo "   Всего нод в LTE_ALL: $COUNT"
+
+          if [ "$COUNT" -gt 0 ]; then
+            ALL_OUTS=$(printf '%s' "$ALL_OUTS" | jq \
+              '. + [{"tag":"direct","protocol":"freedom"},{"tag":"block","protocol":"blackhole"}]')
+
+            jq -n \
+              --arg    remarks "LTE | Авто ALL 🌍" \
+              --argjson tags   "$ALL_TAGS" \
+              --argjson outs   "$ALL_OUTS" \
+            '{
+              remarks: $remarks,
+              dns: { servers: ["1.1.1.1","1.0.0.1"], queryStrategy: "UseIP" },
+              routing: {
+                domainMatcher: "hybrid", domainStrategy: "IPIfNonMatch",
+                rules: [
+                  { type: "field", protocol: ["bittorrent"], outboundTag: "direct" },
+                  { type: "field", inboundTag: ["socks","http"], balancerTag: "AUTO-ALL" }
+                ],
+                balancers: [{ tag: "AUTO-ALL", selector: $tags,
+                  strategy: { type: "leastPing",
+                    settings: { maxRTT: "2000ms", expected: 3, baselines: ["1200ms"], tolerance: 0.1 } },
+                  fallbackTag: "direct" }]
+              },
+              inbounds: [
+                { tag: "socks", port: 10808, listen: "127.0.0.1", protocol: "socks",
+                  settings: { udp: true, auth: "noauth" },
+                  sniffing: { enabled: true, routeOnly: false, destOverride: ["http","tls","quic"] } },
+                { tag: "http", port: 10809, listen: "127.0.0.1", protocol: "http",
+                  settings: { allowTransparent: false },
+                  sniffing: { enabled: true, routeOnly: false, destOverride: ["http","tls","quic"] } }
+              ],
+              outbounds: $outs,
+              burstObservatory: {
+                pingConfig: { timeout: "2s", interval: "10s", sampling: 2,
+                  httpMethod: "GET", destination: "https://www.gstatic.com/generate_204", connectivity: "" },
+                subjectSelector: $tags }
+            }' > "${OUTPUT_DIR}/LTE_ALL.json"
+
+            echo "  ✅ ${OUTPUT_DIR}/LTE_ALL.json  ($COUNT нод)"
+          fi
 
           echo ""
           echo "✅ Готово!"
