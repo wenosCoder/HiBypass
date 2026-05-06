@@ -20,39 +20,30 @@ jobs:
         run: |
           set -euo pipefail
 
-          # ==================== Улучшенный парсер VLESS ====================
+          echo "=== Начало обработки ==="
+
           parse_vless() {
             local URL="$1"
             local REMARK="$2"
 
-            # Убираем vless://
             local TEMP="${URL#vless://}"
-            
             local UUID="${TEMP%%@*}"
             local REST="${TEMP#*@}"
             
             local ADDRESS="${REST%%:*}"
-            local PORT_REST="${REST#*:}"
-            local PORT="${PORT_REST%%[?#]*}"
-            
-            # Параметры после ?
-            local QUERY=""
-            if [[ $REST == *"?"* ]]; then
-              QUERY="${REST#*\?}"
-              QUERY="${QUERY%%#*}"
-            fi
+            local PORT="\( {REST#*:}"; PORT=" \){PORT%%[?#]*}"
 
-            # Извлекаем параметры
-            local ENCRYPTION=$(echo "$QUERY" | grep -o 'encryption=[^&]*' | cut -d'=' -f2 || echo "none")
-            local FLOW=$(echo "$QUERY" | grep -o 'flow=[^&]*' | cut -d'=' -f2 || echo "")
-            local SECURITY=$(echo "$QUERY" | grep -o 'security=[^&]*' | cut -d'=' -f2 || echo "reality")
+            local QUERY=""
+            [[ \( REST == *"?"* ]] && QUERY=" \){REST#*\?}" && QUERY="${QUERY%%#*}"
+
+            local PBK=$(echo "$QUERY" | grep -o 'pbk=[^&]*' | cut -d'=' -f2 || echo "")
             local SNI=$(echo "$QUERY" | grep -o 'sni=[^&]*' | cut -d'=' -f2 || echo "$ADDRESS")
             local FP=$(echo "$QUERY" | grep -o 'fp=[^&]*' | cut -d'=' -f2 || echo "chrome")
-            local PBK=$(echo "$QUERY" | grep -o 'pbk=[^&]*' | cut -d'=' -f2 || echo "")
+            local FLOW=$(echo "$QUERY" | grep -o 'flow=[^&]*' | cut -d'=' -f2 || echo "")
+            local SECURITY=$(echo "$QUERY" | grep -o 'security=[^&]*' | cut -d'=' -f2 || echo "reality")
 
-            # Если pbk пустой — пропускаем конфиг (Reality без pbk бесполезен)
             if [[ -z "$PBK" ]]; then
-              echo "Пропущен (нет pbk): $REMARK" >&2
+              echo "⚠️ Пропущен (нет pbk): $REMARK"
               return 1
             fi
 
@@ -62,13 +53,11 @@ jobs:
               --arg address "$ADDRESS" \
               --arg port "$PORT" \
               --arg id "$UUID" \
-              --arg encryption "${ENCRYPTION:-none}" \
               --arg flow "$FLOW" \
               --arg security "$SECURITY" \
               --arg sni "$SNI" \
               --arg fp "$FP" \
               --arg pbk "$PBK" \
-              --arg remark "$REMARK" \
               '{
                 tag: $tag,
                 protocol: $protocol,
@@ -76,11 +65,7 @@ jobs:
                   vnext: [{
                     address: $address,
                     port: ($port | tonumber),
-                    users: [{
-                      id: $id,
-                      encryption: $encryption,
-                      flow: $flow
-                    }]
+                    users: [{ id: $id, encryption: "none", flow: $flow }]
                   }]
                 },
                 streamSettings: {
@@ -96,123 +81,69 @@ jobs:
               }'
           }
 
-          # ==================== Базовый шаблон ====================
+          # Базовый шаблон
           cat > base_config.json << 'EOF'
           {
-            "dns": {
-              "servers": ["1.1.1.1", "1.0.0.1"],
-              "queryStrategy": "UseIP"
-            },
+            "dns": { "servers": ["1.1.1.1", "1.0.0.1"], "queryStrategy": "UseIP" },
             "routing": {
-              "rules": [
-                {
-                  "type": "field",
-                  "protocol": ["bittorrent"],
-                  "outboundTag": "direct"
-                }
-              ],
+              "rules": [{ "type": "field", "protocol": ["bittorrent"], "outboundTag": "direct" }],
               "domainMatcher": "hybrid",
               "domainStrategy": "IPIfNonMatch"
             },
             "inbounds": [
-              {
-                "tag": "socks",
-                "port": 10808,
-                "listen": "127.0.0.1",
-                "protocol": "socks",
-                "settings": { "udp": true, "auth": "noauth" },
-                "sniffing": { "enabled": true, "routeOnly": false, "destOverride": ["http", "tls", "quic"] }
-              },
-              {
-                "tag": "http",
-                "port": 10809,
-                "listen": "127.0.0.1",
-                "protocol": "http",
-                "settings": { "allowTransparent": false },
-                "sniffing": { "enabled": true, "routeOnly": false, "destOverride": ["http", "tls", "quic"] }
-              }
+              { "tag": "socks", "port": 10808, "listen": "127.0.0.1", "protocol": "socks", "settings": { "udp": true, "auth": "noauth" }, "sniffing": { "enabled": true, "destOverride": ["http", "tls", "quic"] } },
+              { "tag": "http",  "port": 10809, "listen": "127.0.0.1", "protocol": "http",  "settings": { "allowTransparent": false }, "sniffing": { "enabled": true, "destOverride": ["http", "tls", "quic"] } }
             ],
             "outbounds": [],
             "remarks": "🇪🇺 LTE | НОМЕР"
           }
           EOF
 
-          # ==================== Обработка источника ====================
-          process_source() {
-            local URL="$1"
-            local BLOCK_NUM="$2"
-            
-            echo "🔄 Обрабатываем источник $BLOCK_NUM: $URL"
-            
-            # Получаем и чистим ссылки
-            mapfile -t ALL_CONFIGS < <(curl -fsSL "$URL" 2>/dev/null | grep -E '^vless://' | sort -u)
-            
-            if [[ ${#ALL_CONFIGS[@]} -eq 0 ]]; then
-              echo "⚠️ Нет VLESS ссылок в источнике $BLOCK_NUM"
-              return 0
-            fi
-
-            local BATCH=1
-            local COUNT=0
-            local CONFIGS=()
-
-            for line in "${ALL_CONFIGS[@]}"; do
-              CONFIGS+=("$line")
-              COUNT=$((COUNT + 1))
-
-              if [[ $COUNT -eq 20 ]]; then
-                process_batch "$BLOCK_NUM" "\( BATCH" " \){CONFIGS[@]}"
-                BATCH=$((BATCH + 1))
-                CONFIGS=()
-                COUNT=0
-              fi
-            done
-
-            # Остаток
-            if [[ ${#CONFIGS[@]} -gt 0 ]]; then
-              process_batch "$BLOCK_NUM" "\( BATCH" " \){CONFIGS[@]}"
-            fi
-          }
-
           process_batch() {
-            local BLOCK_NUM="$1"
-            local BATCH="$2"
+            local BLOCK=$1 BATCH=$2
             shift 2
             local CONFIGS=("$@")
+            local FILE="lte_\( {BLOCK}_ \){BATCH}.json"
 
-            local OUTPUT_FILE="lte_\( {BLOCK_NUM}_ \){BATCH}.json"
-            cp base_config.json "$OUTPUT_FILE"
+            cp base_config.json "$FILE"
 
             local added=0
             for i in "${!CONFIGS[@]}"; do
-              local REMARK="🇪🇺 LTE | \( {BLOCK_NUM}. \){BATCH} | node$((i+1))"
-              
-              if parse_vless "${CONFIGS[$i]}" "$REMARK" >> "$OUTPUT_FILE.tmp"; then
-                added=$((added + 1))
+              local remark="🇪🇺 LTE | \( {BLOCK}. \){BATCH} | node$((i+1))"
+              if parse_vless "${CONFIGS[$i]}" "$remark" >> "$FILE.tmp" 2>> parse_errors.log; then
+                added=$((added+1))
               fi
             done
 
-            if [[ $added -eq 0 ]]; then
-              rm -f "$OUTPUT_FILE" "$OUTPUT_FILE.tmp"
-              echo "❌ Блок $BLOCK_NUM.$BATCH: ничего не добавлено"
-              return 0
+            if [[ $added -gt 0 ]]; then
+              jq -s '.[0] as $base | $base + {outbounds: (.[1:])}' "$FILE" "$FILE.tmp" > "$FILE.new" && mv "$FILE.new" "$FILE"
+              jq --arg r "🇪🇺 LTE | \( {BLOCK}. \){BATCH} (${added} nodes)" '.remarks = $r' "$FILE" > "$FILE.new" && mv "$FILE.new" "$FILE"
+              echo "✅ Создан $FILE — $added нод"
+            else
+              rm -f "$FILE" "$FILE.tmp"
+              echo "❌ Блок \( {BLOCK}. \){BATCH} — ничего не добавлено"
             fi
-
-            # Собираем outbounds
-            jq -s '.[0] as $base | $base + {outbounds: (.[1:])}' "$OUTPUT_FILE" "$OUTPUT_FILE.tmp" > "$OUTPUT_FILE.new"
-            mv "$OUTPUT_FILE.new" "$OUTPUT_FILE"
-            rm -f "$OUTPUT_FILE.tmp"
-
-            # Обновляем remarks
-            jq --arg r "🇪🇺 LTE | \( {BLOCK_NUM}. \){BATCH} (${added} nodes)" \
-              '.remarks = $r' "$OUTPUT_FILE" > "$OUTPUT_FILE.new"
-            mv "$OUTPUT_FILE.new" "$OUTPUT_FILE"
-
-            echo "✅ Создан: $OUTPUT_FILE ($added нод)"
           }
 
-          # ==================== Запуск ====================
-          rm -f lte_*.json
+          rm -f lte_*.json parse_errors.log
+
+          echo "Обработка источников..."
+          process_source() {
+            local url=$1 block=$2
+            echo "→ Источник $block: $url"
+            mapfile -t links < <(curl -fsSL "$url" 2>/dev/null | grep '^vless://' | sort -u)
+            echo "   Найдено ссылок: ${#links[@]}"
+
+            if [[ ${#links[@]} -eq 0 ]]; then return; fi
+
+            local batch=1 i=0
+            while (( i < ${#links[@]} )); do
+              local chunk=("${links[@]:i:20}")
+              process_batch "$block" "\( batch" " \){chunk[@]}"
+              batch=$((batch+1))
+              i=$((i+20))
+            done
+          }
 
           process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/Vless-Reality-White-Lists-Rus-Mobile-2.txt" "1"
           process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/Vless-Reality-White-Lists-Rus-Mobile.txt" "2"
@@ -223,17 +154,19 @@ jobs:
           process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/BLACK_VLESS_RUS.txt" "7"
           process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/BLACK_VLESS_RUS_mobile.txt" "8"
 
-          echo "Всего создано файлов: $(ls lte_*.json 2>/dev/null | wc -l)"
+          echo "=== Итог ==="
+          ls -l lte_*.json 2>/dev/null || echo "Файлы lte_*.json не созданы!"
 
       - name: Commit and push
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           
-          if git diff --quiet --exit-code lte_*.json 2>/dev/null; then
-            echo "Нет изменений для коммита"
+          if git diff --quiet lte_*.json 2>/dev/null; then
+            echo "Изменений нет"
           else
             git add lte_*.json
-            git commit -m "Auto: обновление $(date -u '+%Y-%m-%d %H:%M UTC')"
+            git commit -m "Auto update $(date -u '+%Y-%m-%d %H:%M UTC')"
             git push
+            echo "✅ Файлы успешно закоммичены"
           fi
