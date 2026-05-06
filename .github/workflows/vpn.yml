@@ -1,76 +1,141 @@
-name: Merge VLESS Configs
+name: Build AUTO V2Ray Config
 
 on:
   schedule:
     - cron: '0 */6 * * *'
   workflow_dispatch:
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
 jobs:
-  merge:
+  build:
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
 
-      - name: Fetch configs
+      - name: Install tools
         run: |
-          echo '#profile-title: HiBypass | LTE FREE' > vlees.txt
-          echo '#profile-update-interval: 6' >> vlees.txt
-          echo '#support-url: https://t.me/Hibypass' >> vlees.txt
-          echo '#profile-web-page-url: https://t.me/Hibypass' >> vlees.txt
-          echo '#announce: Besplatnyy obkhod | TG: @Hibypass' >> vlees.txt
+          sudo apt update
+          sudo apt install -y jq
 
-          fetch() {
-            curl -fsSL "$1" | grep -E '^vless://' | sort -u | awk -v p="$2" 'BEGIN{c=1}{sub(/#.*/,""); print $0 "#LTE | " p "." c; c++}'
-          }
-
-          fetch "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/Vless-Reality-White-Lists-Rus-Mobile-2.txt" "1" >> vlees.txt
-          fetch "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/Vless-Reality-White-Lists-Rus-Mobile.txt" "2" >> vlees.txt
-          fetch "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/WHITE-CIDR-RU-all.txt" "3" >> vlees.txt
-          fetch "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/WHITE-CIDR-RU-checked.txt" "4" >> vlees.txt
-          fetch "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/WHITE-SNI-RU-all.txt" "5" >> vlees.txt
-          fetch "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/BLACK_SS%2BAll_RUS.txt" "6" >> vlees.txt
-          fetch "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/BLACK_VLESS_RUS.txt" "7" >> vlees.txt
-          fetch "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/BLACK_VLESS_RUS_mobile.txt" "8" >> vlees.txt
-
-          echo "vlees.txt: $(wc -l < vlees.txt) lines"
-
-      - name: Generate config.json
+      - name: Fetch VLESS and build config.json
         run: |
-          rm -f outbounds.txt selectors.txt
-          N=1
+          SOURCES=(
+            "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/Vless-Reality-White-Lists-Rus-Mobile-2.txt"
+            "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/Vless-Reality-White-Lists-Rus-Mobile.txt"
+            "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/WHITE-CIDR-RU-all.txt"
+            "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/WHITE-CIDR-RU-checked.txt"
+          )
 
-          while IFS= read -r line; do
-            [[ "$line" =~ ^vless:// ]] || continue
-            UUID=$(echo "$line" | grep -oP '(?<=vless://)[^@]+' || true)
-            HOST=$(echo "$line" | grep -oP '(?<=@)[^:]+' || true)
-            PORT=$(echo "$line" | grep -oP '(?<=:)\d+(?=\?)' | head -1 || true)
-            SNI=$(echo "$line" | grep -oP '(?<=sni=)[^&]+' | head -1 || true)
-            PBK=$(echo "$line" | grep -oP '(?<=pbk=)[^&]+' | head -1 || true)
-            SID=$(echo "$line" | grep -oP '(?<=sid=)[^&]+' | head -1 || true)
-            [ -z "$UUID" ] && continue
-            [ -z "$HOST" ] && continue
-            [ -z "$PORT" ] && continue
+          > raw.txt
+          for URL in "${SOURCES[@]}"; do
+            curl -fsSL "$URL" | grep '^vless://' >> raw.txt
+          done
+
+          sort -u raw.txt > unique.txt
+
+          echo "[]" > outbounds.json
+
+          while read -r line; do
+            BASE=$(echo "$line" | sed 's/#.*//')
+
+            # Парсим VLESS
+            UUID=$(echo "$BASE" | sed -n 's|vless://\([^@]*\)@.*|\1|p')
+            HOST=$(echo "$BASE" | sed -n 's|vless://[^@]*@\([^:]*\):.*|\1|p')
+            PORT=$(echo "$BASE" | sed -n 's|.*:\([0-9]*\)?.*|\1|p')
+
+            SNI=$(echo "$BASE" | grep -o 'sni=[^&]*' | cut -d= -f2)
+            PBK=$(echo "$BASE" | grep -o 'pbk=[^&]*' | cut -d= -f2)
+            SID=$(echo "$BASE" | grep -o 'sid=[^&]*' | cut -d= -f2)
+
             [ -z "$SNI" ] && SNI="$HOST"
-            TAG="s${N}"
-            echo "{\"tag\":\"$TAG\",\"protocol\":\"vless\",\"settings\":{\"vnext\":[{\"address\":\"$HOST\",\"port\":$PORT,\"users\":[{\"id\":\"$UUID\",\"encryption\":\"none\",\"flow\":\"xtls-rprx-vision\"}]}]},\"streamSettings\":{\"network\":\"tcp\",\"security\":\"reality\",\"realitySettings\":{\"serverName\":\"$SNI\",\"publicKey\":\"$PBK\",\"shortId\":\"$SID\",\"fingerprint\":\"chrome\"}}}" >> outbounds.txt
-            echo "\"$TAG\"" >> selectors.txt
-            N=$((N+1))
-          done < vlees.txt
 
-          OUTBOUNDS=$(paste -sd ',' outbounds.txt)
-          SELECTORS=$(paste -sd ',' selectors.txt)
+            jq --arg host "$HOST" \
+               --arg port "$PORT" \
+               --arg uuid "$UUID" \
+               --arg sni "$SNI" \
+               --arg pbk "$PBK" \
+               --arg sid "$SID" \
+               '. += [{
+                 "tag": "cheap",
+                 "protocol": "vless",
+                 "settings": {
+                   "vnext": [{
+                     "address": $host,
+                     "port": ($port|tonumber),
+                     "users": [{
+                       "id": $uuid,
+                       "encryption": "none",
+                       "flow": "xtls-rprx-vision"
+                     }]
+                   }]
+                 },
+                 "streamSettings": {
+                   "network": "tcp",
+                   "security": "reality",
+                   "realitySettings": {
+                     "serverName": $sni,
+                     "publicKey": $pbk,
+                     "shortId": $sid,
+                     "fingerprint": "chrome"
+                   }
+                 }
+               }]' outbounds.json > tmp.json && mv tmp.json outbounds.json
 
-          echo "{\"remarks\":\"HiBypass | LTE AUTO\",\"dns\":{\"servers\":[\"1.1.1.1\",\"1.0.0.1\"]},\"routing\":{\"domainStrategy\":\"IPIfNonMatch\",\"rules\":[{\"type\":\"field\",\"protocol\":[\"bittorrent\"],\"outboundTag\":\"direct\"},{\"type\":\"field\",\"inboundTag\":[\"socks\",\"http\"],\"balancerTag\":\"auto\"}],\"balancers\":[{\"tag\":\"auto\",\"selector\":[$SELECTORS],\"strategy\":{\"type\":\"leastPing\"}}]},\"inbounds\":[{\"tag\":\"socks\",\"port\":10808,\"listen\":\"127.0.0.1\",\"protocol\":\"socks\",\"settings\":{\"udp\":true}},{\"tag\":\"http\",\"port\":10809,\"listen\":\"127.0.0.1\",\"protocol\":\"http\"}],\"outbounds\":[$OUTBOUNDS,{\"tag\":\"direct\",\"protocol\":\"freedom\"},{\"tag\":\"block\",\"protocol\":\"blackhole\"}],\"burstObservatory\":{\"pingConfig\":{\"timeout\":\"2s\",\"interval\":\"10s\",\"sampling\":2,\"destination\":\"https://www.gstatic.com/generate_204\"},\"subjectSelector\":[$SELECTORS]}}" > config.json
+          done < unique.txt
 
-          echo "config.json: done, $((N-1)) servers"
+          # Финальный config
+          jq -n \
+          --slurpfile outs outbounds.json \
+          '{
+            "log": { "loglevel": "warning" },
+
+            "inbounds": [{
+              "tag": "socks",
+              "port": 10808,
+              "listen": "127.0.0.1",
+              "protocol": "socks",
+              "settings": { "udp": true }
+            }],
+
+            "outbounds": (
+              $outs[0] + [
+                {
+                  "tag": "auto",
+                  "protocol": "freedom"
+                }
+              ]
+            ),
+
+            "routing": {
+              "rules": [{
+                "type": "field",
+                "balancerTag": "AUTO"
+              }],
+              "balancers": [{
+                "tag": "AUTO",
+                "selector": ["cheap"],
+                "strategy": {
+                  "type": "leastPing"
+                }
+              }]
+            },
+
+            "burstObservatory": {
+              "pingConfig": {
+                "destination": "https://www.gstatic.com/generate_204",
+                "interval": "10s",
+                "timeout": "2s"
+              },
+              "subjectSelector": ["cheap"]
+            }
+          }' > config.json
+
+          echo "Готово. Серверов: $(jq length outbounds.json)"
 
       - name: Commit
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add vlees.txt config.json
-          git diff --staged --quiet || git commit -m "Auto update $(date -u '+%Y-%m-%d %H:%M UTC')"
+          git config user.name "bot"
+          git config user.email "bot@github.com"
+          git add config.json
+          git commit -m "AUTO config $(date -u)" || echo "no changes"
           git push
