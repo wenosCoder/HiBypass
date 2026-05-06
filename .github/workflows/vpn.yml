@@ -32,8 +32,13 @@ jobs:
             local COUNTER=1
             curl -fsSL "$URL" | grep -E '^vless://' | sort -u | while IFS= read -r line; do
               BASE=$(echo "$line" | sed 's/#.*//')
-              echo "${BASE}#🇪🇺LTE | ${PREFIX}.${COUNTER}"
-              COUNTER=$((COUNTER + 1))
+              # Извлекаем IP/хост из vless URI (часть между @ и следующим : или /)
+              HOST=$(echo "$BASE" | grep -oP '(?<=@)[^:/@]+')
+              # Оставляем только если IP начинается на 84. или 89.
+              if echo "$HOST" | grep -qE '^(84|89)\.'; then
+                echo "${BASE}#🇪🇺LTE | ${PREFIX}.${COUNTER}"
+                COUNTER=$((COUNTER + 1))
+              fi
             done
           }
 
