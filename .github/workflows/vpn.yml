@@ -1,97 +1,141 @@
 name: AUTO VLESS CLEAN
 
 on:
-schedule:
-- cron: '0 */6 * * *'
-workflow_dispatch:
+  schedule:
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
 
 jobs:
-build:
-runs-on: ubuntu-latest
+  build:
+    runs-on: ubuntu-latest
 
-steps:
-  - name: Checkout
-    uses: actions/checkout@v4
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
-  - name: Install jq
-    run: |
-      sudo apt-get update
-      sudo apt-get install -y jq
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
 
-  - name: Fetch sources
-    run: |
-      curl -fsSL https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/Vless-Reality-White-Lists-Rus-Mobile.txt | grep '^vless://' > raw.txt
+      - name: Fetch sources
+        run: |
+          SOURCES=(
+            "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/Vless-Reality-White-Lists-Rus-Mobile-2.txt"
+            "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/Vless-Reality-White-Lists-Rus-Mobile.txt"
+            "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/WHITE-CIDR-RU-all.txt"
+            "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/WHITE-CIDR-RU-checked.txt"
+          )
 
-  - name: Clean & limit
-    run: |
-      sed 's/#.*//' raw.txt | sort -u | head -n 30 > final.txt
-      echo "Configs: $(wc -l < final.txt)"
+          > raw.txt
+          for URL in "${SOURCES[@]}"; do
+            curl -fsSL "$URL" | grep '^vless://' >> raw.txt
+          done
 
-  - name: Build config
-    run: |
-      echo "[]" > outbounds.json
+      - name: Clean & deduplicate
+        run: |
+          sed 's/#.*//' raw.txt > clean.txt
+          awk -F'[@:]' '!seen[$2":"$3]++' clean.txt > unique.txt
+          head -n 50 unique.txt > final.txt
+          echo "После очистки: $(wc -l < final.txt)"
 
-      while read -r line; do
-        UUID=$(echo "$line" | sed -n 's|vless://[^@]*@.*|\1|p')
-        HOST=$(echo "$line" | sed -n 's|vless://[^@]*@[^:]*:.*|\1|p')
-        PORT=$(echo "$line" | sed -n 's|.*:[0-9]*?.*|\1|p')
-        SNI=$(echo "$line" | grep -o 'sni=[^&]*' | cut -d= -f2)
-        PBK=$(echo "$line" | grep -o 'pbk=[^&]*' | cut -d= -f2)
+      - name: Build outbounds
+        run: |
+          echo "[]" > outbounds.json
 
-        [ -z "$SNI" ] && SNI="$HOST"
-        [ -z "$PBK" ] && continue
+          while read -r line; do
+            UUID=$(echo "$line" | sed -n 's|vless://\([^@]*\)@.*|\1|p')
+            HOST=$(echo "$line" | sed -n 's|vless://[^@]*@\([^:]*\):.*|\1|p')
+            PORT=$(echo "$line" | sed -n 's|.*:\([0-9]*\)?.*|\1|p')
 
-        jq --arg host "$HOST" \
-           --arg port "$PORT" \
-           --arg uuid "$UUID" \
-           --arg sni "$SNI" \
-           --arg pbk "$PBK" \
-           '. += [{
-             "tag": "cheap",
-             "protocol": "vless",
-             "settings": {
-               "vnext": [{
-                 "address": $host,
-                 "port": ($port|tonumber),
-                 "users": [{
-                   "id": $uuid,
-                   "encryption": "none"
-                 }]
-               }]
-             },
-             "streamSettings": {
-               "security": "reality",
-               "realitySettings": {
-                 "serverName": $sni,
-                 "publicKey": $pbk,
-                 "fingerprint": "chrome"
-               }
-             }
-           }]' outbounds.json > tmp.json && mv tmp.json outbounds.json
+            SNI=$(echo "$line" | grep -o 'sni=[^&]*' | cut -d= -f2)
+            PBK=$(echo "$line" | grep -o 'pbk=[^&]*' | cut -d= -f2)
+            SID=$(echo "$line" | grep -o 'sid=[^&]*' | cut -d= -f2)
 
-      done < final.txt
+            [ -z "$SNI" ] && SNI="$HOST"
 
-      jq -n --slurpfile outs outbounds.json '{
-        "inbounds":[{"port":10808,"protocol":"socks","settings":{"udp":true}}],
-        "outbounds":($outs[0]+[{"protocol":"freedom","tag":"direct"}]),
-        "routing":{
-          "rules":[{"type":"field","balancerTag":"AUTO"}],
-          "balancers":[{"tag":"AUTO","selector":["cheap"],"strategy":{"type":"leastPing"}}]
-        },
-        "burstObservatory":{
-          "pingConfig":{
-            "destination":"http://connectivitycheck.gstatic.com/generate_204",
-            "interval":"5s",
-            "timeout":"1s"
-          },
-          "subjectSelector":["cheap"]
-        }
-      }' > config.json
+            if [ -z "$PBK" ]; then
+              continue
+            fi
 
-  - name: Commit
-    run: |
-      git config user.name "bot"
-      git config user.email "bot@github.com"
-      git add config.json
-      git commit -m "update auto config" || echo "no changes"
-      git push
+            jq --arg host "$HOST" \
+               --arg port "$PORT" \
+               --arg uuid "$UUID" \
+               --arg sni "$SNI" \
+               --arg pbk "$PBK" \
+               --arg sid "$SID" \
+               '. += [{
+                 "tag": "cheap",
+                 "protocol": "vless",
+                 "settings": {
+                   "vnext": [{
+                     "address": $host,
+                     "port": ($port|tonumber),
+                     "users": [{
+                       "id": $uuid,
+                       "encryption": "none",
+                       "flow": "xtls-rprx-vision"
+                     }]
+                   }]
+                 },
+                 "streamSettings": {
+                   "network": "tcp",
+                   "security": "reality",
+                   "realitySettings": {
+                     "serverName": $sni,
+                     "publicKey": $pbk,
+                     "shortId": $sid,
+                     "fingerprint": "chrome"
+                   }
+                 }
+               }]' outbounds.json > tmp.json && mv tmp.json outbounds.json
+
+          done < final.txt
+
+          echo "Outbounds: $(jq length outbounds.json)"
+
+      - name: Build config.json
+        run: |
+          jq -n \
+          --slurpfile outs outbounds.json \
+          '{
+            "log": { "loglevel": "warning" },
+            "inbounds": [{
+              "port": 10808,
+              "protocol": "socks",
+              "settings": { "udp": true }
+            }],
+            "outbounds": (
+              $outs[0] + [
+                { "tag": "direct", "protocol": "freedom" }
+              ]
+            ),
+            "routing": {
+              "rules": [{
+                "type": "field",
+                "balancerTag": "AUTO"
+              }],
+              "balancers": [{
+                "tag": "AUTO",
+                "selector": ["cheap"],
+                "strategy": {
+                  "type": "leastPing"
+                }
+              }]
+            },
+            "burstObservatory": {
+              "pingConfig": {
+                "destination": "http://connectivitycheck.gstatic.com/generate_204",
+                "interval": "5s",
+                "timeout": "1s"
+              },
+              "subjectSelector": ["cheap"]
+            },
+            "remarks": "💎 AUTO CLEAN VLESS ⚡"
+          }' > config.json
+
+      - name: Commit
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add config.json
+          git commit -m "AUTO CLEAN $(date -u)" || echo "no changes"
+          git push
