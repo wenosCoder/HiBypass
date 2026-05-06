@@ -1,0 +1,47 @@
+#profile-title: HiBypass | LTE ALL CONFIGS
+#profile-update-interval: 6
+#support-url: https://t.me/Hibypass
+https://raw.githubusercontent.com/wenosCoder/HiBypass/main/configs/lte_1_1.json
+https://raw.githubusercontent.com/wenosCoder/HiBypass/main/configs/lte_1_2.json
+https://raw.githubusercontent.com/wenosCoder/HiBypass/main/configs/lte_1_3.json
+https://raw.githubusercontent.com/wenosCoder/HiBypass/main/configs/lte_1_5.json
+https://raw.githubusercontent.com/wenosCoder/HiBypass/main/configs/lte_1_6.json
+https://raw.githubusercontent.com/wenosCoder/HiBypass/main/configs/lte_1_7.json
+https://raw.githubusercontent.com/wenosCoder/HiBypass/main/configs/lte_1_8.json
+https://raw.githubusercontent.com/wenosCoder/HiBypass/main/configs/lte_2_1.json
+https://raw.githubusercontent.com/wenosCoder/HiBypass/main/configs/lte_2_2.json
+https://raw.githubusercontent.com/wenosCoder/HiBypass/main/configs/lte_2_5.json
+https://raw.githubusercontent.com/wenosCoder/HiBypass/main/configs/lte_2_6.json
+https://raw.githubusercontent.com/wenosCoder/HiBypass/main/configs/lte_2_7.json
+https://raw.githubusercontent.com/wenosCoder/HiBypass/main/configs/lte_2_8.json
+https://raw.githubusercontent.com/wenosCoder/HiBypass/main/configs/lte_3_1.json
+https://raw.githubusercontent.com/wenosCoder/HiBypass/main/configs/lte_3_2.json
+https://raw.githubusercontent.com/wenosCoder/HiBypass/main/configs/lte_3_3.json
+https://raw.githubusercontent.com/wenosCoder/HiBypass/main/configs/lte_3_4.json
+https://raw.githubusercontent.com/wenosCoder/HiBypass/main/configs/lte_3_10.json
+https://raw.githubusercontent.com/wenosCoder/HiBypass/main/configs/lte_3_11.json
+https://raw.githubusercontent.com/wenosCoder/HiBypass/main/configs/lte_3_12.json
+https://raw.githubusercontent.com/wenosCoder/HiBypass/main/configs/lte_3_13.json
+https://raw.githubusercontent.com/wenosCoder/HiBypass/main/configs/lte_3_14.json
+https://raw.githubusercontent.com/wenosCoder/HiBypass/main/configs/lte_3_15.json
+https://raw.githubusercontent.com/wenosCoder/HiBypass/main/configs/lte_3_16.json
+https://raw.githubusercontent.com/wenosCoder/HiBypass/main/configs/lte_4_1.json
+https://raw.githubusercontent.com/wenosCoder/HiBypass/main/configs/lte_4_2.json
+https://raw.githubusercontent.com/wenosCoder/HiBypass/main/configs/lte_5_1.json
+https://raw.githubusercontent.com/wenosCoder/HiBypass/main/configs/lte_5_2.json
+https://raw.githubusercontent.com/wenosCoder/HiBypass/main/configs/lte_5_3.json
+https://raw.githubusercontent.com/wenosCoder/HiBypass/main/configs/lte_5_4.json
+https://raw.githubusercontent.com/wenosCoder/HiBypass/main/configs/lte_5_5.json
+https://raw.githubusercontent.com/wenosCoder/HiBypass/main/configs/lte_5_6.json
+https://raw.githubusercontent.com/wenosCoder/HiBypass/main/configs/lte_5_7.json
+https://raw.githubusercontent.com/wenosCoder/HiBypass/main/configs/lte_7_1.json
+https://raw.githubusercontent.com/wenosCoder/HiBypass/main/configs/lte_7_2.json
+https://raw.githubusercontent.com/wenosCoder/HiBypass/main/configs/lte_7_3.json
+https://raw.githubusercontent.com/wenosCoder/HiBypass/main/configs/lte_7_4.json
+https://raw.githubusercontent.com/wenosCoder/HiBypass/main/configs/lte_7_5.json
+https://raw.githubusercontent.com/wenosCoder/HiBypass/main/configs/lte_7_6.json
+https://raw.githubusercontent.com/wenosCoder/HiBypass/main/configs/lte_8_1.json
+https://raw.githubusercontent.com/wenosCoder/HiBypass/main/configs/lte_8_2.json
+https://raw.githubusercontent.com/wenosCoder/HiBypass/main/configs/lte_8_3.json
+https://raw.githubusercontent.com/wenosCoder/HiBypass/main/configs/lte_8_5.json
+https://raw.githubusercontent.com/wenosCoder/HiBypass/main/configs/lte_8_6.json
