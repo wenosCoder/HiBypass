@@ -15,7 +15,14 @@ jobs:
 
       - name: Fetch and merge VLESS configs
         run: |
-          > merged-vless.txt
+          # Заголовки для v2rayTun
+          cat > vlees.txt << 'EOF'
+          #profile-title: HiBypass | LTE FREE 🏳🇷🇺
+          #profile-update-interval: 6
+          #support-url: https://t.me/Hibypass
+          #profile-web-page-url: https://t.me/Hibypass
+          #announce: Бесплатный обход белых списков РФ 🏳🇷🇺 | ТГ : @Hibypass
+          EOF
 
           process_source() {
             local URL="$1"
@@ -28,44 +35,21 @@ jobs:
             done
           }
 
-          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/Vless-Reality-White-Lists-Rus-Mobile-2.txt" "1" >> merged-vless.txt
-          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/Vless-Reality-White-Lists-Rus-Mobile.txt" "2" >> merged-vless.txt
-          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/WHITE-CIDR-RU-all.txt" "3" >> merged-vless.txt
-          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/WHITE-CIDR-RU-checked.txt" "4" >> merged-vless.txt
-          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/WHITE-SNI-RU-all.txt" "5" >> merged-vless.txt
-          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/BLACK_SS%2BAll_RUS.txt" "6" >> merged-vless.txt
-          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/BLACK_VLESS_RUS.txt" "7" >> merged-vless.txt
-          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/BLACK_VLESS_RUS_mobile.txt" "8" >> merged-vless.txt
+          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/Vless-Reality-White-Lists-Rus-Mobile-2.txt" "1" >> vlees.txt
+          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/Vless-Reality-White-Lists-Rus-Mobile.txt" "2" >> vlees.txt
+          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/WHITE-CIDR-RU-all.txt" "3" >> vlees.txt
+          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/WHITE-CIDR-RU-checked.txt" "4" >> vlees.txt
+          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/WHITE-SNI-RU-all.txt" "5" >> vlees.txt
+          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/BLACK_SS%2BAll_RUS.txt" "6" >> vlees.txt
+          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/BLACK_VLESS_RUS.txt" "7" >> vlees.txt
+          process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/BLACK_VLESS_RUS_mobile.txt" "8" >> vlees.txt
 
-          echo "Всего конфигов: $(wc -l < merged-vless.txt)"
-
-      - name: Generate subscription file
-        run: |
-          # Заголовок для v2rayTun
-          TITLE="HiBypass | LTE FREE 🏳🇷🇺"
-          DESC="Бесплатный обход белых списков РФ 🏳🇷🇺 | ТГ : @Hibypass"
-          UPLOAD="unlimited"
-          DOWNLOAD="unlimited"
-          TOTAL="unlimited"
-
-          # Кодируем заголовок
-          HEADER=$(printf "profile-title: base64:%s\nprofile-update-interval: 6\nsubscription-userinfo: upload=0; download=0; total=0; expire=0\nprofile-web-page-url: https://t.me/Hibypass\nsupport-url: https://t.me/Hibypass\nprofile-short-info: base64:%s" \
-            "$(echo -n "$TITLE" | base64 -w 0)" \
-            "$(echo -n "$DESC" | base64 -w 0)")
-
-          # Кодируем конфиги в base64
-          CONFIGS=$(base64 -w 0 merged-vless.txt)
-
-          # Собираем финальный файл (заголовок + конфиги)
-          echo "$HEADER" > vlees.txt
-          echo "$CONFIGS" >> vlees.txt
-
-          echo "Готово"
+          echo "Всего конфигов: $(wc -l < vlees.txt)"
 
       - name: Commit and push
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add merged-vless.txt vlees.txt
-          git diff --staged --quiet || git commit -m "Auto: обновление VLESS конфигов $(date -u '+%Y-%m-%d %H:%M UTC')"
+          git add vlees.txt
+          git diff --staged --quiet || git commit -m "Auto: обновление $(date -u '+%Y-%m-%d %H:%M UTC')"
           git push
