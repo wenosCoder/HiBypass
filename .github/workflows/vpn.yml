@@ -16,7 +16,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install dependencies
-        run: sudo apt-get install -y netcat-openbsd curl openssl
+        run: sudo apt-get install -y netcat-openbsd curl openssl jq
 
       - name: Fetch and merge configs
         run: |
@@ -31,26 +31,21 @@ jobs:
             > vlees.txt
 
           SNI_DOMAINS="ads.x5.ru max.ru vk.ru yandex.com ya.ru"
-
           CONFIGS_TMP=$(mktemp)
           SEEN_HOSTS=$(mktemp)
 
           check_server() {
-            local HOST="$1"
-            local PORT="$2"
+            local HOST="$1" PORT="$2"
             nc -z -w 5 "$HOST" "$PORT" 2>/dev/null
-            return $?
           }
 
           check_sni() {
-            local HOST="$1"
-            local PORT="$2"
+            local HOST="$1" PORT="$2"
             for SNI in $SNI_DOMAINS; do
               RESULT=$(echo "" | timeout 5 openssl s_client \
                 -connect "${HOST}:${PORT}" \
                 -servername "$SNI" \
-                -alpn h2 \
-                2>/dev/null | head -5)
+                -alpn h2 2>/dev/null | head -5)
               if echo "$RESULT" | grep -q "CONNECTED"; then
                 echo "SNI OK: $HOST:$PORT -> $SNI" >&2
                 return 0
@@ -61,10 +56,7 @@ jobs:
           }
 
           measure_ping() {
-            local HOST="$1"
-            local PORT="$2"
-            local TOTAL=0
-            local COUNT=0
+            local HOST="$1" PORT="$2" TOTAL=0 COUNT=0
             for i in 1 2 3; do
               START=$(date +%s%3N)
               if nc -z -w 3 "$HOST" "$PORT" 2>/dev/null; then
@@ -73,22 +65,16 @@ jobs:
                 COUNT=$((COUNT + 1))
               fi
             done
-            if [ "$COUNT" -eq 0 ]; then
-              echo "99999"
-            else
-              echo $((TOTAL / COUNT))
-            fi
+            [ "$COUNT" -eq 0 ] && echo "99999" || echo $((TOTAL / COUNT))
           }
 
           process_source() {
-            local URL="$1"
-            local PREFIX="$2"
+            local URL="$1" PREFIX="$2"
             local TMPFILE
             TMPFILE=$(mktemp)
             curl -fsSL --max-time 30 --connect-timeout 10 "$URL" > "$TMPFILE" 2>/dev/null || {
               echo "WARN: failed to fetch $URL" >&2
-              rm -f "$TMPFILE"
-              return
+              rm -f "$TMPFILE"; return
             }
 
             grep -E '^vless://' "$TMPFILE" | sort -u | while IFS= read -r line; do
@@ -100,24 +86,22 @@ jobs:
                 HOSTPORT="${HOST}:${PORT}"
 
                 if grep -qF "$HOSTPORT" "$SEEN_HOSTS" 2>/dev/null; then
-                  echo "DUP: $HOSTPORT — пропускаем" >&2
-                  continue
+                  echo "DUP: $HOSTPORT" >&2; continue
                 fi
 
                 if ! check_server "$HOST" "$PORT"; then
-                  echo "SKIP TCP: $HOSTPORT недоступен" >&2
-                  continue
+                  echo "SKIP TCP: $HOSTPORT" >&2; continue
                 fi
 
                 if ! check_sni "$HOST" "$PORT"; then
-                  echo "SKIP SNI: $HOSTPORT не прошёл SNI" >&2
-                  continue
+                  echo "SKIP SNI: $HOSTPORT" >&2; continue
                 fi
 
                 PING=$(measure_ping "$HOST" "$PORT")
                 echo "PING $HOSTPORT = ${PING}ms" >&2
 
-                printf '%s\t%s\t%s\n' "$PING" "$BASE" "$PREFIX" >> "$CONFIGS_TMP"
+                # Сохраняем: PING<TAB>BASE<TAB>HOST<TAB>PORT<TAB>PREFIX
+                printf '%s\t%s\t%s\t%s\t%s\n' "$PING" "$BASE" "$HOST" "$PORT" "$PREFIX" >> "$CONFIGS_TMP"
                 echo "$HOSTPORT" >> "$SEEN_HOSTS"
               fi
             done
@@ -139,23 +123,209 @@ jobs:
           process_source "https://raw.githubusercontent.com/whoahaow/rjsxrd/refs/heads/main/githubmirror/split-by-protocols/vless-secure.txt" "13"
           process_source "https://raw.githubusercontent.com/whoahaow/rjsxrd/refs/heads/main/githubmirror/split-by-protocols/vless.txt" "14"
 
-          echo "--- Сортировка по пингу ---" >&2
-          COUNTER=1
-          sort -t$'\t' -k1 -n "$CONFIGS_TMP" | while IFS=$'\t' read -r PING BASE PREFIX; do
-            LABEL="🇪🇺LTE | ${PREFIX}.${COUNTER}"
+          # ─── Сортируем по пингу ───────────────────────────────────────
+          echo "--- Сортировка и генерация ---" >&2
+          SORTED_TMP=$(mktemp)
+          sort -t$'\t' -k1 -n "$CONFIGS_TMP" > "$SORTED_TMP"
+
+          # ─── vlees.txt ────────────────────────────────────────────────
+          GLOBAL_COUNTER=1
+          PAK_NUM=1
+          LINE_IN_PAK=1
+
+          while IFS=$'\t' read -r PING BASE HOST PORT PREFIX; do
+            PAK_NUM=$(( (GLOBAL_COUNTER - 1) / 10 + 1 ))
+            LINE_IN_PAK=$(( (GLOBAL_COUNTER - 1) % 10 + 1 ))
+            LABEL="🇪🇺LTE | ${PAK_NUM}.${LINE_IN_PAK}"
             echo "${BASE}#${LABEL}" >> vlees.txt
-            COUNTER=$((COUNTER + 1))
+            GLOBAL_COUNTER=$((GLOBAL_COUNTER + 1))
+          done < "$SORTED_TMP"
+
+          # ─── JSON паки ────────────────────────────────────────────────
+          mkdir -p packs
+
+          TOTAL_LINES=$(wc -l < "$SORTED_TMP")
+          TOTAL_PAKS=$(( (TOTAL_LINES + 9) / 10 ))
+
+          for PAK in $(seq 1 $TOTAL_PAKS); do
+            PAK_FILE="packs/lte-${PAK}.json"
+            START_LINE=$(( (PAK - 1) * 10 + 1 ))
+            END_LINE=$(( PAK * 10 ))
+
+            # Извлекаем 10 строк этого пака
+            PAK_LINES=$(sed -n "${START_LINE},${END_LINE}p" "$SORTED_TMP")
+
+            # Строим массив outbounds
+            OUTBOUNDS_JSON="[]"
+            IDX=1
+            SELECTOR_TAGS=""
+
+            while IFS=$'\t' read -r PING BASE HOST PORT PREFIX; do
+              # Парсим UUID из vless URI
+              UUID=$(echo "$BASE" | sed 's/vless:\/\///' | sed 's/@.*//')
+
+              # Парсим параметры из query string
+              PARAMS=$(echo "$BASE" | grep -o '?.*' | tr '?' ' ' | tr '&' '\n')
+              FLOW=$(echo "$PARAMS" | grep '^flow=' | cut -d= -f2)
+              SECURITY=$(echo "$PARAMS" | grep '^security=' | cut -d= -f2)
+              SNI=$(echo "$PARAMS" | grep '^sni=' | cut -d= -f2)
+              PBK=$(echo "$PARAMS" | grep '^pbk=' | cut -d= -f2)
+              FP=$(echo "$PARAMS" | grep '^fp=' | cut -d= -f2)
+              SID=$(echo "$PARAMS" | grep '^sid=' | cut -d= -f2)
+              NET=$(echo "$PARAMS" | grep '^type=' | cut -d= -f2)
+              [ -z "$NET" ] && NET="tcp"
+              [ -z "$FP" ] && FP="chrome"
+              [ -z "$FLOW" ] && FLOW="xtls-rprx-vision"
+
+              TAG="lte-${PAK}-${IDX}"
+
+              # Строим outbound объект
+              OB=$(jq -n \
+                --arg tag "$TAG" \
+                --arg addr "$HOST" \
+                --argjson port "$PORT" \
+                --arg uuid "$UUID" \
+                --arg flow "$FLOW" \
+                --arg net "$NET" \
+                --arg sec "$SECURITY" \
+                --arg sni "$SNI" \
+                --arg pbk "$PBK" \
+                --arg fp "$FP" \
+                --arg sid "$SID" \
+                '{
+                  tag: $tag,
+                  protocol: "vless",
+                  settings: {
+                    vnext: [{
+                      address: $addr,
+                      port: $port,
+                      users: [{
+                        id: $uuid,
+                        encryption: "none",
+                        flow: $flow
+                      }]
+                    }]
+                  },
+                  streamSettings: {
+                    network: $net,
+                    security: $sec,
+                    realitySettings: {
+                      serverName: $sni,
+                      publicKey: $pbk,
+                      shortId: $sid,
+                      fingerprint: $fp
+                    }
+                  }
+                }')
+
+              OUTBOUNDS_JSON=$(echo "$OUTBOUNDS_JSON" | jq --argjson ob "$OB" '. + [$ob]')
+              SELECTOR_TAGS="${SELECTOR_TAGS} \"${TAG}\","
+              IDX=$((IDX + 1))
+            done <<< "$PAK_LINES"
+
+            # Убираем последнюю запятую у selector
+            SELECTOR_TAGS=$(echo "$SELECTOR_TAGS" | sed 's/,$//')
+
+            PAK_LABEL="🇪🇺LTE | Пак ${PAK}"
+
+            # Итоговый JSON файла
+            jq -n \
+              --arg remarks "$PAK_LABEL" \
+              --argjson outbounds "$OUTBOUNDS_JSON" \
+              --argjson pak "$PAK" \
+              '{
+                dns: {
+                  servers: ["1.1.1.1", "1.0.0.1"],
+                  queryStrategy: "UseIP"
+                },
+                routing: {
+                  rules: [
+                    {
+                      type: "field",
+                      protocol: ["bittorrent"],
+                      outboundTag: "direct"
+                    },
+                    {
+                      type: "field",
+                      inboundTag: ["socks", "http"],
+                      balancerTag: ("LTE-PAK-" + ($pak | tostring))
+                    }
+                  ],
+                  balancers: [
+                    {
+                      tag: ("LTE-PAK-" + ($pak | tostring)),
+                      selector: ["lte-" + ($pak | tostring)],
+                      strategy: {
+                        type: "leastPing",
+                        settings: {
+                          maxRTT: "1400ms",
+                          expected: 3,
+                          baselines: ["1200ms"],
+                          tolerance: 0.05
+                        }
+                      },
+                      fallbackTag: "direct"
+                    }
+                  ],
+                  domainMatcher: "hybrid",
+                  domainStrategy: "IPIfNonMatch"
+                },
+                inbounds: [
+                  {
+                    tag: "socks",
+                    port: 10808,
+                    listen: "127.0.0.1",
+                    protocol: "socks",
+                    settings: { udp: true, auth: "noauth" },
+                    sniffing: {
+                      enabled: true,
+                      routeOnly: false,
+                      destOverride: ["http", "tls", "quic"]
+                    }
+                  },
+                  {
+                    tag: "http",
+                    port: 10809,
+                    listen: "127.0.0.1",
+                    protocol: "http",
+                    settings: { allowTransparent: false },
+                    sniffing: {
+                      enabled: true,
+                      routeOnly: false,
+                      destOverride: ["http", "tls", "quic"]
+                    }
+                  }
+                ],
+                outbounds: ($outbounds + [
+                  { tag: "direct", protocol: "freedom" },
+                  { tag: "block", protocol: "blackhole" }
+                ]),
+                burstObservatory: {
+                  pingConfig: {
+                    timeout: "2s",
+                    interval: "10s",
+                    sampling: 2,
+                    httpMethod: "GET",
+                    destination: "https://www.gstatic.com/generate_204",
+                    connectivity: ""
+                  },
+                  subjectSelector: ["lte-" + ($pak | tostring)]
+                },
+                remarks: $remarks
+              }' > "$PAK_FILE"
+
+            echo "✅ Создан $PAK_FILE" >&2
           done
 
-          rm -f "$CONFIGS_TMP" "$SEEN_HOSTS"
+          rm -f "$CONFIGS_TMP" "$SEEN_HOSTS" "$SORTED_TMP"
 
           TOTAL=$(grep -cE '^vless://' vlees.txt || echo 0)
-          echo "✅ Всего рабочих VLESS конфигов: $TOTAL"
+          echo "✅ Всего конфигов: $TOTAL, паков: $TOTAL_PAKS"
 
       - name: Commit and push
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add vlees.txt
+          git add vlees.txt packs/
           git diff --staged --quiet || git commit -m "Auto: обновление $(date -u '+%Y-%m-%d %H:%M UTC')"
           git push
