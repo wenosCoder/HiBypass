@@ -1,1 +1,56 @@
+name: Авто-обновление списков для Happ Proxy (каждый час)
 
+on:
+  schedule:
+    - cron: '0 * * * *'      # Каждый час
+  workflow_dispatch:
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout репозиторий
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GH_TOKEN }}
+
+      - name: Скачиваем свежие списки
+        run: |
+          mkdir -p lists
+
+          # Основные списки
+          curl -fsSL -o lists/Vless-Reality-White-Lists-Rus-Mobile-2.txt \
+            https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/main/Vless-Reality-White-Lists-Rus-Mobile-2.txt
+
+          curl -fsSL -o lists/Vless-Reality-White-Lists-Rus-Mobile.txt \
+            https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/main/Vless-Reality-White-Lists-Rus-Mobile.txt
+
+          curl -fsSL -o lists/WHITE-CIDR-RU-all.txt \
+            https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/main/WHITE-CIDR-RU-all.txt
+
+          curl -fsSL -o lists/WHITE-CIDR-RU-checked.txt \
+            https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/main/WHITE-CIDR-RU-checked.txt
+
+          curl -fsSL -o lists/WHITE-SNI-RU-all.txt \
+            https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/main/WHITE-SNI-RU-all.txt
+
+          curl -fsSL -o lists/BLACK_SS+All_RUS.txt \
+            https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/main/BLACK_SS%2BAll_RUS.txt
+
+          curl -fsSL -o lists/BLACK_VLESS_RUS.txt \
+            https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/main/BLACK_VLESS_RUS.txt
+
+          curl -fsSL -o lists/BLACK_VLESS_RUS_mobile.txt \
+            https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/main/BLACK_VLESS_RUS_mobile.txt
+
+          # Добавляем метку времени (удобно для Happ)
+          echo "# Последнее обновление: $(date -u +'%Y-%m-%d %H:%M:%S UTC')" >> lists/_UPDATED.txt
+
+      - name: Commit и Push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lists/
+          git diff --staged --quiet || git commit -m "Авто-обновление списков $(date -u +'%Y-%m-%d %H:%M')"
+          git push
