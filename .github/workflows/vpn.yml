@@ -22,15 +22,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install dependencies
-        run: sudo apt-get install -y curl jq netcat-openbsd openssl
-
-      - name: Download dead hosts cache
-        continue-on-error: true
-        run: |
-          curl -fsSL \
-            "https://raw.githubusercontent.com/${{ github.repository }}/main/dead_hosts.txt" \
-            -o dead_hosts.txt 2>/dev/null || touch dead_hosts.txt
-          echo "Мёртвых хостов в кэше: $(wc -l < dead_hosts.txt)"
+        run: sudo apt-get install -y curl jq netcat-openbsd
 
       - name: Fetch batch ${{ matrix.batch }}
         timeout-minutes: 50
@@ -40,43 +32,41 @@ jobs:
           SEEN_HOSTS=$(mktemp)
           CHECK_QUEUE=$(mktemp)
 
-          # ── TLS-проверка: убеждаемся что Reality-сервер реально отвечает ──
-          # Быстрее чем curl через VLESS, не требует xray, отсеивает ~85% мёртвых
-          check_server() {
-            local HOST="$1" PORT="$2"
-
-            # Шаг 1: TCP за 1 сек (быстрый отсев)
-            nc -z -w1 "$HOST" "$PORT" 2>/dev/null || return 1
-
-            # Шаг 2: TLS handshake за 2 сек
-            # Reality отвечает на TLS даже без правильного SNI (просто закрывает)
-            # Главное — соединение устанавливается и есть TLS-ответ
-            local RESP
-            RESP=$(echo Q | timeout 2 openssl s_client \
-                     -connect "${HOST}:${PORT}" \
-                     -servername "www.google.com" \
-                     -verify_return_error \
-                     2>&1 | head -5)
-
-            # Reality возвращает CONNECTED или alert — в любом случае TLS работает
-            # Мёртвый сервер вернёт "Connection refused" или таймаут
-            echo "$RESP" | grep -qiE \
-              "(CONNECTED|no peer certificate|SSL handshake|alert|record)" \
-              && return 0
-
-            return 1
-          }
-
-          # ── Параллельная проверка пачками по 30 ──────────────────────────
+          # ── Параллельная проверка живости + измерение пинга ───────────────
           flush_queue() {
             [ ! -s "$CHECK_QUEUE" ] && return
+            local RESULTS_TMP
+            RESULTS_TMP=$(mktemp)
+
             while IFS=$'\t' read -r BASE HOST PORT PREFIX; do
               (
-                check_server "$HOST" "$PORT" && \
-                printf '%s\t%s\t%s\t%s\n' "$BASE" "$HOST" "$PORT" "$PREFIX"
-              ) &
+                # TCP-коннект (быстро)
+                nc -z -w2 "$HOST" "$PORT" 2>/dev/null || exit 1
+
+                # Измеряем RTT через curl TTFB
+                RTT=$(curl -o /dev/null -s -w "%{time_connect}" \
+                  --max-time 3 --connect-timeout 2 \
+                  "https://${HOST}:${PORT}" 2>/dev/null || echo "")
+
+                if [ -n "$RTT" ] && echo "$RTT" | grep -qE '^[0-9.]+$'; then
+                  # Переводим секунды в миллисекунды (целое)
+                  PING_MS=$(awk "BEGIN{printf \"%d\", $RTT * 1000}")
+                else
+                  # Фоллбэк: пинг через /dev/tcp
+                  T1=$(date +%s%3N)
+                  (echo >/dev/tcp/"$HOST"/"$PORT") 2>/dev/null && \
+                    PING_MS=$(($(date +%s%3N) - T1)) || PING_MS=9999
+                fi
+
+                printf '%s\t%s\t%s\t%s\t%s\n' \
+                  "$BASE" "$HOST" "$PORT" "$PREFIX" "$PING_MS"
+              ) >> "$RESULTS_TMP" &
             done < "$CHECK_QUEUE"
             wait
+
+            # Сортируем по пингу (5-я колонка), лучшие первые
+            sort -t$'\t' -k5 -n "$RESULTS_TMP" >> "$CONFIGS_TMP"
+            rm -f "$RESULTS_TMP"
             > "$CHECK_QUEUE"
           }
 
@@ -86,8 +76,8 @@ jobs:
             local URL="$1" PREFIX="$2" COUNT=0
             local TMPFILE
             TMPFILE=$(mktemp)
-            curl -fsSL --max-time 30 --connect-timeout 10 "$URL" > "$TMPFILE" 2>/dev/null \
-              || { rm -f "$TMPFILE"; return; }
+            curl -fsSL --max-time 30 --connect-timeout 10 "$URL" \
+              > "$TMPFILE" 2>/dev/null || { rm -f "$TMPFILE"; return; }
 
             if ! grep -qE '^vless://' "$TMPFILE"; then
               local BASE64_TMP
@@ -120,19 +110,16 @@ jobs:
               echo "$PORT" | grep -qE '^[0-9]+$' || continue
 
               HOSTPORT="${HOST}:${PORT}"
-
-              # ── Пропускаем хосты из кэша мёртвых ─────────────────────────
-              grep -qF "$HOSTPORT" dead_hosts.txt 2>/dev/null && continue
-
               grep -qF "$HOSTPORT" "$SEEN_HOSTS" 2>/dev/null && continue
               echo "$HOSTPORT" >> "$SEEN_HOSTS"
 
-              printf '%s\t%s\t%s\t%s\n' "$BASE" "$HOST" "$PORT" "$PREFIX" >> "$CHECK_QUEUE"
+              printf '%s\t%s\t%s\t%s\n' "$BASE" "$HOST" "$PORT" "$PREFIX" \
+                >> "$CHECK_QUEUE"
               COUNT=$((COUNT + 1))
               QUEUE_SIZE=$((QUEUE_SIZE + 1))
 
               if [ "$QUEUE_SIZE" -ge 30 ]; then
-                flush_queue >> "$CONFIGS_TMP"
+                flush_queue
                 QUEUE_SIZE=0
               fi
             done
@@ -209,7 +196,7 @@ jobs:
           fi
 
           # Остаток очереди
-          flush_queue >> "$CONFIGS_TMP"
+          flush_queue
 
           rm -f "$CHECK_QUEUE" "$SEEN_HOSTS"
           FOUND=$(wc -l < "$CONFIGS_TMP" 2>/dev/null || echo 0)
@@ -244,7 +231,6 @@ jobs:
 
       - name: Merge and generate files
         run: |
-          # ── vlees.txt ──────────────────────────────────────────────────────
           printf '%s\n' \
             '#profile-title: HiBypass | LTE FREE 🏳🇷🇺' \
             '#profile-update-interval: 1' \
@@ -255,80 +241,45 @@ jobs:
             '#traffic-remaining: ∞' \
             > vlees.txt
 
-          # ── Дедупликация ───────────────────────────────────────────────────
+          # ── Слияние всех батчей ────────────────────────────────────────────
           MERGED_TMP=$(mktemp)
           cat batch_*.tmp 2>/dev/null > "$MERGED_TMP"
 
+          # ── Глобальная сортировка по пингу (5-я колонка) ──────────────────
+          SORTED_TMP=$(mktemp)
+          sort -t$'\t' -k5 -n "$MERGED_TMP" > "$SORTED_TMP"
+
+          # ── Дедупликация (сохраняем порядок по пингу) ─────────────────────
           DEDUP_TMP=$(mktemp)
           SEEN=$(mktemp)
-          while IFS=$'\t' read -r BASE HOST PORT PREFIX; do
+          while IFS=$'\t' read -r BASE HOST PORT PREFIX PING_MS; do
             HOSTPORT="${HOST}:${PORT}"
             grep -qF "$HOSTPORT" "$SEEN" && continue
             echo "$HOSTPORT" >> "$SEEN"
-            printf '%s\t%s\t%s\t%s\n' "$BASE" "$HOST" "$PORT" "$PREFIX" >> "$DEDUP_TMP"
-          done < "$MERGED_TMP"
+            printf '%s\t%s\t%s\t%s\t%s\n' \
+              "$BASE" "$HOST" "$PORT" "$PREFIX" "$PING_MS" >> "$DEDUP_TMP"
+          done < "$SORTED_TMP"
 
           TOTAL=$(wc -l < "$DEDUP_TMP")
           echo "Всего уникальных живых TCP конфигов: $TOTAL"
 
-          # ── vlees.txt ──────────────────────────────────────────────────────
+          # ── vlees.txt с пингом в label ─────────────────────────────────────
           IDX=1
-          while IFS=$'\t' read -r BASE HOST PORT PREFIX; do
-            echo "${BASE}#🇪🇺LTE | ${IDX} 🌐 RU" >> vlees.txt
+          while IFS=$'\t' read -r BASE HOST PORT PREFIX PING_MS; do
+            if [ -n "$PING_MS" ] && [ "$PING_MS" -lt 9999 ] 2>/dev/null; then
+              LABEL="🇪🇺LTE | ${IDX} 🌐 RU | ${PING_MS}ms"
+            else
+              LABEL="🇪🇺LTE | ${IDX} 🌐 RU"
+            fi
+            echo "${BASE}#${LABEL}" >> vlees.txt
             IDX=$((IDX + 1))
           done < "$DEDUP_TMP"
 
-          # ── Обновление кэша мёртвых хостов ────────────────────────────────
-          # Логика: если HOST:PORT был в прошлом vlees.txt, но не попал в новый —
-          # значит он не прошёл TLS-проверку. Записываем в dead_hosts.txt.
-          # Хосты которые пропали 2+ раза подряд остаются в кэше навсегда
-          # (пока не появятся снова живыми — тогда убираем из dead_hosts.txt).
-
-          NEW_HOSTS=$(mktemp)
-          while IFS=$'\t' read -r BASE HOST PORT PREFIX; do
-            echo "${HOST}:${PORT}"
-          done < "$DEDUP_TMP" | sort > "$NEW_HOSTS"
-
-          # Загружаем прошлый vlees.txt из репо для сравнения
-          OLD_HOSTS=$(mktemp)
-          if [ -f vlees.txt ] && git show HEAD:vlees.txt > /tmp/old_vlees.txt 2>/dev/null; then
-            grep '^vless://' /tmp/old_vlees.txt \
-              | sed 's/.*@//;s/[#?].*//' \
-              | sort > "$OLD_HOSTS"
-          else
-            touch "$OLD_HOSTS"
-          fi
-
-          # Хосты что были раньше, но не прошли проверку сейчас → кандидаты в мёртвые
-          DEAD_CANDIDATES=$(mktemp)
-          comm -23 "$OLD_HOSTS" "$NEW_HOSTS" > "$DEAD_CANDIDATES"
-          CANDIDATES_COUNT=$(wc -l < "$DEAD_CANDIDATES")
-          echo "Кандидатов в мёртвые (не прошли TLS): $CANDIDATES_COUNT"
-
-          # Загружаем текущий dead_hosts.txt из репо
-          CURRENT_DEAD=$(mktemp)
-          git show HEAD:dead_hosts.txt > "$CURRENT_DEAD" 2>/dev/null || touch "$CURRENT_DEAD"
-
-          # Новый dead_hosts.txt = старые мёртвые + новые кандидаты − те кто ожил
-          # «Ожившие» = хосты что были в dead_hosts, но снова появились в новом vlees
-          NEW_DEAD=$(mktemp)
-          cat "$CURRENT_DEAD" "$DEAD_CANDIDATES" \
-            | sort -u \
-            | comm -23 - "$NEW_HOSTS" \
-            > "$NEW_DEAD"
-
-          NEW_DEAD_COUNT=$(wc -l < "$NEW_DEAD")
-          REVIVED=$(comm -12 "$CURRENT_DEAD" "$NEW_HOSTS" | wc -l)
-          echo "Серверов в кэше мёртвых: $NEW_DEAD_COUNT (ожило и убрано: $REVIVED)"
-
-          mv "$NEW_DEAD" dead_hosts.txt
-          rm -f "$OLD_HOSTS" "$NEW_HOSTS" "$DEAD_CANDIDATES" "$CURRENT_DEAD"
-
-          # ── Генерация всех outbounds ───────────────────────────────────────
+          # ── Генерация outbounds ────────────────────────────────────────────
           ALL_OUTBOUNDS=$(mktemp)
           IDX=1
 
-          while IFS=$'\t' read -r BASE HOST PORT PREFIX; do
+          while IFS=$'\t' read -r BASE HOST PORT PREFIX PING_MS; do
             UUID=$(echo "$BASE" | sed 's/vless:\/\///;s/@.*//')
             QUERY=$(echo "$BASE" | grep -o '?[^#]*' | tr '?&' '\n\n')
             get_param() { echo "$QUERY" | grep "^${1}=" | head -1 | cut -d= -f2-; }
@@ -345,19 +296,27 @@ jobs:
             [ -z "$FLOW" ] && FLOW="xtls-rprx-vision"
             [ -z "$SID" ]  && SID=""
 
+            # Пинг для remarks
+            if [ -n "$PING_MS" ] && [ "$PING_MS" -lt 9999 ] 2>/dev/null; then
+              PING_LABEL="${PING_MS}ms"
+            else
+              PING_LABEL="?"
+            fi
+
             echo "$PORT" | grep -qE '^[0-9]+$' || { IDX=$((IDX + 1)); continue; }
 
             jq -cn \
-              --arg  tag  "lte-${IDX}" \
-              --arg  addr "$HOST"      \
-              --argjson port "$PORT"   \
-              --arg  uuid "$UUID"      \
-              --arg  flow "$FLOW"      \
-              --arg  sec  "$SEC"       \
-              --arg  sni  "$SNI"       \
-              --arg  pbk  "$PBK"       \
-              --arg  fp   "$FP"        \
-              --arg  sid  "$SID"       \
+              --arg  tag   "lte-${IDX}"       \
+              --arg  addr  "$HOST"             \
+              --argjson port "$PORT"           \
+              --arg  uuid  "$UUID"             \
+              --arg  flow  "$FLOW"             \
+              --arg  sec   "$SEC"              \
+              --arg  sni   "$SNI"              \
+              --arg  pbk   "$PBK"             \
+              --arg  fp    "$FP"               \
+              --arg  sid   "$SID"              \
+              --arg  ping  "$PING_LABEL"       \
               '{
                 tag: $tag,
                 protocol: "vless",
@@ -377,7 +336,8 @@ jobs:
                     shortId: $sid,
                     fingerprint: $fp
                   }
-                }
+                },
+                _ping: $ping
               }' >> "$ALL_OUTBOUNDS"
 
             IDX=$((IDX + 1))
@@ -386,8 +346,8 @@ jobs:
           CONF_COUNT=$((IDX - 1))
           echo "Сгенерировано outbounds: $CONF_COUNT"
 
-          # ── Разбивка на паки по 50 — всё в один packs.json ────────────────
-          PACK_SIZE=50
+          # ── Разбивка на паки по 100 ───────────────────────────────────────
+          PACK_SIZE=100
           PACK_NUM=1
           CHUNK=$(mktemp)
           LINE_COUNT=0
@@ -399,18 +359,29 @@ jobs:
             RETAGGED=$(mktemp)
             local i=1
             while IFS= read -r obj; do
-              echo "$obj" | jq --arg t "lte-${i}" '.tag = $t'
+              echo "$obj" | jq --arg t "lte-${i}" '.tag = $t | del(._ping)'
               i=$((i + 1))
             done < "$chunk" > "$RETAGGED"
 
+            # Считаем средний пинг пака для remarks
+            AVG_PING=$(jq -s '[.[].["_ping"] | 
+              if test("^[0-9]+ms$") then (.[:-2] | tonumber) else empty end
+              ] | if length > 0 then (add/length | floor) else 0 end' "$chunk" 2>/dev/null || echo 0)
+
+            if [ "$AVG_PING" -gt 0 ] 2>/dev/null; then
+              REMARKS="🇪🇺LTE | 1.${num} 🌐 | ~${AVG_PING}ms"
+            else
+              REMARKS="🇪🇺LTE | 1.${num} 🌐"
+            fi
+
             jq -n \
-              --arg remarks "🇪🇺LTE | 1.${num} 🌐" \
+              --arg remarks "$REMARKS" \
               --slurpfile out "$RETAGGED" \
               '{
                 remarks: $remarks,
                 dns: {
-                  servers: ["1.1.1.1", "1.0.0.1"],
-                  queryStrategy: "UseIP"
+                  servers: ["1.1.1.1", "1.0.0.1", "8.8.8.8"],
+                  queryStrategy: "UseIPv4"
                 },
                 observatory: {
                   enableConcurrency: true,
@@ -482,7 +453,7 @@ jobs:
               TMP_ARRAY=$(mktemp)
               jq --argjson pack "$PACK_JSON" '. + [$pack]' "$PACKS_ARRAY" > "$TMP_ARRAY"
               mv "$TMP_ARRAY" "$PACKS_ARRAY"
-              echo "✅ Пак 1.${PACK_NUM} добавлен (50 серверов)"
+              echo "✅ Пак 1.${PACK_NUM} добавлен (100 серверов)"
               PACK_NUM=$((PACK_NUM + 1))
               rm -f "$CHUNK"
               CHUNK=$(mktemp)
@@ -499,7 +470,7 @@ jobs:
           fi
 
           mv "$PACKS_ARRAY" packs.json
-          rm -f "$CHUNK" "$MERGED_TMP" "$DEDUP_TMP" "$SEEN" "$ALL_OUTBOUNDS"
+          rm -f "$CHUNK" "$MERGED_TMP" "$SORTED_TMP" "$DEDUP_TMP" "$SEEN" "$ALL_OUTBOUNDS"
           echo "✅ Готово: $CONF_COUNT серверов в $PACK_NUM паках — один packs.json"
 
       - name: Validate JSON
@@ -517,9 +488,8 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add vlees.txt packs.json dead_hosts.txt
+          git add vlees.txt packs.json
           SERVER_COUNT=$(jq '[.[].outbounds[]|select(.tag|startswith("lte-"))]|length' packs.json)
           PACK_COUNT=$(jq 'length' packs.json)
-          DEAD_COUNT=$(wc -l < dead_hosts.txt 2>/dev/null || echo 0)
-          git diff --staged --quiet || git commit -m "Auto: $(date -u '+%Y-%m-%d %H:%M UTC') | $SERVER_COUNT серверов | $PACK_COUNT паков | 💀 $DEAD_COUNT мёртвых"
+          git diff --staged --quiet || git commit -m "Auto: $(date -u '+%Y-%m-%d %H:%M UTC') | $SERVER_COUNT серверов | $PACK_COUNT паков"
           git push
