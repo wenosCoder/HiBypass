@@ -35,19 +35,31 @@ jobs:
             local URL="$1" PREFIX="$2" TMPFILE HOST PORT HOSTPORT BASE SNI_VAL SNI_OK
             TMPFILE=$(mktemp)
             curl -fsSL --max-time 30 --connect-timeout 10 "$URL" > "$TMPFILE" 2>/dev/null || { rm -f "$TMPFILE"; return; }
+
+            # Декодируем base64 если файл не содержит vless:// напрямую
+            if ! grep -qE '^vless://' "$TMPFILE"; then
+              BASE64_TMP=$(mktemp)
+              base64 -d "$TMPFILE" > "$BASE64_TMP" 2>/dev/null && mv "$BASE64_TMP" "$TMPFILE" || rm -f "$BASE64_TMP"
+            fi
+
             grep -E '^vless://' "$TMPFILE" | sort -u | while IFS= read -r line; do
               BASE=$(echo "$line" | sed 's/#.*//')
               HOST=$(echo "$BASE" | sed 's/.*@//;s/[:/].*//')
+
+              # Фильтр по IP-диапазонам российских операторов
               echo "$HOST" | grep -qE '^(84|89|158|188)\.' || continue
+
               SNI_VAL=$(echo "$BASE" | grep -o 'sni=[^&]*' | cut -d= -f2)
               SNI_OK=0
               for ALLOWED in $SNI_ALLOWED; do
                 [ "$SNI_VAL" = "$ALLOWED" ] && SNI_OK=1 && break
               done
               [ "$SNI_OK" -eq 1 ] || continue
+
               PORT=$(echo "$BASE" | sed 's/.*@[^:]*://;s/[/?].*//')
               HOSTPORT="${HOST}:${PORT}"
               grep -qF "$HOSTPORT" "$SEEN_HOSTS" 2>/dev/null && continue
+
               printf '%s\t%s\t%s\t%s\n' "$BASE" "$HOST" "$PORT" "$PREFIX" >> "$CONFIGS_TMP"
               echo "$HOSTPORT" >> "$SEEN_HOSTS"
             done
@@ -135,7 +147,7 @@ jobs:
 
       - name: Merge and generate files
         run: |
-          # ── vlees.txt ─────────────────────────────────────────────────────
+          # ── vlees.txt (подписка) ──────────────────────────────────────────
           printf '%s\n' \
             '#profile-title: HiBypass | LTE FREE 🏳🇷🇺' \
             '#profile-update-interval: 1' \
@@ -146,7 +158,7 @@ jobs:
             '#traffic-remaining: ∞' \
             > vlees.txt
 
-          # ── дедупликация ──────────────────────────────────────────────────
+          # ── дедупликация по host:port ─────────────────────────────────────
           MERGED_TMP=$(mktemp)
           cat batch_*.tmp 2>/dev/null > "$MERGED_TMP"
 
@@ -159,6 +171,9 @@ jobs:
             printf '%s\t%s\t%s\t%s\n' "$BASE" "$HOST" "$PORT" "$PREFIX" >> "$DEDUP_TMP"
           done < "$MERGED_TMP"
 
+          TOTAL=$(wc -l < "$DEDUP_TMP")
+          echo "Всего уникальных конфигов: $TOTAL"
+
           # ── vlees.txt — список конфигов ───────────────────────────────────
           IDX=1
           while IFS=$'\t' read -r BASE HOST PORT PREFIX; do
@@ -166,114 +181,203 @@ jobs:
             IDX=$((IDX + 1))
           done < "$DEDUP_TMP"
 
-          # ── строим outbounds через файл (избегаем "Argument list too long") 
-          OUTBOUNDS_FILE=$(mktemp)
-          echo '[]' > "$OUTBOUNDS_FILE"
+          # ── Генерация outbounds через NDJSON (O(n) вместо O(n²)) ──────────
+          # Каждый outbound пишем отдельной строкой JSON, потом jq -s '.' собирает массив
+          OUTBOUNDS_NDJSON=$(mktemp)
           IDX=1
 
           while IFS=$'\t' read -r BASE HOST PORT PREFIX; do
             UUID=$(echo "$BASE" | sed 's/vless:\/\///;s/@.*//')
-            PARAMS=$(echo "$BASE" | grep -o '?.*' | tr '?&' '\n\n')
-            get_param() { echo "$PARAMS" | grep "^$1=" | cut -d= -f2; }
-            FLOW=$(get_param flow); SNI=$(get_param sni); PBK=$(get_param pbk)
-            FP=$(get_param fp);     SID=$(get_param sid); NET=$(get_param type)
+
+            # Парсим query-параметры
+            QUERY=$(echo "$BASE" | grep -o '?[^#]*' | tr '?&' '\n\n')
+            get_param() { echo "$QUERY" | grep "^${1}=" | head -1 | cut -d= -f2-; }
+
+            FLOW=$(get_param flow)
+            SNI=$(get_param sni)
+            PBK=$(get_param pbk)
+            FP=$(get_param fp)
+            SID=$(get_param sid)
+            NET=$(get_param type)
             SEC=$(get_param security)
+
+            # Дефолты
             [ -z "$NET" ]  && NET="tcp"
             [ -z "$FP" ]   && FP="chrome"
+            [ -z "$SEC" ]  && SEC="reality"
             [ -z "$FLOW" ] && FLOW="xtls-rprx-vision"
+            [ -z "$SID" ]  && SID=""
 
-            # каждый outbound пишем в отдельный tmp файл и сливаем через jq
-            OB_FILE=$(mktemp)
+            # Валидация порта
+            echo "$PORT" | grep -qE '^[0-9]+$' || { IDX=$((IDX + 1)); continue; }
+
             jq -n \
-              --arg tag  "lte-${IDX}" --arg addr "$HOST" \
-              --argjson port "$PORT"  --arg uuid "$UUID" \
-              --arg flow "$FLOW"      --arg net  "$NET"  \
-              --arg sec  "$SEC"       --arg sni  "$SNI"  \
-              --arg pbk  "$PBK"       --arg fp   "$FP"   \
-              --arg sid  "$SID" \
-              '{tag:$tag, protocol:"vless",
-                settings:{vnext:[{address:$addr, port:$port,
-                  users:[{id:$uuid, encryption:"none", flow:$flow}]}]},
-                streamSettings:{network:$net, security:$sec,
-                  realitySettings:{serverName:$sni, publicKey:$pbk,
-                    shortId:$sid, fingerprint:$fp}}}' > "$OB_FILE"
+              --arg  tag  "lte-${IDX}"  \
+              --arg  addr "$HOST"       \
+              --argjson port "$PORT"    \
+              --arg  uuid "$UUID"       \
+              --arg  flow "$FLOW"       \
+              --arg  net  "$NET"        \
+              --arg  sec  "$SEC"        \
+              --arg  sni  "$SNI"        \
+              --arg  pbk  "$PBK"        \
+              --arg  fp   "$FP"         \
+              --arg  sid  "$SID"        \
+              '{
+                tag: $tag,
+                protocol: "vless",
+                settings: {
+                  vnext: [{
+                    address: $addr,
+                    port: $port,
+                    users: [{
+                      id: $uuid,
+                      encryption: "none",
+                      flow: $flow
+                    }]
+                  }]
+                },
+                streamSettings: {
+                  network: $net,
+                  security: $sec,
+                  realitySettings: {
+                    serverName: $sni,
+                    publicKey: $pbk,
+                    shortId: $sid,
+                    fingerprint: $fp
+                  }
+                }
+              }' >> "$OUTBOUNDS_NDJSON"
 
-            # добавляем в массив через файл, не через переменную
-            jq --slurpfile ob "$OB_FILE" '. + $ob' "$OUTBOUNDS_FILE" > "${OUTBOUNDS_FILE}.new"
-            mv "${OUTBOUNDS_FILE}.new" "$OUTBOUNDS_FILE"
-            rm -f "$OB_FILE"
             IDX=$((IDX + 1))
           done < "$DEDUP_TMP"
 
-          # добавляем direct и block
-          jq '. + [{tag:"direct",protocol:"freedom"},{tag:"block",protocol:"blackhole"}]' \
-            "$OUTBOUNDS_FILE" > "${OUTBOUNDS_FILE}.final"
-          mv "${OUTBOUNDS_FILE}.final" "$OUTBOUNDS_FILE"
+          # Собираем массив outbounds за один вызов jq
+          OUTBOUNDS_JSON=$(jq -s '.' "$OUTBOUNDS_NDJSON")
+          CONF_COUNT=$(echo "$OUTBOUNDS_JSON" | jq 'length')
 
-          # ── финальный конфиг ──────────────────────────────────────────────
+          # ── Финальный packs.json ──────────────────────────────────────────
           jq -n \
-            --arg remarks "🇷🇺 HiBypass | LTE FREE" \
-            --slurpfile out "$OUTBOUNDS_FILE" \
+            --arg     remarks   "🇷🇺 HiBypass | LTE FREE" \
+            --argjson out       "$OUTBOUNDS_JSON" \
             '{
               remarks: $remarks,
+
+              log: {
+                loglevel: "warning"
+              },
+
               dns: {
                 servers: ["1.1.1.1", "1.0.0.1"],
                 queryStrategy: "UseIP"
               },
-              routing: {
-                domainMatcher: "hybrid",
-                domainStrategy: "IPIfNonMatch",
-                rules: [
-                  {type:"field", protocol:["bittorrent"], outboundTag:"direct"},
-                  {type:"field", inboundTag:["socks","http"], balancerTag:"BALANCER"}
-                ],
-                balancers: [{
-                  tag: "BALANCER",
-                  selector: ["lte-"],
-                  strategy: {type: "leastPing"}
-                }]
+
+              # observatory работает на старых версиях Xray (< 1.8)
+              observatory: {
+                enableConcurrency: true,
+                probeInterval: "3m",
+                probeUrl: "http://www.gstatic.com/generate_204",
+                subjectSelector: ["lte-"]
               },
-              inbounds: [
-                {
-                  tag: "socks",
-                  port: 10808,
-                  listen: "127.0.0.1",
-                  protocol: "socks",
-                  settings: {udp: true, auth: "noauth"},
-                  sniffing: {enabled: true, routeOnly: false,
-                    destOverride: ["http","tls","quic"]}
-                },
-                {
-                  tag: "http",
-                  port: 10809,
-                  listen: "127.0.0.1",
-                  protocol: "http",
-                  settings: {allowTransparent: false},
-                  sniffing: {enabled: true, routeOnly: false,
-                    destOverride: ["http","tls","quic"]}
-                }
-              ],
-              outbounds: $out[0],
+
+              # burstObservatory — для новых версий Xray (>= 1.8)
               burstObservatory: {
                 pingConfig: {
                   timeout: "5s",
-                  interval: "300s",
+                  interval: "180s",
                   sampling: 2,
                   httpMethod: "GET",
                   destination: "https://www.gstatic.com/generate_204",
                   connectivity: ""
                 },
                 subjectSelector: ["lte-"]
-              }
+              },
+
+              routing: {
+                domainMatcher: "hybrid",
+                domainStrategy: "IPIfNonMatch",
+                rules: [
+                  {
+                    type: "field",
+                    protocol: ["bittorrent"],
+                    outboundTag: "direct"
+                  },
+                  {
+                    type: "field",
+                    inboundTag: ["socks", "http"],
+                    balancerTag: "BALANCER"
+                  }
+                ],
+                balancers: [{
+                  tag: "BALANCER",
+                  selector: ["lte-"],
+                  strategy: {
+                    type: "leastLoad",
+                    settings: {
+                      maxRTT: "2000ms",
+                      expected: 1,
+                      baselines: ["500ms", "1000ms"],
+                      tolerance: 0.1
+                    }
+                  }
+                }]
+              },
+
+              inbounds: [
+                {
+                  tag: "socks",
+                  port: 10808,
+                  listen: "127.0.0.1",
+                  protocol: "socks",
+                  settings: {
+                    udp: true,
+                    auth: "noauth"
+                  },
+                  sniffing: {
+                    enabled: true,
+                    routeOnly: false,
+                    destOverride: ["http", "tls", "quic"]
+                  }
+                },
+                {
+                  tag: "http",
+                  port: 10809,
+                  listen: "127.0.0.1",
+                  protocol: "http",
+                  settings: {
+                    allowTransparent: false
+                  },
+                  sniffing: {
+                    enabled: true,
+                    routeOnly: false,
+                    destOverride: ["http", "tls", "quic"]
+                  }
+                }
+              ],
+
+              outbounds: ($out + [
+                {tag: "direct", protocol: "freedom", settings: {domainStrategy: "UseIP"}},
+                {tag: "block",  protocol: "blackhole"}
+              ])
             }' > packs.json
 
-          rm -f "$MERGED_TMP" "$DEDUP_TMP" "$SEEN" "$OUTBOUNDS_FILE"
-          echo "✅ Конфигов: $((IDX - 1))"
+          rm -f "$MERGED_TMP" "$DEDUP_TMP" "$SEEN" "$OUTBOUNDS_NDJSON"
+          echo "✅ Конфигов в packs.json: $CONF_COUNT"
+
+      - name: Validate JSON
+        run: |
+          if jq empty packs.json 2>/dev/null; then
+            echo "✅ packs.json валидный"
+            echo "Конфигов: $(jq '.outbounds | map(select(.tag | startswith("lte-"))) | length' packs.json)"
+          else
+            echo "❌ packs.json невалидный JSON!"
+            exit 1
+          fi
 
       - name: Commit and push
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add vlees.txt packs.json
-          git diff --staged --quiet || git commit -m "Auto: обновление $(date -u '+%Y-%m-%d %H:%M UTC')"
+          git diff --staged --quiet || git commit -m "Auto: обновление $(date -u '+%Y-%m-%d %H:%M UTC') | $(jq '.outbounds | map(select(.tag | startswith("lte-"))) | length' packs.json) конфигов"
           git push
