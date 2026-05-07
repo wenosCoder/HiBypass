@@ -181,8 +181,9 @@ jobs:
             IDX=$((IDX + 1))
           done < "$DEDUP_TMP"
 
-          # ── Генерация outbounds через NDJSON (O(n) вместо O(n²)) ──────────
-          # Каждый outbound пишем отдельной строкой JSON, потом jq -s '.' собирает массив
+          # ── Генерация outbounds — каждый объект как строка NDJSON ──────────
+          # Важно: НЕ используем shell-переменные для больших данных (Argument list too long)
+          # Всё через файлы на диске
           OUTBOUNDS_NDJSON=$(mktemp)
           IDX=1
 
@@ -208,10 +209,12 @@ jobs:
             [ -z "$FLOW" ] && FLOW="xtls-rprx-vision"
             [ -z "$SID" ]  && SID=""
 
-            # Валидация порта
+            # Валидация порта — пропускаем невалидные
             echo "$PORT" | grep -qE '^[0-9]+$' || { IDX=$((IDX + 1)); continue; }
 
-            jq -n \
+            # Пишем каждый outbound как отдельную строку JSON в файл
+            # НЕ накапливаем в переменную — это и есть причина "Argument list too long"
+            jq -cn \
               --arg  tag  "lte-${IDX}"  \
               --arg  addr "$HOST"       \
               --argjson port "$PORT"    \
@@ -230,11 +233,7 @@ jobs:
                   vnext: [{
                     address: $addr,
                     port: $port,
-                    users: [{
-                      id: $uuid,
-                      encryption: "none",
-                      flow: $flow
-                    }]
+                    users: [{id: $uuid, encryption: "none", flow: $flow}]
                   }]
                 },
                 streamSettings: {
@@ -252,16 +251,15 @@ jobs:
             IDX=$((IDX + 1))
           done < "$DEDUP_TMP"
 
-          # Собираем массив outbounds за один вызов jq
-          OUTBOUNDS_JSON=$(jq -s '.' "$OUTBOUNDS_NDJSON")
-          CONF_COUNT=$(echo "$OUTBOUNDS_JSON" | jq 'length')
+          CONF_COUNT=$((IDX - 1))
+          echo "Сгенерировано outbounds: $CONF_COUNT"
 
-          # ── Финальный packs.json ──────────────────────────────────────────
+          # ── Финальный packs.json — собираем целиком через jq, читая файлы ─
+          # --slurpfile читает файл NDJSON и даёт его как массив $out — без shell-переменных
           jq -n \
-            --arg     remarks   "🇷🇺 HiBypass | LTE FREE" \
-            --argjson out       "$OUTBOUNDS_JSON" \
+            --slurpfile out "$OUTBOUNDS_NDJSON" \
             '{
-              remarks: $remarks,
+              remarks: "🇷🇺 HiBypass | LTE FREE",
 
               log: {
                 loglevel: "warning"
@@ -272,7 +270,6 @@ jobs:
                 queryStrategy: "UseIP"
               },
 
-              # observatory работает на старых версиях Xray (< 1.8)
               observatory: {
                 enableConcurrency: true,
                 probeInterval: "3m",
@@ -280,7 +277,6 @@ jobs:
                 subjectSelector: ["lte-"]
               },
 
-              # burstObservatory — для новых версий Xray (>= 1.8)
               burstObservatory: {
                 pingConfig: {
                   timeout: "5s",
@@ -329,10 +325,7 @@ jobs:
                   port: 10808,
                   listen: "127.0.0.1",
                   protocol: "socks",
-                  settings: {
-                    udp: true,
-                    auth: "noauth"
-                  },
+                  settings: {udp: true, auth: "noauth"},
                   sniffing: {
                     enabled: true,
                     routeOnly: false,
@@ -344,9 +337,7 @@ jobs:
                   port: 10809,
                   listen: "127.0.0.1",
                   protocol: "http",
-                  settings: {
-                    allowTransparent: false
-                  },
+                  settings: {allowTransparent: false},
                   sniffing: {
                     enabled: true,
                     routeOnly: false,
