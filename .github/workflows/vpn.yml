@@ -38,25 +38,17 @@ jobs:
             grep -E '^vless://' "$TMPFILE" | sort -u | while IFS= read -r line; do
               BASE=$(echo "$line" | sed 's/#.*//')
               HOST=$(echo "$BASE" | sed 's/.*@//;s/[:/].*//')
-
-              # Фильтр по IP 84. или 89.
               echo "$HOST" | grep -qE '^(84|89)\.' || continue
-
-              # Фильтр по SNI из конфига
               SNI_VAL=$(echo "$BASE" | grep -o 'sni=[^&]*' | cut -d= -f2)
               SNI_OK=0
               for ALLOWED in $SNI_ALLOWED; do
                 [ "$SNI_VAL" = "$ALLOWED" ] && SNI_OK=1 && break
               done
               [ "$SNI_OK" -eq 1 ] || continue
-
               PORT=$(echo "$BASE" | sed 's/.*@[^:]*://;s/[/?].*//')
               HOSTPORT="${HOST}:${PORT}"
               grep -qF "$HOSTPORT" "$SEEN_HOSTS" 2>/dev/null && continue
-
-              # Только проверяем жив ли сервер (1 попытка, 2 сек)
               nc -z -w 2 "$HOST" "$PORT" 2>/dev/null || continue
-
               printf '%s\t%s\t%s\t%s\n' "$BASE" "$HOST" "$PORT" "$PREFIX" >> "$CONFIGS_TMP"
               echo "$HOSTPORT" >> "$SEEN_HOSTS"
             done
@@ -154,7 +146,6 @@ jobs:
           MERGED_TMP=$(mktemp)
           cat batch_*.tmp 2>/dev/null > "$MERGED_TMP"
 
-          # Дедупликация по host:port
           DEDUP_TMP=$(mktemp)
           SEEN=$(mktemp)
           while IFS=$'\t' read -r BASE HOST PORT PREFIX; do
@@ -259,156 +250,6 @@ jobs:
 
           echo "$ALL_PACKS_JSON" | jq '.' > packs.json
           rm -f "$MERGED_TMP" "$DEDUP_TMP" "$SEEN"
-
-          echo "✅ Конфигов: $(grep -cE '^vless://' vlees.txt || echo 0), Паков: $TOTAL_PAKS"
-
-      - name: Commit and push
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add vlees.txt packs.json
-          git diff --staged --quiet || git commit -m "Auto: обновление $(date -u '+%Y-%m-%d %H:%M UTC')"
-          git push
-  merge:
-    needs: fetch
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    timeout-minutes: 10
-
-    steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
-
-      - name: Install dependencies
-        run: sudo apt-get install -y jq
-
-      - name: Download all batches
-        uses: actions/download-artifact@v4
-        with:
-          pattern: batch-*
-          merge-multiple: true
-
-      - name: Merge and generate files
-        run: |
-          printf '%s\n' \
-            '#profile-title: HiBypass | LTE FREE 🏳🇷🇺' \
-            '#profile-update-interval: 1' \
-            '#support-url: https://t.me/Hibypass' \
-            '#profile-web-page-url: https://t.me/Hibypass' \
-            '#announce: Бесплатный обход белых списков РФ 🏳🇷🇺 | ТГ : @Hibypass' \
-            '#traffic-limit: ∞' \
-            '#traffic-remaining: ∞' \
-            > vlees.txt
-
-          SORTED_TMP=$(mktemp)
-          cat batch_*.tmp 2>/dev/null | sort -t$'\t' -k1 -n > "$SORTED_TMP"
-
-          DEDUP_TMP=$(mktemp)
-          SEEN=$(mktemp)
-          while IFS=$'\t' read -r PING BASE HOST PORT PREFIX; do
-            HOSTPORT="${HOST}:${PORT}"
-            grep -qF "$HOSTPORT" "$SEEN" && continue
-            echo "$HOSTPORT" >> "$SEEN"
-            printf '%s\t%s\t%s\t%s\t%s\n' "$PING" "$BASE" "$HOST" "$PORT" "$PREFIX" >> "$DEDUP_TMP"
-          done < "$SORTED_TMP"
-          mv "$DEDUP_TMP" "$SORTED_TMP"
-
-          TOTAL_LINES=$(wc -l < "$SORTED_TMP")
-          TOTAL_PAKS=$(( (TOTAL_LINES + 44) / 45 ))
-          GLOBAL_COUNTER=1
-
-          while IFS=$'\t' read -r PING BASE HOST PORT PREFIX; do
-            PAK_NUM=$(( (GLOBAL_COUNTER - 1) / 45 + 1 ))
-            LINE_IN_PAK=$(( (GLOBAL_COUNTER - 1) % 45 + 1 ))
-            echo "${BASE}#🇷🇺 LTE | ${PAK_NUM}.${LINE_IN_PAK}" >> vlees.txt
-            GLOBAL_COUNTER=$((GLOBAL_COUNTER + 1))
-          done < "$SORTED_TMP"
-
-          ALL_PACKS_JSON="[]"
-
-          for PAK in $(seq 1 $TOTAL_PAKS); do
-            START_LINE=$(( (PAK - 1) * 45 + 1 ))
-            END_LINE=$(( PAK * 45 ))
-            OUTBOUNDS_JSON="[]"
-            IDX=1
-
-            while IFS=$'\t' read -r PING BASE HOST PORT PREFIX; do
-              UUID=$(echo "$BASE" | sed 's/vless:\/\///;s/@.*//')
-              PARAMS=$(echo "$BASE" | grep -o '?.*' | tr '?&' '\n\n')
-              get_param() { echo "$PARAMS" | grep "^$1=" | cut -d= -f2; }
-              FLOW=$(get_param flow); SNI=$(get_param sni); PBK=$(get_param pbk)
-              FP=$(get_param fp); SID=$(get_param sid); NET=$(get_param type)
-              SEC=$(get_param security)
-              [ -z "$NET" ]  && NET="tcp"
-              [ -z "$FP" ]   && FP="chrome"
-              [ -z "$FLOW" ] && FLOW="xtls-rprx-vision"
-
-              OB=$(jq -n \
-                --arg tag "lte-${PAK}-${IDX}" --arg addr "$HOST" \
-                --argjson port "$PORT"         --arg uuid "$UUID" \
-                --arg flow "$FLOW"             --arg net "$NET" \
-                --arg sec "$SEC"               --arg sni "$SNI" \
-                --arg pbk "$PBK"               --arg fp "$FP" \
-                --arg sid "$SID" \
-                '{tag:$tag,protocol:"vless",
-                  settings:{vnext:[{address:$addr,port:$port,
-                    users:[{id:$uuid,encryption:"none",flow:$flow}]}]},
-                  streamSettings:{network:$net,security:$sec,
-                    realitySettings:{serverName:$sni,publicKey:$pbk,
-                      shortId:$sid,fingerprint:$fp}}}')
-
-              OUTBOUNDS_JSON=$(echo "$OUTBOUNDS_JSON" | jq --argjson ob "$OB" '. + [$ob]')
-              IDX=$((IDX + 1))
-            done < <(sed -n "${START_LINE},${END_LINE}p" "$SORTED_TMP")
-
-            PAK_JSON=$(jq -n \
-              --arg rem "🇷🇺 LTE | ${PAK}" \
-              --argjson out "$OUTBOUNDS_JSON" \
-              --argjson pak "$PAK" \
-              '{
-                remarks: $rem,
-                dns: {servers:["1.1.1.1","1.0.0.1"], queryStrategy:"UseIP"},
-                routing: {
-                  domainMatcher:"hybrid", domainStrategy:"IPIfNonMatch",
-                  rules:[
-                    {type:"field",protocol:["bittorrent"],outboundTag:"direct"},
-                    {type:"field",inboundTag:["socks","http"],
-                     balancerTag:("LTE-"+($pak|tostring))}
-                  ],
-                  balancers:[{
-                    tag:("LTE-"+($pak|tostring)),
-                    selector:[("lte-"+($pak|tostring))],
-                    strategy:{type:"leastPing",settings:{
-                      maxRTT:"1400ms",expected:3,baselines:["1200ms"],tolerance:0.05}},
-                    fallbackTag:"direct"
-                  }]
-                },
-                inbounds:[
-                  {tag:"socks",port:10808,listen:"127.0.0.1",protocol:"socks",
-                   settings:{udp:true,auth:"noauth"},
-                   sniffing:{enabled:true,routeOnly:false,destOverride:["http","tls","quic"]}},
-                  {tag:"http",port:10809,listen:"127.0.0.1",protocol:"http",
-                   settings:{allowTransparent:false},
-                   sniffing:{enabled:true,routeOnly:false,destOverride:["http","tls","quic"]}}
-                ],
-                outbounds:($out + [
-                  {tag:"direct",protocol:"freedom"},
-                  {tag:"block",protocol:"blackhole"}
-                ]),
-                burstObservatory:{
-                  pingConfig:{timeout:"2s",interval:"10s",sampling:2,
-                    httpMethod:"GET",destination:"https://www.gstatic.com/generate_204",
-                    connectivity:""},
-                  subjectSelector:[("lte-"+($pak|tostring))]
-                }
-              }')
-
-            ALL_PACKS_JSON=$(echo "$ALL_PACKS_JSON" | jq --argjson p "$PAK_JSON" '. + [$p]')
-          done
-
-          echo "$ALL_PACKS_JSON" | jq '.' > packs.json
-          rm -f "$SORTED_TMP" "$SEEN"
 
           echo "✅ Конфигов: $(grep -cE '^vless://' vlees.txt || echo 0), Паков: $TOTAL_PAKS"
 
