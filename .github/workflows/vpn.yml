@@ -135,6 +135,7 @@ jobs:
 
       - name: Merge and generate files
         run: |
+          # ── vlees.txt (подписка) ──────────────────────────────────────────
           printf '%s\n' \
             '#profile-title: HiBypass | LTE FREE 🏳🇷🇺' \
             '#profile-update-interval: 1' \
@@ -145,6 +146,7 @@ jobs:
             '#traffic-remaining: ∞' \
             > vlees.txt
 
+          # ── дедупликация ──────────────────────────────────────────────────
           MERGED_TMP=$(mktemp)
           cat batch_*.tmp 2>/dev/null > "$MERGED_TMP"
 
@@ -158,115 +160,109 @@ jobs:
           done < "$MERGED_TMP"
 
           TOTAL_LINES=$(wc -l < "$DEDUP_TMP")
-          TOTAL_PAKS=$(( (TOTAL_LINES + 44) / 45 ))
-          GLOBAL_COUNTER=1
 
+          # ── vlees.txt — список конфигов ───────────────────────────────────
+          IDX=1
           while IFS=$'\t' read -r BASE HOST PORT PREFIX; do
-            PAK_NUM=$(( (GLOBAL_COUNTER - 1) / 45 + 1 ))
-            LINE_IN_PAK=$(( (GLOBAL_COUNTER - 1) % 45 + 1 ))
-            echo "${BASE}#🇷🇺 LTE | ${PAK_NUM}.${LINE_IN_PAK}" >> vlees.txt
-            GLOBAL_COUNTER=$((GLOBAL_COUNTER + 1))
+            echo "${BASE}#🇷🇺 LTE | ${IDX}" >> vlees.txt
+            IDX=$((IDX + 1))
           done < "$DEDUP_TMP"
 
-          ALL_PACKS_JSON="[]"
+          # ── один большой JSON конфиг ──────────────────────────────────────
+          OUTBOUNDS_JSON="[]"
+          IDX=1
 
-          for PAK in $(seq 1 $TOTAL_PAKS); do
-            START_LINE=$(( (PAK - 1) * 45 + 1 ))
-            END_LINE=$(( PAK * 45 ))
-            OUTBOUNDS_JSON="[]"
-            IDX=1
+          while IFS=$'\t' read -r BASE HOST PORT PREFIX; do
+            UUID=$(echo "$BASE" | sed 's/vless:\/\///;s/@.*//')
+            PARAMS=$(echo "$BASE" | grep -o '?.*' | tr '?&' '\n\n')
+            get_param() { echo "$PARAMS" | grep "^$1=" | cut -d= -f2; }
+            FLOW=$(get_param flow); SNI=$(get_param sni); PBK=$(get_param pbk)
+            FP=$(get_param fp);   SID=$(get_param sid); NET=$(get_param type)
+            SEC=$(get_param security)
+            [ -z "$NET" ]  && NET="tcp"
+            [ -z "$FP" ]   && FP="chrome"
+            [ -z "$FLOW" ] && FLOW="xtls-rprx-vision"
 
-            while IFS=$'\t' read -r BASE HOST PORT PREFIX; do
-              UUID=$(echo "$BASE" | sed 's/vless:\/\///;s/@.*//')
-              PARAMS=$(echo "$BASE" | grep -o '?.*' | tr '?&' '\n\n')
-              get_param() { echo "$PARAMS" | grep "^$1=" | cut -d= -f2; }
-              FLOW=$(get_param flow); SNI=$(get_param sni); PBK=$(get_param pbk)
-              FP=$(get_param fp); SID=$(get_param sid); NET=$(get_param type)
-              SEC=$(get_param security)
-              [ -z "$NET" ]  && NET="tcp"
-              [ -z "$FP" ]   && FP="chrome"
-              [ -z "$FLOW" ] && FLOW="xtls-rprx-vision"
+            OB=$(jq -n \
+              --arg tag  "lte-${IDX}"  --arg addr "$HOST" \
+              --argjson port "$PORT"   --arg uuid "$UUID" \
+              --arg flow "$FLOW"       --arg net  "$NET"  \
+              --arg sec  "$SEC"        --arg sni  "$SNI"  \
+              --arg pbk  "$PBK"        --arg fp   "$FP"   \
+              --arg sid  "$SID" \
+              '{tag:$tag, protocol:"vless",
+                settings:{vnext:[{address:$addr, port:$port,
+                  users:[{id:$uuid, encryption:"none", flow:$flow}]}]},
+                streamSettings:{network:$net, security:$sec,
+                  realitySettings:{serverName:$sni, publicKey:$pbk,
+                    shortId:$sid, fingerprint:$fp}}}')
 
-              OB=$(jq -n \
-                --arg tag "lte-${PAK}-${IDX}" --arg addr "$HOST" \
-                --argjson port "$PORT"         --arg uuid "$UUID" \
-                --arg flow "$FLOW"             --arg net "$NET" \
-                --arg sec "$SEC"               --arg sni "$SNI" \
-                --arg pbk "$PBK"               --arg fp "$FP" \
-                --arg sid "$SID" \
-                '{tag:$tag,protocol:"vless",
-                  settings:{vnext:[{address:$addr,port:$port,
-                    users:[{id:$uuid,encryption:"none",flow:$flow}]}]},
-                  streamSettings:{network:$net,security:$sec,
-                    realitySettings:{serverName:$sni,publicKey:$pbk,
-                      shortId:$sid,fingerprint:$fp}}}')
+            OUTBOUNDS_JSON=$(echo "$OUTBOUNDS_JSON" | jq --argjson ob "$OB" '. + [$ob]')
+            IDX=$((IDX + 1))
+          done < "$DEDUP_TMP"
 
-              OUTBOUNDS_JSON=$(echo "$OUTBOUNDS_JSON" | jq --argjson ob "$OB" '. + [$ob]')
-              IDX=$((IDX + 1))
-            done < <(sed -n "${START_LINE},${END_LINE}p" "$DEDUP_TMP")
-
-            PAK_JSON=$(jq -n \
-              --arg rem "🇷🇺 LTE | ${PAK}" \
-              --argjson out "$OUTBOUNDS_JSON" \
-              --argjson pak "$PAK" \
-              --arg prefix "lte-${PAK}-" \
-              --arg bal_tag "LTE-${PAK}" \
-              '{
-                remarks: $rem,
-                dns: {
-                  servers: ["1.1.1.1", "1.0.0.1"],
-                  queryStrategy: "UseIP"
-                },
-                observatory: {
-                  subjectSelector: [$prefix],
-                  probeUrl: "https://www.gstatic.com/generate_204",
-                  probeInterval: "300s",
-                  enableConcurrency: true
-                },
-                routing: {
-                  domainMatcher: "hybrid",
-                  domainStrategy: "IPIfNonMatch",
-                  rules: [
-                    {type:"field", protocol:["bittorrent"], outboundTag:"direct"},
-                    {type:"field", inboundTag:["socks","http"], balancerTag: $bal_tag}
-                  ],
-                  balancers: [{
-                    tag: $bal_tag,
-                    selector: [$prefix],
-                    strategy: {type: "leastPing"}
-                  }]
-                },
-                inbounds: [
-                  {
-                    tag: "socks",
-                    port: 10808,
-                    listen: "127.0.0.1",
-                    protocol: "socks",
-                    settings: {udp: true, auth: "noauth"},
-                    sniffing: {enabled: true, routeOnly: false, destOverride: ["http","tls","quic"]}
-                  },
-                  {
-                    tag: "http",
-                    port: 10809,
-                    listen: "127.0.0.1",
-                    protocol: "http",
-                    settings: {allowTransparent: false},
-                    sniffing: {enabled: true, routeOnly: false, destOverride: ["http","tls","quic"]}
-                  }
+          # Финальный конфиг — один объект, не массив
+          jq -n \
+            --arg remarks "🇷🇺 HiBypass | LTE FREE" \
+            --argjson out "$OUTBOUNDS_JSON" \
+            '{
+              remarks: $remarks,
+              dns: {
+                servers: ["1.1.1.1", "1.0.0.1"],
+                queryStrategy: "UseIP"
+              },
+              routing: {
+                domainMatcher: "hybrid",
+                domainStrategy: "IPIfNonMatch",
+                rules: [
+                  {type:"field", protocol:["bittorrent"], outboundTag:"direct"},
+                  {type:"field", inboundTag:["socks","http"], balancerTag:"BALANCER"}
                 ],
-                outbounds: ($out + [
-                  {tag: "direct", protocol: "freedom"},
-                  {tag: "block",  protocol: "blackhole"}
-                ])
-              }')
+                balancers: [{
+                  tag: "BALANCER",
+                  selector: ["lte-"],
+                  strategy: {type: "leastPing"}
+                }]
+              },
+              inbounds: [
+                {
+                  tag: "socks",
+                  port: 10808,
+                  listen: "127.0.0.1",
+                  protocol: "socks",
+                  settings: {udp: true, auth: "noauth"},
+                  sniffing: {enabled: true, routeOnly: false,
+                    destOverride: ["http","tls","quic"]}
+                },
+                {
+                  tag: "http",
+                  port: 10809,
+                  listen: "127.0.0.1",
+                  protocol: "http",
+                  settings: {allowTransparent: false},
+                  sniffing: {enabled: true, routeOnly: false,
+                    destOverride: ["http","tls","quic"]}
+                }
+              ],
+              outbounds: ($out + [
+                {tag:"direct", protocol:"freedom"},
+                {tag:"block",  protocol:"blackhole"}
+              ]),
+              burstObservatory: {
+                pingConfig: {
+                  timeout: "5s",
+                  interval: "300s",
+                  sampling: 2,
+                  httpMethod: "GET",
+                  destination: "https://www.gstatic.com/generate_204",
+                  connectivity: ""
+                },
+                subjectSelector: ["lte-"]
+              }
+            }' > packs.json
 
-            ALL_PACKS_JSON=$(echo "$ALL_PACKS_JSON" | jq --argjson p "$PAK_JSON" '. + [$p]')
-          done
-
-          echo "$ALL_PACKS_JSON" | jq '.' > packs.json
           rm -f "$MERGED_TMP" "$DEDUP_TMP" "$SEEN"
-
-          echo "✅ Конфигов: $(grep -cE '^vless://' vlees.txt || echo 0), Паков: $TOTAL_PAKS"
+          echo "✅ Конфигов: $((IDX - 1))"
 
       - name: Commit and push
         run: |
