@@ -1,35 +1,11 @@
 {
-  "remarks": "🇷🇺 HiBypass | LTE FREE",
-  "log": {
-    "loglevel": "warning"
-  },
+  "remarks": "🇪🇺LTE | AUTO 🌐 RU",
   "dns": {
     "servers": [
       "1.1.1.1",
       "1.0.0.1"
     ],
     "queryStrategy": "UseIP"
-  },
-  "observatory": {
-    "enableConcurrency": true,
-    "probeInterval": "3m",
-    "probeUrl": "http://www.gstatic.com/generate_204",
-    "subjectSelector": [
-      "lte-"
-    ]
-  },
-  "burstObservatory": {
-    "pingConfig": {
-      "timeout": "5s",
-      "interval": "180s",
-      "sampling": 2,
-      "httpMethod": "GET",
-      "destination": "https://www.gstatic.com/generate_204",
-      "connectivity": ""
-    },
-    "subjectSelector": [
-      "lte-"
-    ]
   },
   "routing": {
     "domainMatcher": "hybrid",
@@ -58,16 +34,7 @@
           "lte-"
         ],
         "strategy": {
-          "type": "leastLoad",
-          "settings": {
-            "maxRTT": "2000ms",
-            "expected": 1,
-            "baselines": [
-              "500ms",
-              "1000ms"
-            ],
-            "tolerance": 0.1
-          }
+          "type": "leastPing"
         }
       }
     ]
@@ -8321,14 +8288,24 @@
     },
     {
       "tag": "direct",
-      "protocol": "freedom",
-      "settings": {
-        "domainStrategy": "UseIP"
-      }
+      "protocol": "freedom"
     },
     {
       "tag": "block",
       "protocol": "blackhole"
     }
-  ]
+  ],
+  "burstObservatory": {
+    "pingConfig": {
+      "timeout": "5s",
+      "interval": "300s",
+      "sampling": 2,
+      "httpMethod": "GET",
+      "destination": "https://www.gstatic.com/generate_204",
+      "connectivity": ""
+    },
+    "subjectSelector": [
+      "lte-"
+    ]
+  }
 }
