@@ -31,9 +31,7 @@ jobs:
           CONFIGS_TMP="batch_${{ matrix.batch }}.tmp"
           SEEN_HOSTS=$(mktemp)
           CHECK_QUEUE=$(mktemp)
-          CHECK_RESULTS=$(mktemp)
 
-          # ── Параллельная проверка живости пачками по 30 ───────────────────
           flush_queue() {
             [ ! -s "$CHECK_QUEUE" ] && return
             while IFS=$'\t' read -r BASE HOST PORT PREFIX; do
@@ -61,7 +59,6 @@ jobs:
             fi
 
             grep -E '^vless://' "$TMPFILE" | sort -u | while IFS= read -r line; do
-              # Лимит 30 серверов с одного источника
               [ "$COUNT" -ge 30 ] && break
 
               BASE=$(echo "$line" | sed 's/#.*//')
@@ -92,7 +89,6 @@ jobs:
               COUNT=$((COUNT + 1))
               QUEUE_SIZE=$((QUEUE_SIZE + 1))
 
-              # Каждые 30 — параллельно проверяем и пишем живые
               if [ "$QUEUE_SIZE" -ge 30 ]; then
                 flush_queue >> "$CONFIGS_TMP"
                 QUEUE_SIZE=0
@@ -170,10 +166,9 @@ jobs:
             process_source "https://raw.githubusercontent.com/whoahaow/rjsxrd/refs/heads/main/githubmirror/split-by-protocols/tuic.txt" "57"
           fi
 
-          # Остаток очереди
           flush_queue >> "$CONFIGS_TMP"
 
-          rm -f "$CHECK_QUEUE" "$CHECK_RESULTS" "$SEEN_HOSTS"
+          rm -f "$CHECK_QUEUE" "$SEEN_HOSTS"
           FOUND=$(wc -l < "$CONFIGS_TMP" 2>/dev/null || echo 0)
           echo "Батч ${{ matrix.batch }}: найдено живых серверов: $FOUND"
 
@@ -206,9 +201,8 @@ jobs:
 
       - name: Merge and generate files
         run: |
-          # ── vlees.txt ──────────────────────────────────────────────────────
           printf '%s\n' \
-            '#profile-title: HiBypass | LTE FREE 🏳🇷🇺' \
+            '#profile-title: HiBypass | FREE 🏳🇷🇺' \
             '#profile-update-interval: 1' \
             '#support-url: https://t.me/Hibypass' \
             '#profile-web-page-url: https://t.me/Hibypass' \
@@ -217,7 +211,6 @@ jobs:
             '#traffic-remaining: ∞' \
             > vlees.txt
 
-          # ── дедупликация ───────────────────────────────────────────────────
           MERGED_TMP=$(mktemp)
           cat batch_*.tmp 2>/dev/null > "$MERGED_TMP"
 
@@ -233,14 +226,12 @@ jobs:
           TOTAL=$(wc -l < "$DEDUP_TMP")
           echo "Всего уникальных живых TCP конфигов: $TOTAL"
 
-          # ── vlees.txt ──────────────────────────────────────────────────────
           IDX=1
           while IFS=$'\t' read -r BASE HOST PORT PREFIX; do
             echo "${BASE}#🇪🇺LTE | ${IDX} 🌐 RU" >> vlees.txt
             IDX=$((IDX + 1))
           done < "$DEDUP_TMP"
 
-          # ── Генерация всех outbounds ───────────────────────────────────────
           ALL_OUTBOUNDS=$(mktemp)
           IDX=1
 
@@ -302,7 +293,6 @@ jobs:
           CONF_COUNT=$((IDX - 1))
           echo "Сгенерировано outbounds: $CONF_COUNT"
 
-          # ── Разбивка на паки по 50 — всё в один packs.json ────────────────
           PACK_SIZE=50
           PACK_NUM=1
           CHUNK=$(mktemp)
@@ -324,15 +314,29 @@ jobs:
               --slurpfile out "$RETAGGED" \
               '{
                 remarks: $remarks,
+                "profile-title": "HiBypass | FREE | 🏳🇷🇺",
+                description: "Бесплатный обход белых списков 🏳🇷🇺 | TELEGRAM : T.ME/HIBYPASS",
+                "profile-update-interval": 1,
                 dns: {
                   servers: ["1.1.1.1", "1.0.0.1"],
                   queryStrategy: "UseIP"
                 },
                 observatory: {
                   enableConcurrency: true,
-                  probeInterval: "30s",
+                  probeInterval: "20s",
                   probeUrl: "http://www.gstatic.com/generate_204",
-                  subjectSelector: ["lte-"]
+                  subjectSelector: ["lte-"],
+                  MaxRTT: "2000ms"
+                },
+                burstObservatory: {
+                  subjectSelector: ["lte-"],
+                  pingConfig: {
+                    destination: "http://www.gstatic.com/generate_204",
+                    connectivity: "http://www.gstatic.com/generate_204",
+                    interval: "20s",
+                    sampling: 3,
+                    timeout: "4s"
+                  }
                 },
                 routing: {
                   domainMatcher: "hybrid",
