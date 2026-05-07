@@ -75,7 +75,6 @@ jobs:
             rm -f "$TMPFILE"
           }
 
-          # Batch 1 — оригинальные источники (1-9)
           if [ "${{ matrix.batch }}" = "1" ]; then
             process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/Vless-Reality-White-Lists-Rus-Mobile-2.txt" "1"
             process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/Vless-Reality-White-Lists-Rus-Mobile.txt" "2"
@@ -93,7 +92,6 @@ jobs:
             process_source "https://raw.githubusercontent.com/whoahaow/rjsxrd/refs/heads/main/githubmirror/split-by-protocols/vless.txt" "14"
           fi
 
-          # Batch 2 — новые источники часть 1 (15-27)
           if [ "${{ matrix.batch }}" = "2" ]; then
             process_source "https://raw.githubusercontent.com/VOID-Anonymity/V.O.I.D-VPN_Bypass/refs/heads/main/url_work.txt" "15"
             process_source "https://github.com/sakha1370/OpenRay/raw/refs/heads/main/output/all_valid_proxies.txt" "16"
@@ -110,7 +108,6 @@ jobs:
             process_source "https://raw.githubusercontent.com/MahsaNetConfigTopic/config/refs/heads/main/xray_final.txt" "27"
           fi
 
-          # Batch 3 — новые источники часть 2 (28-40)
           if [ "${{ matrix.batch }}" = "3" ]; then
             process_source "https://github.com/LalatinaHub/Mineral/raw/refs/heads/master/result/nodes" "28"
             process_source "https://raw.githubusercontent.com/miladtahanian/Config-Collector/refs/heads/main/mixed_iran.txt" "29"
@@ -124,6 +121,7 @@ jobs:
             process_source "https://github.com/Mr-Meshky/vify/raw/refs/heads/main/configs/vless.txt" "37"
             process_source "https://raw.githubusercontent.com/V2RayRoot/V2RayConfig/refs/heads/main/Config/vless.txt" "38"
             process_source "https://raw.githubusercontent.com/AvenCores/goida-vpn-configs/refs/heads/main/githubmirror/26.txt" "39"
+            process_source "https://raw.githubusercontent.com/whoahaow/rjsxrd/refs/heads/main/githubmirror/bypass/raw/bypass-all-raw.txt" "40"
           fi
 
       - name: Upload batch artifact
@@ -168,7 +166,6 @@ jobs:
           SORTED_TMP=$(mktemp)
           cat batch_*.tmp 2>/dev/null | sort -t$'\t' -k1 -n > "$SORTED_TMP"
 
-          # Дедупликация по host:port
           DEDUP_TMP=$(mktemp)
           SEEN=$(mktemp)
           while IFS=$'\t' read -r PING BASE HOST PORT PREFIX; do
@@ -180,23 +177,21 @@ jobs:
           mv "$DEDUP_TMP" "$SORTED_TMP"
 
           TOTAL_LINES=$(wc -l < "$SORTED_TMP")
-          TOTAL_PAKS=$(( (TOTAL_LINES + 9) / 10 ))
+          TOTAL_PAKS=$(( (TOTAL_LINES + 44) / 45 ))
           GLOBAL_COUNTER=1
 
-          # vlees.txt
           while IFS=$'\t' read -r PING BASE HOST PORT PREFIX; do
-            PAK_NUM=$(( (GLOBAL_COUNTER - 1) / 10 + 1 ))
-            LINE_IN_PAK=$(( (GLOBAL_COUNTER - 1) % 10 + 1 ))
-            echo "${BASE}#🇪🇺📡LTE | ${PAK_NUM}.${LINE_IN_PAK}" >> vlees.txt
+            PAK_NUM=$(( (GLOBAL_COUNTER - 1) / 45 + 1 ))
+            LINE_IN_PAK=$(( (GLOBAL_COUNTER - 1) % 45 + 1 ))
+            echo "${BASE}#🇷🇺 LTE | ${PAK_NUM}.${LINE_IN_PAK}" >> vlees.txt
             GLOBAL_COUNTER=$((GLOBAL_COUNTER + 1))
           done < "$SORTED_TMP"
 
-          # packs.json
           ALL_PACKS_JSON="[]"
 
           for PAK in $(seq 1 $TOTAL_PAKS); do
-            START_LINE=$(( (PAK - 1) * 10 + 1 ))
-            END_LINE=$(( PAK * 10 ))
+            START_LINE=$(( (PAK - 1) * 45 + 1 ))
+            END_LINE=$(( PAK * 45 ))
             OUTBOUNDS_JSON="[]"
             IDX=1
 
@@ -230,7 +225,7 @@ jobs:
             done < <(sed -n "${START_LINE},${END_LINE}p" "$SORTED_TMP")
 
             PAK_JSON=$(jq -n \
-              --arg rem "🇪🇺📡LTE | ${PAK}" \
+              --arg rem "🇷🇺 LTE | ${PAK}" \
               --argjson out "$OUTBOUNDS_JSON" \
               --argjson pak "$PAK" \
               '{
