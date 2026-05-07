@@ -22,7 +22,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install dependencies
-        run: sudo apt-get install -y netcat-openbsd curl jq
+        run: sudo apt-get install -y curl jq
 
       - name: Fetch batch ${{ matrix.batch }}
         timeout-minutes: 50
@@ -48,7 +48,6 @@ jobs:
               PORT=$(echo "$BASE" | sed 's/.*@[^:]*://;s/[/?].*//')
               HOSTPORT="${HOST}:${PORT}"
               grep -qF "$HOSTPORT" "$SEEN_HOSTS" 2>/dev/null && continue
-              nc -z -w 2 "$HOST" "$PORT" 2>/dev/null || continue
               printf '%s\t%s\t%s\t%s\n' "$BASE" "$HOST" "$PORT" "$PREFIX" >> "$CONFIGS_TMP"
               echo "$HOSTPORT" >> "$SEEN_HOSTS"
             done
