@@ -36,7 +36,6 @@ jobs:
             TMPFILE=$(mktemp)
             curl -fsSL --max-time 30 --connect-timeout 10 "$URL" > "$TMPFILE" 2>/dev/null || { rm -f "$TMPFILE"; return; }
 
-            # Декодируем base64 если файл не содержит vless:// напрямую
             if ! grep -qE '^vless://' "$TMPFILE"; then
               BASE64_TMP=$(mktemp)
               base64 -d "$TMPFILE" > "$BASE64_TMP" 2>/dev/null && mv "$BASE64_TMP" "$TMPFILE" || rm -f "$BASE64_TMP"
@@ -45,21 +44,16 @@ jobs:
             grep -E '^vless://' "$TMPFILE" | sort -u | while IFS= read -r line; do
               BASE=$(echo "$line" | sed 's/#.*//')
               HOST=$(echo "$BASE" | sed 's/.*@//;s/[:/].*//')
-
-              # Фильтр по IP-диапазонам российских операторов
               echo "$HOST" | grep -qE '^(84|89|158|188)\.' || continue
-
               SNI_VAL=$(echo "$BASE" | grep -o 'sni=[^&]*' | cut -d= -f2)
               SNI_OK=0
               for ALLOWED in $SNI_ALLOWED; do
                 [ "$SNI_VAL" = "$ALLOWED" ] && SNI_OK=1 && break
               done
               [ "$SNI_OK" -eq 1 ] || continue
-
               PORT=$(echo "$BASE" | sed 's/.*@[^:]*://;s/[/?].*//')
               HOSTPORT="${HOST}:${PORT}"
               grep -qF "$HOSTPORT" "$SEEN_HOSTS" 2>/dev/null && continue
-
               printf '%s\t%s\t%s\t%s\n' "$BASE" "$HOST" "$PORT" "$PREFIX" >> "$CONFIGS_TMP"
               echo "$HOSTPORT" >> "$SEEN_HOSTS"
             done
@@ -158,7 +152,7 @@ jobs:
             '#traffic-remaining: ∞' \
             > vlees.txt
 
-          # ── дедупликация по host:port ─────────────────────────────────────
+          # ── дедупликация ──────────────────────────────────────────────────
           MERGED_TMP=$(mktemp)
           cat batch_*.tmp 2>/dev/null > "$MERGED_TMP"
 
@@ -177,20 +171,17 @@ jobs:
           # ── vlees.txt — список конфигов ───────────────────────────────────
           IDX=1
           while IFS=$'\t' read -r BASE HOST PORT PREFIX; do
-            echo "${BASE}#🇷🇺 LTE | ${IDX}" >> vlees.txt
+            echo "${BASE}#🇪🇺LTE | ${IDX} 🌐 RU" >> vlees.txt
             IDX=$((IDX + 1))
           done < "$DEDUP_TMP"
 
-          # ── Генерация outbounds — каждый объект как строка NDJSON ──────────
-          # Важно: НЕ используем shell-переменные для больших данных (Argument list too long)
-          # Всё через файлы на диске
-          OUTBOUNDS_NDJSON=$(mktemp)
+          # ── Генерация outbounds — каждый объект как строка NDJSON в файл ──
+          # Не используем shell-переменные для JSON → нет "Argument list too long"
+          OUTBOUNDS_FILE=$(mktemp)
           IDX=1
 
           while IFS=$'\t' read -r BASE HOST PORT PREFIX; do
             UUID=$(echo "$BASE" | sed 's/vless:\/\///;s/@.*//')
-
-            # Парсим query-параметры
             QUERY=$(echo "$BASE" | grep -o '?[^#]*' | tr '?&' '\n\n')
             get_param() { echo "$QUERY" | grep "^${1}=" | head -1 | cut -d= -f2-; }
 
@@ -202,18 +193,14 @@ jobs:
             NET=$(get_param type)
             SEC=$(get_param security)
 
-            # Дефолты
             [ -z "$NET" ]  && NET="tcp"
             [ -z "$FP" ]   && FP="chrome"
             [ -z "$SEC" ]  && SEC="reality"
             [ -z "$FLOW" ] && FLOW="xtls-rprx-vision"
             [ -z "$SID" ]  && SID=""
 
-            # Валидация порта — пропускаем невалидные
             echo "$PORT" | grep -qE '^[0-9]+$' || { IDX=$((IDX + 1)); continue; }
 
-            # Пишем каждый outbound как отдельную строку JSON в файл
-            # НЕ накапливаем в переменную — это и есть причина "Argument list too long"
             jq -cn \
               --arg  tag  "lte-${IDX}"  \
               --arg  addr "$HOST"       \
@@ -246,7 +233,7 @@ jobs:
                     fingerprint: $fp
                   }
                 }
-              }' >> "$OUTBOUNDS_NDJSON"
+              }' >> "$OUTBOUNDS_FILE"
 
             IDX=$((IDX + 1))
           done < "$DEDUP_TMP"
@@ -254,39 +241,17 @@ jobs:
           CONF_COUNT=$((IDX - 1))
           echo "Сгенерировано outbounds: $CONF_COUNT"
 
-          # ── Финальный packs.json — собираем целиком через jq, читая файлы ─
-          # --slurpfile читает файл NDJSON и даёт его как массив $out — без shell-переменных
+          # ── Финальный packs.json ──────────────────────────────────────────
+          # --slurpfile читает NDJSON-файл напрямую с диска → массив $out
+          # Никаких shell-переменных с большими данными
           jq -n \
-            --slurpfile out "$OUTBOUNDS_NDJSON" \
+            --slurpfile out "$OUTBOUNDS_FILE" \
             '{
-              remarks: "🇷🇺 HiBypass | LTE FREE",
-
-              log: {
-                loglevel: "warning"
-              },
+              remarks: "🇪🇺LTE | AUTO 🌐 RU",
 
               dns: {
                 servers: ["1.1.1.1", "1.0.0.1"],
                 queryStrategy: "UseIP"
-              },
-
-              observatory: {
-                enableConcurrency: true,
-                probeInterval: "3m",
-                probeUrl: "http://www.gstatic.com/generate_204",
-                subjectSelector: ["lte-"]
-              },
-
-              burstObservatory: {
-                pingConfig: {
-                  timeout: "5s",
-                  interval: "180s",
-                  sampling: 2,
-                  httpMethod: "GET",
-                  destination: "https://www.gstatic.com/generate_204",
-                  connectivity: ""
-                },
-                subjectSelector: ["lte-"]
               },
 
               routing: {
@@ -307,15 +272,7 @@ jobs:
                 balancers: [{
                   tag: "BALANCER",
                   selector: ["lte-"],
-                  strategy: {
-                    type: "leastLoad",
-                    settings: {
-                      maxRTT: "2000ms",
-                      expected: 1,
-                      baselines: ["500ms", "1000ms"],
-                      tolerance: 0.1
-                    }
-                  }
+                  strategy: {type: "leastPing"}
                 }]
               },
 
@@ -347,21 +304,33 @@ jobs:
               ],
 
               outbounds: ($out + [
-                {tag: "direct", protocol: "freedom", settings: {domainStrategy: "UseIP"}},
+                {tag: "direct", protocol: "freedom"},
                 {tag: "block",  protocol: "blackhole"}
-              ])
+              ]),
+
+              burstObservatory: {
+                pingConfig: {
+                  timeout: "5s",
+                  interval: "300s",
+                  sampling: 2,
+                  httpMethod: "GET",
+                  destination: "https://www.gstatic.com/generate_204",
+                  connectivity: ""
+                },
+                subjectSelector: ["lte-"]
+              }
             }' > packs.json
 
-          rm -f "$MERGED_TMP" "$DEDUP_TMP" "$SEEN" "$OUTBOUNDS_NDJSON"
-          echo "✅ Конфигов в packs.json: $CONF_COUNT"
+          rm -f "$MERGED_TMP" "$DEDUP_TMP" "$SEEN" "$OUTBOUNDS_FILE"
+          echo "✅ Готово: $CONF_COUNT конфигов"
 
       - name: Validate JSON
         run: |
           if jq empty packs.json 2>/dev/null; then
-            echo "✅ packs.json валидный"
-            echo "Конфигов: $(jq '.outbounds | map(select(.tag | startswith("lte-"))) | length' packs.json)"
+            COUNT=$(jq '[.outbounds[] | select(.tag | startswith("lte-"))] | length' packs.json)
+            echo "✅ packs.json валидный, конфигов: $COUNT"
           else
-            echo "❌ packs.json невалидный JSON!"
+            echo "❌ packs.json невалидный!"
             exit 1
           fi
 
@@ -370,5 +339,6 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add vlees.txt packs.json
-          git diff --staged --quiet || git commit -m "Auto: обновление $(date -u '+%Y-%m-%d %H:%M UTC') | $(jq '.outbounds | map(select(.tag | startswith("lte-"))) | length' packs.json) конфигов"
+          COUNT=$(jq '[.outbounds[] | select(.tag | startswith("lte-"))] | length' packs.json)
+          git diff --staged --quiet || git commit -m "Auto: $(date -u '+%Y-%m-%d %H:%M UTC') | $COUNT конфигов"
           git push
