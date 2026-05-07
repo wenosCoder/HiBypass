@@ -22,26 +22,14 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install dependencies
-        run: sudo apt-get install -y netcat-openbsd curl openssl jq
+        run: sudo apt-get install -y netcat-openbsd curl jq
 
       - name: Fetch batch ${{ matrix.batch }}
         timeout-minutes: 50
         run: |
-          SNI_DOMAINS="ads.x5.ru max.ru vk.ru yandex.com ya.ru"
+          SNI_ALLOWED="ads.x5.ru max.ru vk.ru yandex.com ya.ru"
           CONFIGS_TMP="batch_${{ matrix.batch }}.tmp"
           SEEN_HOSTS=$(mktemp)
-
-          check_server() { nc -z -w 5 "$1" "$2" 2>/dev/null; }
-
-          check_sni() {
-            local HOST="$1" PORT="$2"
-            for SNI in $SNI_DOMAINS; do
-              echo "" | timeout 5 openssl s_client \
-                -connect "${HOST}:${PORT}" -servername "$SNI" -alpn h2 2>/dev/null \
-                | head -5 | grep -q "CONNECTED" && return 0
-            done
-            return 1
-          }
 
           measure_ping() {
             local HOST="$1" PORT="$2" TOTAL=0 COUNT=0 START END
@@ -56,18 +44,28 @@ jobs:
           }
 
           process_source() {
-            local URL="$1" PREFIX="$2" TMPFILE HOST PORT HOSTPORT PING BASE
+            local URL="$1" PREFIX="$2" TMPFILE HOST PORT HOSTPORT PING BASE SNI_VAL SNI_OK
             TMPFILE=$(mktemp)
             curl -fsSL --max-time 30 --connect-timeout 10 "$URL" > "$TMPFILE" 2>/dev/null || { rm -f "$TMPFILE"; return; }
             grep -E '^vless://' "$TMPFILE" | sort -u | while IFS= read -r line; do
               BASE=$(echo "$line" | sed 's/#.*//')
               HOST=$(echo "$BASE" | sed 's/.*@//;s/[:/].*//')
+
+              # Фильтр по IP 84. или 89.
               echo "$HOST" | grep -qE '^(84|89)\.' || continue
+
+              # Фильтр по SNI из самого конфига
+              SNI_VAL=$(echo "$BASE" | grep -o 'sni=[^&]*' | cut -d= -f2)
+              SNI_OK=0
+              for ALLOWED in $SNI_ALLOWED; do
+                [ "$SNI_VAL" = "$ALLOWED" ] && SNI_OK=1 && break
+              done
+              [ "$SNI_OK" -eq 1 ] || continue
+
               PORT=$(echo "$BASE" | sed 's/.*@[^:]*://;s/[/?].*//')
               HOSTPORT="${HOST}:${PORT}"
               grep -qF "$HOSTPORT" "$SEEN_HOSTS" 2>/dev/null && continue
-              check_server "$HOST" "$PORT" || continue
-              check_sni "$HOST" "$PORT" || continue
+              nc -z -w 3 "$HOST" "$PORT" 2>/dev/null || continue
               PING=$(measure_ping "$HOST" "$PORT")
               printf '%s\t%s\t%s\t%s\t%s\n' "$PING" "$BASE" "$HOST" "$PORT" "$PREFIX" >> "$CONFIGS_TMP"
               echo "$HOSTPORT" >> "$SEEN_HOSTS"
