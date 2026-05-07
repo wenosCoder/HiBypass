@@ -135,7 +135,7 @@ jobs:
 
       - name: Merge and generate files
         run: |
-          # ── vlees.txt (подписка) ──────────────────────────────────────────
+          # ── vlees.txt ─────────────────────────────────────────────────────
           printf '%s\n' \
             '#profile-title: HiBypass | LTE FREE 🏳🇷🇺' \
             '#profile-update-interval: 1' \
@@ -159,8 +159,6 @@ jobs:
             printf '%s\t%s\t%s\t%s\n' "$BASE" "$HOST" "$PORT" "$PREFIX" >> "$DEDUP_TMP"
           done < "$MERGED_TMP"
 
-          TOTAL_LINES=$(wc -l < "$DEDUP_TMP")
-
           # ── vlees.txt — список конфигов ───────────────────────────────────
           IDX=1
           while IFS=$'\t' read -r BASE HOST PORT PREFIX; do
@@ -168,8 +166,9 @@ jobs:
             IDX=$((IDX + 1))
           done < "$DEDUP_TMP"
 
-          # ── один большой JSON конфиг ──────────────────────────────────────
-          OUTBOUNDS_JSON="[]"
+          # ── строим outbounds через файл (избегаем "Argument list too long") 
+          OUTBOUNDS_FILE=$(mktemp)
+          echo '[]' > "$OUTBOUNDS_FILE"
           IDX=1
 
           while IFS=$'\t' read -r BASE HOST PORT PREFIX; do
@@ -177,34 +176,44 @@ jobs:
             PARAMS=$(echo "$BASE" | grep -o '?.*' | tr '?&' '\n\n')
             get_param() { echo "$PARAMS" | grep "^$1=" | cut -d= -f2; }
             FLOW=$(get_param flow); SNI=$(get_param sni); PBK=$(get_param pbk)
-            FP=$(get_param fp);   SID=$(get_param sid); NET=$(get_param type)
+            FP=$(get_param fp);     SID=$(get_param sid); NET=$(get_param type)
             SEC=$(get_param security)
             [ -z "$NET" ]  && NET="tcp"
             [ -z "$FP" ]   && FP="chrome"
             [ -z "$FLOW" ] && FLOW="xtls-rprx-vision"
 
-            OB=$(jq -n \
-              --arg tag  "lte-${IDX}"  --arg addr "$HOST" \
-              --argjson port "$PORT"   --arg uuid "$UUID" \
-              --arg flow "$FLOW"       --arg net  "$NET"  \
-              --arg sec  "$SEC"        --arg sni  "$SNI"  \
-              --arg pbk  "$PBK"        --arg fp   "$FP"   \
+            # каждый outbound пишем в отдельный tmp файл и сливаем через jq
+            OB_FILE=$(mktemp)
+            jq -n \
+              --arg tag  "lte-${IDX}" --arg addr "$HOST" \
+              --argjson port "$PORT"  --arg uuid "$UUID" \
+              --arg flow "$FLOW"      --arg net  "$NET"  \
+              --arg sec  "$SEC"       --arg sni  "$SNI"  \
+              --arg pbk  "$PBK"       --arg fp   "$FP"   \
               --arg sid  "$SID" \
               '{tag:$tag, protocol:"vless",
                 settings:{vnext:[{address:$addr, port:$port,
                   users:[{id:$uuid, encryption:"none", flow:$flow}]}]},
                 streamSettings:{network:$net, security:$sec,
                   realitySettings:{serverName:$sni, publicKey:$pbk,
-                    shortId:$sid, fingerprint:$fp}}}')
+                    shortId:$sid, fingerprint:$fp}}}' > "$OB_FILE"
 
-            OUTBOUNDS_JSON=$(echo "$OUTBOUNDS_JSON" | jq --argjson ob "$OB" '. + [$ob]')
+            # добавляем в массив через файл, не через переменную
+            jq --slurpfile ob "$OB_FILE" '. + $ob' "$OUTBOUNDS_FILE" > "${OUTBOUNDS_FILE}.new"
+            mv "${OUTBOUNDS_FILE}.new" "$OUTBOUNDS_FILE"
+            rm -f "$OB_FILE"
             IDX=$((IDX + 1))
           done < "$DEDUP_TMP"
 
-          # Финальный конфиг — один объект, не массив
+          # добавляем direct и block
+          jq '. + [{tag:"direct",protocol:"freedom"},{tag:"block",protocol:"blackhole"}]' \
+            "$OUTBOUNDS_FILE" > "${OUTBOUNDS_FILE}.final"
+          mv "${OUTBOUNDS_FILE}.final" "$OUTBOUNDS_FILE"
+
+          # ── финальный конфиг ──────────────────────────────────────────────
           jq -n \
             --arg remarks "🇷🇺 HiBypass | LTE FREE" \
-            --argjson out "$OUTBOUNDS_JSON" \
+            --slurpfile out "$OUTBOUNDS_FILE" \
             '{
               remarks: $remarks,
               dns: {
@@ -244,10 +253,7 @@ jobs:
                     destOverride: ["http","tls","quic"]}
                 }
               ],
-              outbounds: ($out + [
-                {tag:"direct", protocol:"freedom"},
-                {tag:"block",  protocol:"blackhole"}
-              ]),
+              outbounds: $out[0],
               burstObservatory: {
                 pingConfig: {
                   timeout: "5s",
@@ -261,7 +267,7 @@ jobs:
               }
             }' > packs.json
 
-          rm -f "$MERGED_TMP" "$DEDUP_TMP" "$SEEN"
+          rm -f "$MERGED_TMP" "$DEDUP_TMP" "$SEEN" "$OUTBOUNDS_FILE"
           echo "✅ Конфигов: $((IDX - 1))"
 
       - name: Commit and push
