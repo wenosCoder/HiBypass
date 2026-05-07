@@ -45,10 +45,8 @@ jobs:
               BASE=$(echo "$line" | sed 's/#.*//')
               HOST=$(echo "$BASE" | sed 's/.*@//;s/[:/].*//')
 
-              # Только российские IP диапазоны
               echo "$HOST" | grep -qE '^(84|89|158|188)\.' || continue
 
-              # Только TCP — gRPC и другие не работают
               NET_VAL=$(echo "$BASE" | grep -o 'type=[^&]*' | cut -d= -f2)
               if [ -n "$NET_VAL" ] && [ "$NET_VAL" != "tcp" ]; then
                 continue
@@ -152,7 +150,7 @@ jobs:
 
       - name: Merge and generate files
         run: |
-          # ── vlees.txt (подписка) ──────────────────────────────────────────
+          # ── vlees.txt ──────────────────────────────────────────────────────
           printf '%s\n' \
             '#profile-title: HiBypass | LTE FREE 🏳🇷🇺' \
             '#profile-update-interval: 1' \
@@ -163,7 +161,7 @@ jobs:
             '#traffic-remaining: ∞' \
             > vlees.txt
 
-          # ── дедупликация ──────────────────────────────────────────────────
+          # ── дедупликация ───────────────────────────────────────────────────
           MERGED_TMP=$(mktemp)
           cat batch_*.tmp 2>/dev/null > "$MERGED_TMP"
 
@@ -179,15 +177,15 @@ jobs:
           TOTAL=$(wc -l < "$DEDUP_TMP")
           echo "Всего уникальных TCP конфигов: $TOTAL"
 
-          # ── vlees.txt ─────────────────────────────────────────────────────
+          # ── vlees.txt ──────────────────────────────────────────────────────
           IDX=1
           while IFS=$'\t' read -r BASE HOST PORT PREFIX; do
             echo "${BASE}#🇪🇺LTE | ${IDX} 🌐 RU" >> vlees.txt
             IDX=$((IDX + 1))
           done < "$DEDUP_TMP"
 
-          # ── Генерация outbounds в NDJSON файл ─────────────────────────────
-          OUTBOUNDS_FILE=$(mktemp)
+          # ── Генерация всех outbounds в один tmp файл ───────────────────────
+          ALL_OUTBOUNDS=$(mktemp)
           IDX=1
 
           while IFS=$'\t' read -r BASE HOST PORT PREFIX; do
@@ -210,16 +208,16 @@ jobs:
             echo "$PORT" | grep -qE '^[0-9]+$' || { IDX=$((IDX + 1)); continue; }
 
             jq -cn \
-              --arg  tag  "lte-${IDX}"  \
-              --arg  addr "$HOST"       \
-              --argjson port "$PORT"    \
-              --arg  uuid "$UUID"       \
-              --arg  flow "$FLOW"       \
-              --arg  sec  "$SEC"        \
-              --arg  sni  "$SNI"        \
-              --arg  pbk  "$PBK"        \
-              --arg  fp   "$FP"         \
-              --arg  sid  "$SID"        \
+              --arg  tag  "lte-${IDX}" \
+              --arg  addr "$HOST"      \
+              --argjson port "$PORT"   \
+              --arg  uuid "$UUID"      \
+              --arg  flow "$FLOW"      \
+              --arg  sec  "$SEC"       \
+              --arg  sni  "$SNI"       \
+              --arg  pbk  "$PBK"       \
+              --arg  fp   "$FP"        \
+              --arg  sid  "$SID"       \
               '{
                 tag: $tag,
                 protocol: "vless",
@@ -240,7 +238,7 @@ jobs:
                     fingerprint: $fp
                   }
                 }
-              }' >> "$OUTBOUNDS_FILE"
+              }' >> "$ALL_OUTBOUNDS"
 
             IDX=$((IDX + 1))
           done < "$DEDUP_TMP"
@@ -248,87 +246,128 @@ jobs:
           CONF_COUNT=$((IDX - 1))
           echo "Сгенерировано outbounds: $CONF_COUNT"
 
-          # ── Один финальный packs.json со всеми серверами ──────────────────
-          jq -n \
-            --slurpfile out "$OUTBOUNDS_FILE" \
-            '{
-              remarks: "🇪🇺LTE | AUTO 🌐",
+          # ── Разбивка на паки по 50, всё в один packs.json ─────────────────
+          PACK_SIZE=50
+          PACK_NUM=1
+          CHUNK=$(mktemp)
+          LINE_COUNT=0
+          PACKS_ARRAY=$(mktemp)
+          echo "[]" > "$PACKS_ARRAY"
 
-              dns: {
-                servers: ["1.1.1.1", "1.0.0.1"],
-                queryStrategy: "UseIP"
-              },
+          make_pack() {
+            local num="$1" chunk="$2"
+            jq -n \
+              --arg remarks "🇪🇺LTE | 1.${num} 🌐" \
+              --slurpfile out "$chunk" \
+              '{
+                remarks: $remarks,
 
-              observatory: {
-                enableConcurrency: true,
-                probeInterval: "30s",
-                probeUrl: "http://www.gstatic.com/generate_204",
-                subjectSelector: ["lte-"]
-              },
+                dns: {
+                  servers: ["1.1.1.1", "1.0.0.1"],
+                  queryStrategy: "UseIP"
+                },
 
-              routing: {
-                domainMatcher: "hybrid",
-                domainStrategy: "IPIfNonMatch",
-                rules: [
+                observatory: {
+                  enableConcurrency: true,
+                  probeInterval: "30s",
+                  probeUrl: "http://www.gstatic.com/generate_204",
+                  subjectSelector: ["lte-"]
+                },
+
+                routing: {
+                  domainMatcher: "hybrid",
+                  domainStrategy: "IPIfNonMatch",
+                  rules: [
+                    {
+                      type: "field",
+                      protocol: ["bittorrent"],
+                      outboundTag: "direct"
+                    },
+                    {
+                      type: "field",
+                      inboundTag: ["socks", "http"],
+                      balancerTag: "BALANCER"
+                    }
+                  ],
+                  balancers: [{
+                    tag: "BALANCER",
+                    selector: ["lte-"],
+                    strategy: {type: "leastPing"}
+                  }]
+                },
+
+                inbounds: [
                   {
-                    type: "field",
-                    protocol: ["bittorrent"],
-                    outboundTag: "direct"
+                    tag: "socks",
+                    port: 10808,
+                    listen: "127.0.0.1",
+                    protocol: "socks",
+                    settings: {udp: true, auth: "noauth"},
+                    sniffing: {
+                      enabled: true,
+                      routeOnly: false,
+                      destOverride: ["http", "tls", "quic"]
+                    }
                   },
                   {
-                    type: "field",
-                    inboundTag: ["socks", "http"],
-                    balancerTag: "BALANCER"
+                    tag: "http",
+                    port: 10809,
+                    listen: "127.0.0.1",
+                    protocol: "http",
+                    settings: {allowTransparent: false},
+                    sniffing: {
+                      enabled: true,
+                      routeOnly: false,
+                      destOverride: ["http", "tls", "quic"]
+                    }
                   }
                 ],
-                balancers: [{
-                  tag: "BALANCER",
-                  selector: ["lte-"],
-                  strategy: {type: "leastPing"}
-                }]
-              },
 
-              inbounds: [
-                {
-                  tag: "socks",
-                  port: 10808,
-                  listen: "127.0.0.1",
-                  protocol: "socks",
-                  settings: {udp: true, auth: "noauth"},
-                  sniffing: {
-                    enabled: true,
-                    routeOnly: false,
-                    destOverride: ["http", "tls", "quic"]
-                  }
-                },
-                {
-                  tag: "http",
-                  port: 10809,
-                  listen: "127.0.0.1",
-                  protocol: "http",
-                  settings: {allowTransparent: false},
-                  sniffing: {
-                    enabled: true,
-                    routeOnly: false,
-                    destOverride: ["http", "tls", "quic"]
-                  }
-                }
-              ],
+                outbounds: ($out + [
+                  {tag: "direct", protocol: "freedom"},
+                  {tag: "block",  protocol: "blackhole"}
+                ])
+              }'
+          }
 
-              outbounds: ($out + [
-                {tag: "direct", protocol: "freedom"},
-                {tag: "block",  protocol: "blackhole"}
-              ])
-            }' > packs.json
+          while IFS= read -r line; do
+            echo "$line" >> "$CHUNK"
+            LINE_COUNT=$((LINE_COUNT + 1))
 
-          rm -f "$MERGED_TMP" "$DEDUP_TMP" "$SEEN" "$OUTBOUNDS_FILE"
-          echo "✅ Готово: $CONF_COUNT серверов в одном packs.json"
+            if [ "$LINE_COUNT" -eq "$PACK_SIZE" ]; then
+              PACK_JSON=$(make_pack "$PACK_NUM" "$CHUNK")
+              TMP_ARRAY=$(mktemp)
+              jq --argjson pack "$PACK_JSON" '. + [$pack]' "$PACKS_ARRAY" > "$TMP_ARRAY"
+              mv "$TMP_ARRAY" "$PACKS_ARRAY"
+              echo "✅ Пак 1.${PACK_NUM} добавлен (50 серверов)"
+              PACK_NUM=$((PACK_NUM + 1))
+              rm -f "$CHUNK"
+              CHUNK=$(mktemp)
+              LINE_COUNT=0
+            fi
+          done < "$ALL_OUTBOUNDS"
+
+          # Остаток
+          if [ "$LINE_COUNT" -gt 0 ]; then
+            PACK_JSON=$(make_pack "$PACK_NUM" "$CHUNK")
+            TMP_ARRAY=$(mktemp)
+            jq --argjson pack "$PACK_JSON" '. + [$pack]' "$PACKS_ARRAY" > "$TMP_ARRAY"
+            mv "$TMP_ARRAY" "$PACKS_ARRAY"
+            echo "✅ Пак 1.${PACK_NUM} добавлен ($LINE_COUNT серверов)"
+          fi
+
+          mv "$PACKS_ARRAY" packs.json
+
+          rm -f "$CHUNK" "$MERGED_TMP" "$DEDUP_TMP" "$SEEN" "$ALL_OUTBOUNDS"
+          PACK_TOTAL=$((PACK_NUM))
+          echo "✅ Готово: $CONF_COUNT серверов в $PACK_TOTAL паках — один packs.json"
 
       - name: Validate JSON
         run: |
           if jq empty packs.json 2>/dev/null; then
-            COUNT=$(jq '[.outbounds[]|select(.tag|startswith("lte-"))]|length' packs.json)
-            echo "✅ packs.json валидный | $COUNT серверов"
+            PACK_COUNT=$(jq 'length' packs.json)
+            SERVER_COUNT=$(jq '[.[].outbounds[]|select(.tag|startswith("lte-"))]|length' packs.json)
+            echo "✅ packs.json валидный | $PACK_COUNT паков | $SERVER_COUNT серверов"
           else
             echo "❌ packs.json невалидный!"
             exit 1
@@ -338,9 +377,8 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          # Удаляем старые packs*.json если были
-          git ls-files 'packs*.json' | xargs -r git rm -f 2>/dev/null || true
           git add vlees.txt packs.json
-          COUNT=$(jq '[.outbounds[]|select(.tag|startswith("lte-"))]|length' packs.json)
-          git diff --staged --quiet || git commit -m "Auto: $(date -u '+%Y-%m-%d %H:%M UTC') | $COUNT серверов"
+          SERVER_COUNT=$(jq '[.[].outbounds[]|select(.tag|startswith("lte-"))]|length' packs.json)
+          PACK_COUNT=$(jq 'length' packs.json)
+          git diff --staged --quiet || git commit -m "Auto: $(date -u '+%Y-%m-%d %H:%M UTC') | $SERVER_COUNT серверов | $PACK_COUNT паков"
           git push
