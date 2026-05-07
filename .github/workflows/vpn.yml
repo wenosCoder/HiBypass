@@ -38,7 +38,7 @@ jobs:
             grep -E '^vless://' "$TMPFILE" | sort -u | while IFS= read -r line; do
               BASE=$(echo "$line" | sed 's/#.*//')
               HOST=$(echo "$BASE" | sed 's/.*@//;s/[:/].*//')
-              echo "$HOST" | grep -qE '^(84|89)\.' || continue
+              echo "$HOST" | grep -qE '^(84|89|158|188)\.' || continue
               SNI_VAL=$(echo "$BASE" | grep -o 'sni=[^&]*' | cut -d= -f2)
               SNI_OK=0
               for ALLOWED in $SNI_ALLOWED; do
@@ -69,6 +69,9 @@ jobs:
             process_source "https://raw.githubusercontent.com/whoahaow/rjsxrd/refs/heads/main/githubmirror/bypass-unsecure/bypass-unsecure-all.txt" "12"
             process_source "https://raw.githubusercontent.com/whoahaow/rjsxrd/refs/heads/main/githubmirror/split-by-protocols/vless-secure.txt" "13"
             process_source "https://raw.githubusercontent.com/whoahaow/rjsxrd/refs/heads/main/githubmirror/split-by-protocols/vless.txt" "14"
+            process_source "https://sub.obbhod.online/premium" "41"
+            process_source "https://mifa.world/vless" "42"
+            process_source "https://raw.githubusercontent.com/Temnuk/naabuzil/refs/heads/main/whitelist_full" "43"
           fi
 
           if [ "${{ matrix.batch }}" = "2" ]; then
@@ -217,7 +220,7 @@ jobs:
                 observatory: {
                   subjectSelector: [$prefix],
                   probeUrl: "https://www.gstatic.com/generate_204",
-                  probeInterval: "10s",
+                  probeInterval: "300s",
                   enableConcurrency: true
                 },
                 routing: {
