@@ -240,16 +240,13 @@ jobs:
             while IFS=$'\t' read -r BASE HOST PORT PREFIX; do
               (
                 nc -z -w1 "$HOST" "$PORT" 2>/dev/null || exit 1
-                T1=$(date +%s%3N)
-                (echo >/dev/tcp/"$HOST"/"$PORT") 2>/dev/null && \
-                  PING_MS=$(($(date +%s%3N) - T1)) || PING_MS=9999
-                printf '%s\t%s\t%s\t%s\t%s\n' \
-                  "$BASE" "$HOST" "$PORT" "$PREFIX" "$PING_MS"
+                printf '%s\t%s\t%s\t%s\n' \
+                  "$BASE" "$HOST" "$PORT" "$PREFIX"
               ) >> "$RESULTS_TMP" &
             done < "$CHECK_QUEUE"
             wait
 
-            sort -t$'\t' -k5 -n "$RESULTS_TMP" >> "$CONFIGS_TMP"
+            cat "$RESULTS_TMP" >> "$CONFIGS_TMP"
             rm -f "$RESULTS_TMP"
             > "$CHECK_QUEUE"
           }
@@ -430,29 +427,22 @@ jobs:
           MERGED_TMP=$(mktemp)
           cat batch_*.tmp 2>/dev/null > "$MERGED_TMP"
 
-          SORTED_TMP=$(mktemp)
-          sort -t$'\t' -k5 -n "$MERGED_TMP" > "$SORTED_TMP"
-
           DEDUP_TMP=$(mktemp)
           SEEN=$(mktemp)
-          while IFS=$'\t' read -r BASE HOST PORT PREFIX PING_MS; do
+          while IFS=$'\t' read -r BASE HOST PORT PREFIX; do
             HOSTPORT="${HOST}:${PORT}"
             grep -qF "$HOSTPORT" "$SEEN" && continue
             echo "$HOSTPORT" >> "$SEEN"
-            printf '%s\t%s\t%s\t%s\t%s\n' \
-              "$BASE" "$HOST" "$PORT" "$PREFIX" "$PING_MS" >> "$DEDUP_TMP"
-          done < "$SORTED_TMP"
+            printf '%s\t%s\t%s\t%s\n' \
+              "$BASE" "$HOST" "$PORT" "$PREFIX" >> "$DEDUP_TMP"
+          done < "$MERGED_TMP"
 
           TOTAL=$(wc -l < "$DEDUP_TMP")
           echo "Всего уникальных живых TCP конфигов: $TOTAL"
 
           IDX=1
-          while IFS=$'\t' read -r BASE HOST PORT PREFIX PING_MS; do
-            if [ -n "$PING_MS" ] && [ "$PING_MS" -lt 9999 ] 2>/dev/null; then
-              LABEL="🇪🇺LTE | ${IDX} 🌐 RU | ${PING_MS}ms"
-            else
-              LABEL="🇪🇺LTE | ${IDX} 🌐 RU"
-            fi
+          while IFS=$'\t' read -r BASE HOST PORT PREFIX; do
+            LABEL="🇪🇺LTE | ${IDX} 🌐 RU"
             echo "${BASE}#${LABEL}" >> vlees.txt
             IDX=$((IDX + 1))
           done < "$DEDUP_TMP"
@@ -460,7 +450,7 @@ jobs:
           ALL_OUTBOUNDS=$(mktemp)
           IDX=1
 
-          while IFS=$'\t' read -r BASE HOST PORT PREFIX PING_MS; do
+          while IFS=$'\t' read -r BASE HOST PORT PREFIX; do
             UUID=$(echo "$BASE" | sed 's/vless:\/\///;s/@.*//')
             QUERY=$(echo "$BASE" | grep -o '?[^#]*' | tr '?&' '\n\n')
             get_param() { echo "$QUERY" | grep "^${1}=" | head -1 | cut -d= -f2-; }
@@ -477,12 +467,6 @@ jobs:
             [ -z "$FLOW" ] && FLOW="xtls-rprx-vision"
             [ -z "$SID" ]  && SID=""
 
-            if [ -n "$PING_MS" ] && [ "$PING_MS" -lt 9999 ] 2>/dev/null; then
-              PING_LABEL="${PING_MS}ms"
-            else
-              PING_LABEL="?"
-            fi
-
             echo "$PORT" | grep -qE '^[0-9]+$' || { IDX=$((IDX + 1)); continue; }
 
             jq -cn \
@@ -496,7 +480,6 @@ jobs:
               --arg  pbk   "$PBK"         \
               --arg  fp    "$FP"          \
               --arg  sid   "$SID"         \
-              --arg  ping  "$PING_LABEL"  \
               '{
                 tag: $tag,
                 protocol: "vless",
@@ -516,8 +499,7 @@ jobs:
                     shortId: $sid,
                     fingerprint: $fp
                   }
-                },
-                _ping: $ping
+                }
               }' >> "$ALL_OUTBOUNDS"
 
             IDX=$((IDX + 1))
@@ -526,7 +508,7 @@ jobs:
           CONF_COUNT=$((IDX - 1))
           echo "Сгенерировано outbounds: $CONF_COUNT"
 
-          PACK_SIZE=100
+          PACK_SIZE=50
           PACK_NUM=1
           CHUNK=$(mktemp)
           LINE_COUNT=0
@@ -538,19 +520,11 @@ jobs:
             RETAGGED=$(mktemp)
             local i=1
             while IFS= read -r obj; do
-              echo "$obj" | jq --arg t "lte-${i}" '.tag = $t | del(._ping)'
+              echo "$obj" | jq --arg t "lte-${i}" '.tag = $t'
               i=$((i + 1))
             done < "$chunk" > "$RETAGGED"
 
-            AVG_PING=$(jq -s '[.[].["_ping"] |
-              if test("^[0-9]+ms$") then (.[:-2] | tonumber) else empty end
-              ] | if length > 0 then (add/length | floor) else 0 end' "$chunk" 2>/dev/null || echo 0)
-
-            if [ "$AVG_PING" -gt 0 ] 2>/dev/null; then
-              REMARKS="🇪🇺LTE | 1.${num} 🌐 | ~${AVG_PING}ms"
-            else
-              REMARKS="🇪🇺LTE | 1.${num} 🌐"
-            fi
+            REMARKS="🇪🇺LTE | 1.${num} 🌐"
 
             jq -n \
               --arg remarks "$REMARKS" \
@@ -631,7 +605,7 @@ jobs:
               TMP_ARRAY=$(mktemp)
               jq --argjson pack "$PACK_JSON" '. + [$pack]' "$PACKS_ARRAY" > "$TMP_ARRAY"
               mv "$TMP_ARRAY" "$PACKS_ARRAY"
-              echo "✅ Пак 1.${PACK_NUM} добавлен (100 серверов)"
+              echo "✅ Пак 1.${PACK_NUM} добавлен (50 серверов)"
               PACK_NUM=$((PACK_NUM + 1))
               rm -f "$CHUNK"
               CHUNK=$(mktemp)
@@ -648,7 +622,7 @@ jobs:
           fi
 
           mv "$PACKS_ARRAY" packs.json
-          rm -f "$CHUNK" "$MERGED_TMP" "$SORTED_TMP" "$DEDUP_TMP" "$SEEN" "$ALL_OUTBOUNDS"
+          rm -f "$CHUNK" "$MERGED_TMP" "$DEDUP_TMP" "$SEEN" "$ALL_OUTBOUNDS"
           echo "✅ Готово: $CONF_COUNT серверов в $PACK_NUM паках"
 
       - name: Validate JSON
