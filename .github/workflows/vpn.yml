@@ -2,7 +2,7 @@ name: Merge VLESS Configs
 
 on:
   schedule:
-    - cron: '0 */2 * * *'
+    - cron: '*/30 * * * *'
   workflow_dispatch:
 
 jobs:
@@ -10,11 +10,11 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-    timeout-minutes: 55
+    timeout-minutes: 25
 
     strategy:
       matrix:
-        batch: [1, 2, 3, 4]
+        batch: [1, 2, 3, 4, 5, 6]
       fail-fast: false
 
     steps:
@@ -22,75 +22,46 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install dependencies
-        run: sudo apt-get install -y curl jq netcat-openbsd openssl
-
-      - name: Download dead hosts cache
-        continue-on-error: true
-        run: |
-          curl -fsSL \
-            "https://raw.githubusercontent.com/${{ github.repository }}/main/dead_hosts.txt" \
-            -o dead_hosts.txt 2>/dev/null || touch dead_hosts.txt
-          echo "Мёртвых хостов в кэше: $(wc -l < dead_hosts.txt)"
+        run: sudo apt-get install -y netcat-openbsd jq
 
       - name: Fetch batch ${{ matrix.batch }}
-        timeout-minutes: 50
+        timeout-minutes: 20
         run: |
           SNI_ALLOWED="ads.x5.ru max.ru vk.ru yandex.com ya.ru"
           CONFIGS_TMP="batch_${{ matrix.batch }}.tmp"
           SEEN_HOSTS=$(mktemp)
           CHECK_QUEUE=$(mktemp)
 
-          # Улучшенная проверка сервера (2 попытки)
-          check_server() {
-            local HOST="$1" PORT="$2"
-            local RETRIES=2
-            local DELAY=1
-
-            for attempt in $(seq 1 $RETRIES); do
-              # TCP проверка
-              nc -z -w2 "$HOST" "$PORT" 2>/dev/null || { sleep $DELAY; continue; }
-
-              # TLS handshake
-              local RESP
-              RESP=$(echo Q | timeout 3 openssl s_client \
-                       -connect "${HOST}:${PORT}" \
-                       -servername "www.google.com" \
-                       -verify_return_error \
-                       2>&1 | head -10)
-
-              if echo "$RESP" | grep -qiE "(CONNECTED|SSL handshake|alert|record|verify return:1|Verification: OK)"; then
-                return 0
-              fi
-              sleep $DELAY
-            done
-            return 1
-          }
-
-          # Параллельная проверка пачками по 20 (оптимальнее)
           flush_queue() {
             [ ! -s "$CHECK_QUEUE" ] && return
+            local RESULTS_TMP
+            RESULTS_TMP=$(mktemp)
+
             while IFS=$'\t' read -r BASE HOST PORT PREFIX; do
               (
-                check_server "$HOST" "$PORT" && \
-                printf '%s\t%s\t%s\t%s\n' "$BASE" "$HOST" "$PORT" "$PREFIX"
-              ) &
-              # Ограничиваем параллельные процессы
-              while [ $(jobs -r | wc -l) -ge 30 ]; do
-                sleep 0.1
-              done
+                nc -z -w1 "$HOST" "$PORT" 2>/dev/null || exit 1
+                T1=$(date +%s%3N)
+                (echo >/dev/tcp/"$HOST"/"$PORT") 2>/dev/null && \
+                  PING_MS=$(($(date +%s%3N) - T1)) || PING_MS=9999
+                printf '%s\t%s\t%s\t%s\t%s\n' \
+                  "$BASE" "$HOST" "$PORT" "$PREFIX" "$PING_MS"
+              ) >> "$RESULTS_TMP" &
             done < "$CHECK_QUEUE"
             wait
+
+            sort -t$'\t' -k5 -n "$RESULTS_TMP" >> "$CONFIGS_TMP"
+            rm -f "$RESULTS_TMP"
             > "$CHECK_QUEUE"
           }
 
           QUEUE_SIZE=0
 
           process_source() {
-            local URL="$1" PREFIX="$2" COUNT=0
+            local URL="$1" PREFIX="$2"
             local TMPFILE
             TMPFILE=$(mktemp)
-            curl -fsSL --max-time 30 --connect-timeout 10 "$URL" > "$TMPFILE" 2>/dev/null \
-              || { rm -f "$TMPFILE"; return; }
+            curl -fsSL --max-time 15 --connect-timeout 5 "$URL" \
+              > "$TMPFILE" 2>/dev/null || { rm -f "$TMPFILE"; return; }
 
             if ! grep -qE '^vless://' "$TMPFILE"; then
               local BASE64_TMP
@@ -100,7 +71,6 @@ jobs:
             fi
 
             grep -E '^vless://' "$TMPFILE" | sort -u | while IFS= read -r line; do
-              [ "$COUNT" -ge 30 ] && break
 
               BASE=$(echo "$line" | sed 's/#.*//')
               HOST=$(echo "$BASE" | sed 's/.*@//;s/[:/].*//')
@@ -123,95 +93,97 @@ jobs:
               echo "$PORT" | grep -qE '^[0-9]+$' || continue
 
               HOSTPORT="${HOST}:${PORT}"
-
-              grep -qF "$HOSTPORT" dead_hosts.txt 2>/dev/null && continue
               grep -qF "$HOSTPORT" "$SEEN_HOSTS" 2>/dev/null && continue
               echo "$HOSTPORT" >> "$SEEN_HOSTS"
 
-              printf '%s\t%s\t%s\t%s\n' "$BASE" "$HOST" "$PORT" "$PREFIX" >> "$CHECK_QUEUE"
-              COUNT=$((COUNT + 1))
+              printf '%s\t%s\t%s\t%s\n' "$BASE" "$HOST" "$PORT" "$PREFIX" \
+                >> "$CHECK_QUEUE"
               QUEUE_SIZE=$((QUEUE_SIZE + 1))
 
               if [ "$QUEUE_SIZE" -ge 20 ]; then
-                flush_queue >> "$CONFIGS_TMP"
+                flush_queue
                 QUEUE_SIZE=0
               fi
             done
             rm -f "$TMPFILE"
           }
 
-          # [Остальные process_source блоки остаются без изменений...]
           if [ "${{ matrix.batch }}" = "1" ]; then
             process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/Vless-Reality-White-Lists-Rus-Mobile-2.txt" "1"
             process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/Vless-Reality-White-Lists-Rus-Mobile.txt" "2"
-            process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/WHITE-CIDR-RU-all.txt" "3"
-            process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/WHITE-CIDR-RU-checked.txt" "4"
-            process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/WHITE-SNI-RU-all.txt" "5"
-            process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/BLACK_SS%2BAll_RUS.txt" "6"
-            process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/BLACK_VLESS_RUS.txt" "7"
-            process_source "https://github.com/igareck/vpn-configs-for-russia/raw/refs/heads/main/BLACK_VLESS_RUS_mobile.txt" "8"
-            process_source "https://raw.githubusercontent.com/zieng2/wl/refs/heads/main/vless_universal.txt" "9"
-            process_source "https://raw.githubusercontent.com/zieng2/wl/refs/heads/main/vless_lite.txt" "10"
-            process_source "https://raw.githubusercontent.com/whoahaow/rjsxrd/refs/heads/main/githubmirror/bypass/bypass-all.txt" "11"
-            process_source "https://raw.githubusercontent.com/whoahaow/rjsxrd/refs/heads/main/githubmirror/bypass-unsecure/bypass-unsecure-all.txt" "12"
-            process_source "https://raw.githubusercontent.com/whoahaow/rjsxrd/refs/heads/main/githubmirror/split-by-protocols/vless-secure.txt" "13"
-            process_source "https://raw.githubusercontent.com/whoahaow/rjsxrd/refs/heads/main/githubmirror/split-by-protocols/vless.txt" "14"
-            process_source "https://raw.githubusercontent.com/whoahaow/rjsxrd/refs/heads/main/githubmirror/bypass/raw/bypass-all-raw.txt" "15"
-            process_source "https://sub.obbhod.online/premium" "16"
-            process_source "https://mifa.world/vless" "17"
-            process_source "https://raw.githubusercontent.com/Temnuk/naabuzil/refs/heads/main/whitelist_full" "18"
-            process_source "https://raw.githubusercontent.com/Temnuk/naabuzil/refs/heads/main/wifi" "19"
+            process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/BLACK_VLESS_RUS.txt" "3"
+            process_source "https://github.com/igareck/vpn-configs-for-russia/raw/refs/heads/main/BLACK_VLESS_RUS_mobile.txt" "4"
+            process_source "https://raw.githubusercontent.com/zieng2/wl/refs/heads/main/vless_universal.txt" "5"
+            process_source "https://raw.githubusercontent.com/zieng2/wl/refs/heads/main/vless_lite.txt" "6"
+            process_source "https://raw.githubusercontent.com/whoahaow/rjsxrd/refs/heads/main/githubmirror/bypass/bypass-all.txt" "7"
+            process_source "https://raw.githubusercontent.com/whoahaow/rjsxrd/refs/heads/main/githubmirror/split-by-protocols/vless-secure.txt" "8"
+            process_source "https://raw.githubusercontent.com/whoahaow/rjsxrd/refs/heads/main/githubmirror/split-by-protocols/vless.txt" "9"
+            process_source "https://sub.obbhod.online/premium" "10"
           fi
 
           if [ "${{ matrix.batch }}" = "2" ]; then
-            process_source "https://raw.githubusercontent.com/VOID-Anonymity/V.O.I.D-VPN_Bypass/refs/heads/main/url_work.txt" "20"
-            process_source "https://github.com/sakha1370/OpenRay/raw/refs/heads/main/output/all_valid_proxies.txt" "21"
-            process_source "https://raw.githubusercontent.com/sevcator/5ubscrpt10n/main/protocols/vl.txt" "22"
-            process_source "https://raw.githubusercontent.com/yitong2333/proxy-minging/refs/heads/main/v2ray.txt" "23"
-            process_source "https://raw.githubusercontent.com/acymz/AutoVPN/refs/heads/main/data/V2.txt" "24"
-            process_source "https://raw.githubusercontent.com/miladtahanian/V2RayCFGDumper/refs/heads/main/sub.txt" "25"
-            process_source "https://raw.githubusercontent.com/roosterkid/openproxylist/main/V2RAY_RAW.txt" "26"
-            process_source "https://github.com/Epodonios/v2ray-configs/raw/main/Splitted-By-Protocol/trojan.txt" "27"
-            process_source "https://raw.githubusercontent.com/Epodonios/v2ray-configs/refs/heads/main/All_Configs_Sub.txt" "28"
-            process_source "https://raw.githubusercontent.com/CidVpn/cid-vpn-config/refs/heads/main/general.txt" "29"
-            process_source "https://raw.githubusercontent.com/mohamadfg-dev/telegram-v2ray-configs-collector/refs/heads/main/category/vless.txt" "30"
-            process_source "https://raw.githubusercontent.com/mheidari98/.proxy/refs/heads/main/vless" "31"
-            process_source "https://raw.githubusercontent.com/youfoundamin/V2rayCollector/main/mixed_iran.txt" "32"
-            process_source "https://raw.githubusercontent.com/expressalaki/ExpressVPN/refs/heads/main/configs3.txt" "33"
-            process_source "https://raw.githubusercontent.com/MahsaNetConfigTopic/config/refs/heads/main/xray_final.txt" "34"
+            process_source "https://mifa.world/vless" "11"
+            process_source "https://raw.githubusercontent.com/Temnuk/naabuzil/refs/heads/main/whitelist_full" "12"
+            process_source "https://raw.githubusercontent.com/Temnuk/naabuzil/refs/heads/main/wifi" "13"
+            process_source "https://raw.githubusercontent.com/VOID-Anonymity/V.O.I.D-VPN_Bypass/refs/heads/main/url_work.txt" "14"
+            process_source "https://raw.githubusercontent.com/AvenCores/goida-vpn-configs/refs/heads/main/githubmirror/26.txt" "15"
+            process_source "https://raw.githubusercontent.com/EtoNeYaProject/etoneyaproject.github.io/refs/heads/main/2" "16"
+            process_source "https://raw.githubusercontent.com/ByeWhiteLists/ByeWhiteLists2/refs/heads/main/ByeWhiteLists2.txt" "17"
+            process_source "https://ety.twinkvibe.gay/whitelist" "18"
+            process_source "https://white-lists.vercel.app/api/filter?code=RU" "19"
+            process_source "https://raw.githubusercontent.com/Hidashimora/free-vpn-anti-rkn/main/configs/31.txt" "20"
           fi
 
           if [ "${{ matrix.batch }}" = "3" ]; then
-            process_source "https://github.com/LalatinaHub/Mineral/raw/refs/heads/master/result/nodes" "35"
-            process_source "https://raw.githubusercontent.com/miladtahanian/Config-Collector/refs/heads/main/mixed_iran.txt" "36"
-            process_source "https://raw.githubusercontent.com/Pawdroid/Free-servers/refs/heads/main/sub" "37"
-            process_source "https://github.com/MhdiTaheri/V2rayCollector_Py/raw/refs/heads/main/sub/Mix/mix.txt" "38"
-            process_source "https://raw.githubusercontent.com/free18/v2ray/refs/heads/main/v.txt" "39"
-            process_source "https://github.com/MhdiTaheri/V2rayCollector/raw/refs/heads/main/sub/mix" "40"
-            process_source "https://github.com/Argh94/Proxy-List/raw/refs/heads/main/All_Config.txt" "41"
-            process_source "https://raw.githubusercontent.com/shabane/kamaji/master/hub/merged.txt" "42"
-            process_source "https://raw.githubusercontent.com/wuqb2i4f/xray-config-toolkit/main/output/base64/mix-uri" "43"
-            process_source "https://github.com/Mr-Meshky/vify/raw/refs/heads/main/configs/vless.txt" "44"
-            process_source "https://raw.githubusercontent.com/V2RayRoot/V2RayConfig/refs/heads/main/Config/vless.txt" "45"
-            process_source "https://raw.githubusercontent.com/AvenCores/goida-vpn-configs/refs/heads/main/githubmirror/26.txt" "46"
+            process_source "https://raw.githubusercontent.com/tankist939-afk/Obhod-WL/refs/heads/main/Obhod%20WL" "21"
+            process_source "https://gbr.mydan.online/configs" "22"
+            process_source "https://gitverse.ru/api/repos/bywarm/rser/raw/branch/master/wl.txt" "23"
+            process_source "https://raw.githubusercontent.com/whoahaow/rjsxrd/refs/heads/main/githubmirror/bypass-unsecure/bypass-unsecure-all.txt" "24"
+            process_source "https://raw.githubusercontent.com/whoahaow/rjsxrd/refs/heads/main/githubmirror/bypass/raw/bypass-all-raw.txt" "25"
+            process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/WHITE-CIDR-RU-all.txt" "26"
+            process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/WHITE-CIDR-RU-checked.txt" "27"
+            process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/WHITE-SNI-RU-all.txt" "28"
+            process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/BLACK_SS%2BAll_RUS.txt" "29"
+            process_source "https://gist.github.com/DestroyST6767/50af50221ca1858ba2084efc0f524fbc.txt" "30"
           fi
 
           if [ "${{ matrix.batch }}" = "4" ]; then
-            process_source "https://raw.githubusercontent.com/EtoNeYaProject/etoneyaproject.github.io/refs/heads/main/2" "47"
-            process_source "https://raw.githubusercontent.com/ByeWhiteLists/ByeWhiteLists2/refs/heads/main/ByeWhiteLists2.txt" "48"
-            process_source "https://gitverse.ru/api/repos/bywarm/rser/raw/branch/master/wl.txt" "49"
-            process_source "https://ety.twinkvibe.gay/whitelist" "50"
-            process_source "https://white-lists.vercel.app/api/filter?code=RU" "51"
-            process_source "https://raw.githubusercontent.com/Hidashimora/free-vpn-anti-rkn/main/configs/31.txt" "52"
-            process_source "https://gist.github.com/DestroyST6767/50af50221ca1858ba2084efc0f524fbc.txt" "53"
-            process_source "https://raw.githubusercontent.com/tankist939-afk/Obhod-WL/refs/heads/main/Obhod%20WL" "54"
-            process_source "https://gbr.mydan.online/configs" "55"
+            process_source "https://github.com/sakha1370/OpenRay/raw/refs/heads/main/output/all_valid_proxies.txt" "31"
+            process_source "https://raw.githubusercontent.com/sevcator/5ubscrpt10n/main/protocols/vl.txt" "32"
+            process_source "https://raw.githubusercontent.com/yitong2333/proxy-minging/refs/heads/main/v2ray.txt" "33"
+            process_source "https://raw.githubusercontent.com/acymz/AutoVPN/refs/heads/main/data/V2.txt" "34"
+            process_source "https://raw.githubusercontent.com/miladtahanian/V2RayCFGDumper/refs/heads/main/sub.txt" "35"
+            process_source "https://raw.githubusercontent.com/roosterkid/openproxylist/main/V2RAY_RAW.txt" "36"
+            process_source "https://raw.githubusercontent.com/Epodonios/v2ray-configs/refs/heads/main/All_Configs_Sub.txt" "37"
+            process_source "https://raw.githubusercontent.com/CidVpn/cid-vpn-config/refs/heads/main/general.txt" "38"
+            process_source "https://raw.githubusercontent.com/mohamadfg-dev/telegram-v2ray-configs-collector/refs/heads/main/category/vless.txt" "39"
+            process_source "https://raw.githubusercontent.com/mheidari98/.proxy/refs/heads/main/vless" "40"
+          fi
+
+          if [ "${{ matrix.batch }}" = "5" ]; then
+            process_source "https://raw.githubusercontent.com/youfoundamin/V2rayCollector/main/mixed_iran.txt" "41"
+            process_source "https://raw.githubusercontent.com/expressalaki/ExpressVPN/refs/heads/main/configs3.txt" "42"
+            process_source "https://raw.githubusercontent.com/MahsaNetConfigTopic/config/refs/heads/main/xray_final.txt" "43"
+            process_source "https://github.com/LalatinaHub/Mineral/raw/refs/heads/master/result/nodes" "44"
+            process_source "https://raw.githubusercontent.com/miladtahanian/Config-Collector/refs/heads/main/mixed_iran.txt" "45"
+            process_source "https://raw.githubusercontent.com/Pawdroid/Free-servers/refs/heads/main/sub" "46"
+            process_source "https://github.com/MhdiTaheri/V2rayCollector_Py/raw/refs/heads/main/sub/Mix/mix.txt" "47"
+            process_source "https://raw.githubusercontent.com/free18/v2ray/refs/heads/main/v.txt" "48"
+            process_source "https://github.com/MhdiTaheri/V2rayCollector/raw/refs/heads/main/sub/mix" "49"
+            process_source "https://github.com/Argh94/Proxy-List/raw/refs/heads/main/All_Config.txt" "50"
+          fi
+
+          if [ "${{ matrix.batch }}" = "6" ]; then
+            process_source "https://raw.githubusercontent.com/shabane/kamaji/master/hub/merged.txt" "51"
+            process_source "https://raw.githubusercontent.com/wuqb2i4f/xray-config-toolkit/main/output/base64/mix-uri" "52"
+            process_source "https://github.com/Mr-Meshky/vify/raw/refs/heads/main/configs/vless.txt" "53"
+            process_source "https://raw.githubusercontent.com/V2RayRoot/V2RayConfig/refs/heads/main/Config/vless.txt" "54"
+            process_source "https://github.com/Epodonios/v2ray-configs/raw/main/Splitted-By-Protocol/trojan.txt" "55"
             process_source "https://github.com/rtwo2/FastNodes/raw/refs/heads/main/sub/protocols/hysteria2.txt" "56"
             process_source "https://raw.githubusercontent.com/whoahaow/rjsxrd/refs/heads/main/githubmirror/split-by-protocols/tuic.txt" "57"
           fi
 
-          flush_queue >> "$CONFIGS_TMP"
-
+          flush_queue
           rm -f "$CHECK_QUEUE" "$SEEN_HOSTS"
           FOUND=$(wc -l < "$CONFIGS_TMP" 2>/dev/null || echo 0)
           echo "Батч ${{ matrix.batch }}: найдено живых серверов: $FOUND"
@@ -245,7 +217,6 @@ jobs:
 
       - name: Merge and generate files
         run: |
-          # vlees.txt с правильным форматом
           printf '%s\n' \
             '#profile-title: HiBypass | LTE FREE 🏳🇷🇺' \
             '#profile-update-interval: 1' \
@@ -256,72 +227,40 @@ jobs:
             '#traffic-remaining: ∞' \
             > vlees.txt
 
-          # Дедупликация
           MERGED_TMP=$(mktemp)
           cat batch_*.tmp 2>/dev/null > "$MERGED_TMP"
 
+          SORTED_TMP=$(mktemp)
+          sort -t$'\t' -k5 -n "$MERGED_TMP" > "$SORTED_TMP"
+
           DEDUP_TMP=$(mktemp)
           SEEN=$(mktemp)
-          while IFS=$'\t' read -r BASE HOST PORT PREFIX; do
+          while IFS=$'\t' read -r BASE HOST PORT PREFIX PING_MS; do
             HOSTPORT="${HOST}:${PORT}"
             grep -qF "$HOSTPORT" "$SEEN" && continue
             echo "$HOSTPORT" >> "$SEEN"
-            printf '%s\t%s\t%s\t%s\n' "$BASE" "$HOST" "$PORT" "$PREFIX" >> "$DEDUP_TMP"
-          done < "$MERGED_TMP"
+            printf '%s\t%s\t%s\t%s\t%s\n' \
+              "$BASE" "$HOST" "$PORT" "$PREFIX" "$PING_MS" >> "$DEDUP_TMP"
+          done < "$SORTED_TMP"
 
           TOTAL=$(wc -l < "$DEDUP_TMP")
           echo "Всего уникальных живых TCP конфигов: $TOTAL"
 
-          # Генерация vlees.txt с новым форматом тегов
           IDX=1
-          while IFS=$'\t' read -r BASE HOST PORT PREFIX; do
-            # Формат: 🇪🇺LTE | 1.X | 🌐
-            PACK_NUM=$(( ((IDX - 1) / 50) + 1 ))
-            echo "${BASE}#🇪🇺LTE | 1.${PACK_NUM} | 🌐" >> vlees.txt
+          while IFS=$'\t' read -r BASE HOST PORT PREFIX PING_MS; do
+            if [ -n "$PING_MS" ] && [ "$PING_MS" -lt 9999 ] 2>/dev/null; then
+              LABEL="🇪🇺LTE | ${IDX} 🌐 RU | ${PING_MS}ms"
+            else
+              LABEL="🇪🇺LTE | ${IDX} 🌐 RU"
+            fi
+            echo "${BASE}#${LABEL}" >> vlees.txt
             IDX=$((IDX + 1))
           done < "$DEDUP_TMP"
 
-          # Обновление кэша мёртвых хостов
-          NEW_HOSTS=$(mktemp)
-          while IFS=$'\t' read -r BASE HOST PORT PREFIX; do
-            echo "${HOST}:${PORT}"
-          done < "$DEDUP_TMP" | sort > "$NEW_HOSTS"
-
-          OLD_HOSTS=$(mktemp)
-          if [ -f vlees.txt ] && git show HEAD:vlees.txt > /tmp/old_vlees.txt 2>/dev/null; then
-            grep '^vless://' /tmp/old_vlees.txt \
-              | sed 's/.*@//;s/[#?].*//' \
-              | sort > "$OLD_HOSTS"
-          else
-            touch "$OLD_HOSTS"
-          fi
-
-          DEAD_CANDIDATES=$(mktemp)
-          comm -23 "$OLD_HOSTS" "$NEW_HOSTS" > "$DEAD_CANDIDATES"
-          CANDIDATES_COUNT=$(wc -l < "$DEAD_CANDIDATES")
-          echo "Кандидатов в мёртвые (не прошли TLS): $CANDIDATES_COUNT"
-
-          CURRENT_DEAD=$(mktemp)
-          git show HEAD:dead_hosts.txt > "$CURRENT_DEAD" 2>/dev/null || touch "$CURRENT_DEAD"
-
-          NEW_DEAD=$(mktemp)
-          cat "$CURRENT_DEAD" "$DEAD_CANDIDATES" \
-            | sort -u \
-            | comm -23 - "$NEW_HOSTS" \
-            > "$NEW_DEAD"
-
-          NEW_DEAD_COUNT=$(wc -l < "$NEW_DEAD")
-          REVIVED=$(comm -12 "$CURRENT_DEAD" "$NEW_HOSTS" | wc -l)
-          echo "Серверов в кэше мёртвых: $NEW_DEAD_COUNT (ожило и убрано: $REVIVED)"
-
-          mv "$NEW_DEAD" dead_hosts.txt
-          rm -f "$OLD_HOSTS" "$NEW_HOSTS" "$DEAD_CANDIDATES" "$CURRENT_DEAD"
-
-          # Генерация всех outbounds
           ALL_OUTBOUNDS=$(mktemp)
           IDX=1
 
-          while IFS=$'\t' read -r BASE HOST PORT PREFIX; do
+          while IFS=$'\t' read -r BASE HOST PORT PREFIX PING_MS; do
             UUID=$(echo "$BASE" | sed 's/vless:\/\///;s/@.*//')
             QUERY=$(echo "$BASE" | grep -o '?[^#]*' | tr '?&' '\n\n')
             get_param() { echo "$QUERY" | grep "^${1}=" | head -1 | cut -d= -f2-; }
@@ -338,20 +277,26 @@ jobs:
             [ -z "$FLOW" ] && FLOW="xtls-rprx-vision"
             [ -z "$SID" ]  && SID=""
 
+            if [ -n "$PING_MS" ] && [ "$PING_MS" -lt 9999 ] 2>/dev/null; then
+              PING_LABEL="${PING_MS}ms"
+            else
+              PING_LABEL="?"
+            fi
+
             echo "$PORT" | grep -qE '^[0-9]+$' || { IDX=$((IDX + 1)); continue; }
 
-            # Теги для outbounds: lte-номер
             jq -cn \
-              --arg  tag  "lte-${IDX}" \
-              --arg  addr "$HOST"      \
-              --argjson port "$PORT"   \
-              --arg  uuid "$UUID"      \
-              --arg  flow "$FLOW"      \
-              --arg  sec  "$SEC"       \
-              --arg  sni  "$SNI"       \
-              --arg  pbk  "$PBK"       \
-              --arg  fp   "$FP"        \
-              --arg  sid  "$SID"       \
+              --arg  tag   "lte-${IDX}"  \
+              --arg  addr  "$HOST"        \
+              --argjson port "$PORT"      \
+              --arg  uuid  "$UUID"        \
+              --arg  flow  "$FLOW"        \
+              --arg  sec   "$SEC"         \
+              --arg  sni   "$SNI"         \
+              --arg  pbk   "$PBK"         \
+              --arg  fp    "$FP"          \
+              --arg  sid   "$SID"         \
+              --arg  ping  "$PING_LABEL"  \
               '{
                 tag: $tag,
                 protocol: "vless",
@@ -371,7 +316,8 @@ jobs:
                     shortId: $sid,
                     fingerprint: $fp
                   }
-                }
+                },
+                _ping: $ping
               }' >> "$ALL_OUTBOUNDS"
 
             IDX=$((IDX + 1))
@@ -380,8 +326,7 @@ jobs:
           CONF_COUNT=$((IDX - 1))
           echo "Сгенерировано outbounds: $CONF_COUNT"
 
-          # Разбивка на паки по 50
-          PACK_SIZE=50
+          PACK_SIZE=100
           PACK_NUM=1
           CHUNK=$(mktemp)
           LINE_COUNT=0
@@ -390,24 +335,31 @@ jobs:
 
           make_pack() {
             local num="$1" chunk="$2"
-            local items_in_pack=$(wc -l < "$chunk")
             RETAGGED=$(mktemp)
             local i=1
             while IFS= read -r obj; do
-              # Перенумеровываем теги внутри пака: lte-1, lte-2...
-              echo "$obj" | jq --arg t "lte-${i}" '.tag = $t'
+              echo "$obj" | jq --arg t "lte-${i}" '.tag = $t | del(._ping)'
               i=$((i + 1))
             done < "$chunk" > "$RETAGGED"
 
-            # Формат remarks: 🇪🇺LTE | 1.X | 🌐
+            AVG_PING=$(jq -s '[.[].["_ping"] |
+              if test("^[0-9]+ms$") then (.[:-2] | tonumber) else empty end
+              ] | if length > 0 then (add/length | floor) else 0 end' "$chunk" 2>/dev/null || echo 0)
+
+            if [ "$AVG_PING" -gt 0 ] 2>/dev/null; then
+              REMARKS="🇪🇺LTE | 1.${num} 🌐 | ~${AVG_PING}ms"
+            else
+              REMARKS="🇪🇺LTE | 1.${num} 🌐"
+            fi
+
             jq -n \
-              --arg remarks "🇪🇺LTE | 1.${num} | 🌐" \
+              --arg remarks "$REMARKS" \
               --slurpfile out "$RETAGGED" \
               '{
                 remarks: $remarks,
                 dns: {
-                  servers: ["1.1.1.1", "1.0.0.1"],
-                  queryStrategy: "UseIP"
+                  servers: ["1.1.1.1", "1.0.0.1", "8.8.8.8"],
+                  queryStrategy: "UseIPv4"
                 },
                 observatory: {
                   enableConcurrency: true,
@@ -470,7 +422,6 @@ jobs:
             rm -f "$RETAGGED"
           }
 
-          # Разбиваем ALL_OUTBOUNDS на паки по 50
           while IFS= read -r line; do
             echo "$line" >> "$CHUNK"
             LINE_COUNT=$((LINE_COUNT + 1))
@@ -480,7 +431,7 @@ jobs:
               TMP_ARRAY=$(mktemp)
               jq --argjson pack "$PACK_JSON" '. + [$pack]' "$PACKS_ARRAY" > "$TMP_ARRAY"
               mv "$TMP_ARRAY" "$PACKS_ARRAY"
-              echo "✅ Пак 1.${PACK_NUM} добавлен (${LINE_COUNT} серверов)"
+              echo "✅ Пак 1.${PACK_NUM} добавлен (100 серверов)"
               PACK_NUM=$((PACK_NUM + 1))
               rm -f "$CHUNK"
               CHUNK=$(mktemp)
@@ -488,18 +439,17 @@ jobs:
             fi
           done < "$ALL_OUTBOUNDS"
 
-          # Добавляем остаток (меньше 50)
           if [ "$LINE_COUNT" -gt 0 ]; then
             PACK_JSON=$(make_pack "$PACK_NUM" "$CHUNK")
             TMP_ARRAY=$(mktemp)
             jq --argjson pack "$PACK_JSON" '. + [$pack]' "$PACKS_ARRAY" > "$TMP_ARRAY"
             mv "$TMP_ARRAY" "$PACKS_ARRAY"
-            echo "✅ Пак 1.${PACK_NUM} добавлен (${LINE_COUNT} серверов)"
+            echo "✅ Пак 1.${PACK_NUM} добавлен ($LINE_COUNT серверов)"
           fi
 
           mv "$PACKS_ARRAY" packs.json
-          rm -f "$CHUNK" "$MERGED_TMP" "$DEDUP_TMP" "$SEEN" "$ALL_OUTBOUNDS"
-          echo "✅ Готово: $CONF_COUNT серверов в $PACK_NUM паках — один packs.json"
+          rm -f "$CHUNK" "$MERGED_TMP" "$SORTED_TMP" "$DEDUP_TMP" "$SEEN" "$ALL_OUTBOUNDS"
+          echo "✅ Готово: $CONF_COUNT серверов в $PACK_NUM паках"
 
       - name: Validate JSON
         run: |
@@ -516,9 +466,8 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add vlees.txt packs.json dead_hosts.txt
+          git add vlees.txt packs.json
           SERVER_COUNT=$(jq '[.[].outbounds[]|select(.tag|startswith("lte-"))]|length' packs.json)
           PACK_COUNT=$(jq 'length' packs.json)
-          DEAD_COUNT=$(wc -l < dead_hosts.txt 2>/dev/null || echo 0)
-          git diff --staged --quiet || git commit -m "Auto: $(date -u '+%Y-%m-%d %H:%M UTC') | $SERVER_COUNT серверов | $PACK_COUNT паков | 💀 $DEAD_COUNT мёртвых"
+          git diff --staged --quiet || git commit -m "Auto: $(date -u '+%Y-%m-%d %H:%M UTC') | $SERVER_COUNT серверов | $PACK_COUNT паков"
           git push
