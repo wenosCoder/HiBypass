@@ -54,18 +54,29 @@ jobs:
 
           # Рекурсивный декодер base64: пробует декодировать до тех пор,
           # пока в файле не появятся строки vless://
+          # Не использует команду `file`, только base64 и grep
           decode_until_vless() {
-            local FILE="$1"
+            local INFILE="$1"
             local MAX_DEPTH=5
             local DEPTH=0
             while [ $DEPTH -lt $MAX_DEPTH ]; do
-              grep -qE '^vless://' "$FILE" && return 0
+              # Если уже есть vless:// — готово
+              grep -qE '^vless://' "$INFILE" && return 0
               local TMP_DEC
               TMP_DEC=$(mktemp)
-              base64 -d "$FILE" > "$TMP_DEC" 2>/dev/null || { rm -f "$TMP_DEC"; return 1; }
-              # Проверяем, что декодированный файл содержит печатаемые символы
-              file "$TMP_DEC" | grep -qiE 'text|ascii|utf' || { rm -f "$TMP_DEC"; return 1; }
-              mv "$TMP_DEC" "$FILE"
+              # Пробуем декодировать base64 (игнорируем пробелы/переносы)
+              base64 -d "$INFILE" > "$TMP_DEC" 2>/dev/null
+              # Если пустой результат — бессмысленно продолжать
+              if [ ! -s "$TMP_DEC" ]; then
+                rm -f "$TMP_DEC"
+                return 1
+              fi
+              # Проверяем на нулевые байты (бинарный файл) через od
+              if od -c "$TMP_DEC" 2>/dev/null | grep -q '\\0'; then
+                rm -f "$TMP_DEC"
+                return 1
+              fi
+              mv "$TMP_DEC" "$INFILE"
               DEPTH=$((DEPTH + 1))
             done
             return 1
@@ -80,7 +91,7 @@ jobs:
 
             # Если нет строк vless:// — пробуем рекурсивно декодировать base64
             if ! grep -qE '^vless://' "$TMPFILE"; then
-              decode_until_vless "$TMPFILE"
+              decode_until_vless "$TMPFILE" || true
             fi
 
             grep -E '^vless://' "$TMPFILE" | sort -u | while IFS= read -r line; do
@@ -180,7 +191,6 @@ jobs:
             process_source "https://github.com/Epodonios/v2ray-configs/raw/main/Splitted-By-Protocol/trojan.txt" "55"
             process_source "https://github.com/rtwo2/FastNodes/raw/refs/heads/main/sub/protocols/hysteria2.txt" "56"
             process_source "https://raw.githubusercontent.com/whoahaow/rjsxrd/refs/heads/main/githubmirror/split-by-protocols/tuic.txt" "57"
-            # Новые источники
             process_source "https://gist.githubusercontent.com/angelivan388283-beep/706d96d52a24deedea0fd825d73160e0/raw/ae5c2309e86954dcf061d6da4bba1dfefbd3ac3c/HaizWait2.0" "58"
             process_source "https://gist.githubusercontent.com/angelivan388283-beep/706d96d52a24deedea0fd825d73160e0/raw/ae5c2309e86954dcf061d6da4bba1dfefbd3ac3c/heisen2.0" "59"
             process_source "https://gist.githubusercontent.com/angelivan388283-beep/706d96d52a24deedea0fd825d73160e0/raw/ae5c2309e86954dcf061d6da4bba1dfefbd3ac3c/heisen1.0" "60"
@@ -198,6 +208,7 @@ jobs:
           name: batch-${{ matrix.batch }}
           path: batch_${{ matrix.batch }}.tmp
           retention-days: 1
+          if-no-files-found: warn
 
   merge:
     needs: fetch
