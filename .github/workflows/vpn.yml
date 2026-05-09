@@ -28,28 +28,21 @@ jobs:
         timeout-minutes: 20
         run: |
           CONFIGS_TMP="batch_${{ matrix.batch }}.tmp"
+          touch "$CONFIGS_TMP"
           SEEN_HOSTS=$(mktemp)
           ALL_CANDIDATES=$(mktemp)
 
           # Рекурсивный декодер base64
           decode_until_vless() {
             local INFILE="$1"
-            local MAX_DEPTH=5
             local DEPTH=0
-            while [ $DEPTH -lt $MAX_DEPTH ]; do
+            while [ $DEPTH -lt 5 ]; do
               grep -qaE '^vless://' "$INFILE" && return 0
               local TMP_DEC
               TMP_DEC=$(mktemp)
               base64 -d "$INFILE" > "$TMP_DEC" 2>/dev/null
-              if [ ! -s "$TMP_DEC" ]; then
-                rm -f "$TMP_DEC"
-                return 1
-              fi
-              # Быстрая проверка бинарности по первым 512 байтам
-              if head -c 512 "$TMP_DEC" | cat -v | grep -q '\^@'; then
-                rm -f "$TMP_DEC"
-                return 1
-              fi
+              if [ ! -s "$TMP_DEC" ]; then rm -f "$TMP_DEC"; return 1; fi
+              if head -c 512 "$TMP_DEC" | cat -v | grep -q '\^@'; then rm -f "$TMP_DEC"; return 1; fi
               mv "$TMP_DEC" "$INFILE"
               DEPTH=$((DEPTH + 1))
             done
@@ -67,17 +60,16 @@ jobs:
               decode_until_vless "$TMPFILE" || true
             fi
 
-            # Собираем кандидатов в общий файл (без subshell-проблем с переменными)
             grep -aE '^vless://' "$TMPFILE" | sort -u | while IFS= read -r line; do
-              BASE=$(echo "$line" | sed 's/#.*//')
-              HOST=$(echo "$BASE" | sed 's/.*@//;s/[:/].*//')
-              PORT=$(echo "$BASE" | sed 's/.*@[^:]*://;s/[/?].*//')
-              echo "$PORT" | grep -qE '^[0-9]+$' || continue
+              BASE=$(printf '%s' "$line" | sed 's/#.*//')
+              HOST=$(printf '%s' "$BASE" | sed 's/.*@//;s/[:/].*//')
+              PORT=$(printf '%s' "$BASE" | sed 's/.*@[^:]*://;s/[/?].*//')
+              printf '%s' "$PORT" | grep -qE '^[0-9]+$' || continue
               HOSTPORT="${HOST}:${PORT}"
               grep -qF "$HOSTPORT" "$SEEN_HOSTS" 2>/dev/null && continue
-              echo "$HOSTPORT" >> "$SEEN_HOSTS"
-              printf '%s\t%s\t%s\t%s\n' "$BASE" "$HOST" "$PORT" "$PREFIX" \
-                >> "$ALL_CANDIDATES"
+              printf '%s\n' "$HOSTPORT" >> "$SEEN_HOSTS"
+              # Сохраняем поля через разделитель | (не таб — чтобы не ломать xargs)
+              printf '%s|%s|%s|%s\n' "$BASE" "$HOST" "$PORT" "$PREFIX" >> "$ALL_CANDIDATES"
             done
 
             rm -f "$TMPFILE"
@@ -162,26 +154,40 @@ jobs:
             process_source "https://gist.githubusercontent.com/angelivan388283-beep/706d96d52a24deedea0fd825d73160e0/raw/HaizFill" "61"
           fi
 
-          # --- Параллельная nc-проверка всех кандидатов за раз ---
-          # Ограничиваем параллелизм через xargs: не более 50 одновременных nc
+          # --- Параллельная nc-проверка через фоновые процессы с семафором ---
           TOTAL_CANDS=$(wc -l < "$ALL_CANDIDATES" 2>/dev/null || echo 0)
           echo "Батч ${{ matrix.batch }}: кандидатов для проверки: $TOTAL_CANDS"
 
-          if [ -s "$ALL_CANDIDATES" ]; then
-            # Передаём каждую строку в subshell через xargs с ограничением параллелизма
-            # xargs -P 50 запускает не более 50 nc одновременно, -L 1 = одна строка на процесс
-            cat "$ALL_CANDIDATES" | xargs -I{} -P 50 -L 1 sh -c '
-              LINE="$1"
-              BASE=$(printf "%s" "$LINE" | cut -f1)
-              HOST=$(printf "%s" "$LINE" | cut -f2)
-              PORT=$(printf "%s" "$LINE" | cut -f3)
-              PREFIX=$(printf "%s" "$LINE" | cut -f4)
-              nc -z -w1 "$HOST" "$PORT" 2>/dev/null && \
-                printf "%s\t%s\t%s\t%s\n" "$BASE" "$HOST" "$PORT" "$PREFIX"
-            ' -- {} >> "$CONFIGS_TMP" 2>/dev/null || true
-          fi
+          MAX_PARALLEL=60
+          RUNNING=0
+          RESULTS_TMP=$(mktemp)
 
-          rm -f "$ALL_CANDIDATES" "$SEEN_HOSTS"
+          check_one() {
+            local LINE="$1"
+            local BASE HOST PORT PREFIX
+            BASE=$(printf '%s' "$LINE"  | cut -d'|' -f1)
+            HOST=$(printf '%s' "$LINE"  | cut -d'|' -f2)
+            PORT=$(printf '%s' "$LINE"  | cut -d'|' -f3)
+            PREFIX=$(printf '%s' "$LINE" | cut -d'|' -f4)
+            if nc -z -w1 "$HOST" "$PORT" 2>/dev/null; then
+              printf '%s\t%s\t%s\t%s\n' "$BASE" "$HOST" "$PORT" "$PREFIX"
+            fi
+          }
+          export -f check_one
+
+          while IFS= read -r LINE; do
+            check_one "$LINE" >> "$RESULTS_TMP" &
+            RUNNING=$((RUNNING + 1))
+            if [ "$RUNNING" -ge "$MAX_PARALLEL" ]; then
+              wait
+              RUNNING=0
+            fi
+          done < "$ALL_CANDIDATES"
+          wait
+
+          cat "$RESULTS_TMP" >> "$CONFIGS_TMP"
+          rm -f "$ALL_CANDIDATES" "$SEEN_HOSTS" "$RESULTS_TMP"
+
           FOUND=$(wc -l < "$CONFIGS_TMP" 2>/dev/null || echo 0)
           echo "Батч ${{ matrix.batch }}: найдено живых серверов: $FOUND"
 
@@ -233,9 +239,8 @@ jobs:
           while IFS=$'\t' read -r BASE HOST PORT PREFIX; do
             HOSTPORT="${HOST}:${PORT}"
             grep -qF "$HOSTPORT" "$SEEN" && continue
-            echo "$HOSTPORT" >> "$SEEN"
-            printf '%s\t%s\t%s\t%s\n' \
-              "$BASE" "$HOST" "$PORT" "$PREFIX" >> "$DEDUP_TMP"
+            printf '%s\n' "$HOSTPORT" >> "$SEEN"
+            printf '%s\t%s\t%s\t%s\n' "$BASE" "$HOST" "$PORT" "$PREFIX" >> "$DEDUP_TMP"
           done < "$MERGED_TMP"
 
           TOTAL=$(wc -l < "$DEDUP_TMP")
@@ -244,7 +249,7 @@ jobs:
           IDX=1
           while IFS=$'\t' read -r BASE HOST PORT PREFIX; do
             LABEL="🇪🇺LTE | ${IDX} 🌐 RU"
-            echo "${BASE}#${LABEL}" >> vlees.txt
+            printf '%s\n' "${BASE}#${LABEL}" >> vlees.txt
             IDX=$((IDX + 1))
           done < "$DEDUP_TMP"
 
@@ -252,9 +257,9 @@ jobs:
           IDX=1
 
           while IFS=$'\t' read -r BASE HOST PORT PREFIX; do
-            UUID=$(echo "$BASE" | sed 's/vless:\/\///;s/@.*//')
-            QUERY=$(echo "$BASE" | grep -o '?[^#]*' | tr '?&' '\n\n')
-            get_param() { echo "$QUERY" | grep "^${1}=" | head -1 | cut -d= -f2-; }
+            UUID=$(printf '%s' "$BASE" | sed 's/vless:\/\///;s/@.*//')
+            QUERY=$(printf '%s' "$BASE" | grep -o '?[^#]*' | tr '?&' '\n\n')
+            get_param() { printf '%s' "$QUERY" | grep "^${1}=" | head -1 | cut -d= -f2-; }
 
             FLOW=$(get_param flow)
             SNI=$(get_param sni)
@@ -268,7 +273,7 @@ jobs:
             [ -z "$FLOW" ] && FLOW="xtls-rprx-vision"
             [ -z "$SID" ]  && SID=""
 
-            echo "$PORT" | grep -qE '^[0-9]+$' || { IDX=$((IDX + 1)); continue; }
+            printf '%s' "$PORT" | grep -qE '^[0-9]+$' || { IDX=$((IDX + 1)); continue; }
 
             jq -cn \
               --arg  tag   "lte-${IDX}"  \
@@ -321,7 +326,7 @@ jobs:
             RETAGGED=$(mktemp)
             local i=1
             while IFS= read -r obj; do
-              echo "$obj" | jq --arg t "lte-${i}" '.tag = $t'
+              printf '%s' "$obj" | jq --arg t "lte-${i}" '.tag = $t'
               i=$((i + 1))
             done < "$chunk" > "$RETAGGED"
 
@@ -398,7 +403,7 @@ jobs:
           }
 
           while IFS= read -r line; do
-            echo "$line" >> "$CHUNK"
+            printf '%s\n' "$line" >> "$CHUNK"
             LINE_COUNT=$((LINE_COUNT + 1))
 
             if [ "$LINE_COUNT" -eq "$PACK_SIZE" ]; then
