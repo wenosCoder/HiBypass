@@ -54,25 +54,25 @@ jobs:
 
           # Рекурсивный декодер base64: пробует декодировать до тех пор,
           # пока в файле не появятся строки vless://
-          # Не использует команду `file`, только base64 и grep
+          # Быстрая проверка бинарности через head без od/file
           decode_until_vless() {
             local INFILE="$1"
             local MAX_DEPTH=5
             local DEPTH=0
             while [ $DEPTH -lt $MAX_DEPTH ]; do
               # Если уже есть vless:// — готово
-              grep -qE '^vless://' "$INFILE" && return 0
+              grep -qaE '^vless://' "$INFILE" && return 0
               local TMP_DEC
               TMP_DEC=$(mktemp)
-              # Пробуем декодировать base64 (игнорируем пробелы/переносы)
+              # Пробуем декодировать base64
               base64 -d "$INFILE" > "$TMP_DEC" 2>/dev/null
-              # Если пустой результат — бессмысленно продолжать
+              # Пустой результат — выходим
               if [ ! -s "$TMP_DEC" ]; then
                 rm -f "$TMP_DEC"
                 return 1
               fi
-              # Проверяем на нулевые байты (бинарный файл) через od
-              if od -c "$TMP_DEC" 2>/dev/null | grep -q '\\0'; then
+              # Быстрая проверка на бинарность: ищем нулевой байт только в первых 512 байтах
+              if head -c 512 "$TMP_DEC" | cat -v | grep -q '\^@'; then
                 rm -f "$TMP_DEC"
                 return 1
               fi
@@ -90,11 +90,12 @@ jobs:
               > "$TMPFILE" 2>/dev/null || { rm -f "$TMPFILE"; return; }
 
             # Если нет строк vless:// — пробуем рекурсивно декодировать base64
-            if ! grep -qE '^vless://' "$TMPFILE"; then
+            if ! grep -qaE '^vless://' "$TMPFILE"; then
               decode_until_vless "$TMPFILE" || true
             fi
 
-            grep -E '^vless://' "$TMPFILE" | sort -u | while IFS= read -r line; do
+            # -a: обрабатывать бинарные файлы как текст, чтобы не упасть
+            grep -aE '^vless://' "$TMPFILE" | sort -u | while IFS= read -r line; do
 
               BASE=$(echo "$line" | sed 's/#.*//')
               HOST=$(echo "$BASE" | sed 's/.*@//;s/[:/].*//')
