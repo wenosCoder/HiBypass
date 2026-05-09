@@ -29,7 +29,6 @@ jobs:
         run: |
           CONFIGS_TMP="batch_${{ matrix.batch }}.tmp"
           touch "$CONFIGS_TMP"
-          SEEN_HOSTS=$(mktemp)
 
           # Рекурсивный декодер base64
           decode_until_vless() {
@@ -59,16 +58,12 @@ jobs:
               decode_until_vless "$TMPFILE" || true
             fi
 
-            grep -aE '^vless://' "$TMPFILE" | sort -u | while IFS= read -r line; do
-              BASE=$(printf '%s' "$line" | sed 's/#.*//')
+            grep -aE '^vless://' "$TMPFILE" | sed 's/#.*//' | while IFS= read -r BASE; do
               HOST=$(printf '%s' "$BASE" | sed 's/.*@//;s/[:/].*//')
               PORT=$(printf '%s' "$BASE" | sed 's/.*@[^:]*://;s/[/?].*//')
               printf '%s' "$PORT" | grep -qE '^[0-9]+$' || continue
-              HOSTPORT="${HOST}:${PORT}"
-              grep -qF "$HOSTPORT" "$SEEN_HOSTS" 2>/dev/null && continue
-              printf '%s\n' "$HOSTPORT" >> "$SEEN_HOSTS"
-              printf '%s\t%s\t%s\t%s\n' "$BASE" "$HOST" "$PORT" "$PREFIX" >> "$CONFIGS_TMP"
-            done
+              printf '%s\t%s\t%s\t%s\n' "$BASE" "$HOST" "$PORT" "$PREFIX"
+            done >> "$CONFIGS_TMP"
 
             rm -f "$TMPFILE"
           }
@@ -152,7 +147,6 @@ jobs:
             process_source "https://gist.githubusercontent.com/angelivan388283-beep/706d96d52a24deedea0fd825d73160e0/raw/HaizFill" "61"
           fi
 
-          rm -f "$SEEN_HOSTS"
           FOUND=$(wc -l < "$CONFIGS_TMP" 2>/dev/null || echo 0)
           echo "Батч ${{ matrix.batch }}: собрано конфигов: $FOUND"
 
@@ -198,80 +192,71 @@ jobs:
 
           MERGED_TMP=$(mktemp)
           cat batch_*.tmp 2>/dev/null > "$MERGED_TMP"
+          echo "Всего строк до дедупликации: $(wc -l < "$MERGED_TMP")"
 
-          # Глобальная дедупликация по host:port
+          # Дедупликация через awk по полю host:port (поля 2 и 3)
+          # Быстро, без grep в цикле, не падает на спецсимволах
           DEDUP_TMP=$(mktemp)
-          SEEN=$(mktemp)
-          while IFS=$'\t' read -r BASE HOST PORT PREFIX; do
-            HOSTPORT="${HOST}:${PORT}"
-            grep -qF "$HOSTPORT" "$SEEN" && continue
-            printf '%s\n' "$HOSTPORT" >> "$SEEN"
-            printf '%s\t%s\t%s\t%s\n' "$BASE" "$HOST" "$PORT" "$PREFIX" >> "$DEDUP_TMP"
-          done < "$MERGED_TMP"
+          awk -F'\t' '!seen[$2":"$3]++' "$MERGED_TMP" > "$DEDUP_TMP"
 
           TOTAL=$(wc -l < "$DEDUP_TMP")
           echo "Всего уникальных конфигов: $TOTAL"
 
+          # Лимит: не более 5000 конфигов чтобы merge уложился в 10 минут
+          if [ "$TOTAL" -gt 5000 ]; then
+            head -n 5000 "$DEDUP_TMP" > "${DEDUP_TMP}.trimmed"
+            mv "${DEDUP_TMP}.trimmed" "$DEDUP_TMP"
+            echo "Обрезано до 5000 конфигов"
+          fi
+
+          # Генерируем vlees.txt
           IDX=1
           while IFS=$'\t' read -r BASE HOST PORT PREFIX; do
-            LABEL="🇪🇺LTE | ${IDX} 🌐 RU"
-            printf '%s\n' "${BASE}#${LABEL}" >> vlees.txt
+            printf '%s\n' "${BASE}#🇪🇺LTE | ${IDX} 🌐 RU" >> vlees.txt
             IDX=$((IDX + 1))
           done < "$DEDUP_TMP"
 
+          # Генерируем все outbounds одним проходом через awk + jq
           ALL_OUTBOUNDS=$(mktemp)
           IDX=1
 
           while IFS=$'\t' read -r BASE HOST PORT PREFIX; do
-            UUID=$(printf '%s' "$BASE" | sed 's/vless:\/\///;s/@.*//')
-            QUERY=$(printf '%s' "$BASE" | grep -o '?[^#]*' | tr '?&' '\n\n')
-            get_param() { printf '%s' "$QUERY" | grep "^${1}=" | head -1 | cut -d= -f2-; }
+            printf '%s' "$PORT" | grep -qE '^[0-9]+$' || { IDX=$((IDX + 1)); continue; }
 
-            FLOW=$(get_param flow)
-            SNI=$(get_param sni)
-            PBK=$(get_param pbk)
-            FP=$(get_param fp)
-            SID=$(get_param sid)
-            SEC=$(get_param security)
+            UUID=$(printf '%s' "$BASE" | sed 's/vless:\/\///;s/@.*//')
+
+            # Парсим query string через sed
+            QUERY_RAW=$(printf '%s' "$BASE" | grep -o '?[^#]*')
+            get_param() {
+              printf '%s' "$QUERY_RAW" | grep -o "${1}=[^&]*" | head -1 | cut -d= -f2-
+            }
+
+            FLOW=$(get_param flow); SNI=$(get_param sni); PBK=$(get_param pbk)
+            FP=$(get_param fp);     SID=$(get_param sid); SEC=$(get_param security)
 
             [ -z "$FP" ]   && FP="chrome"
             [ -z "$SEC" ]  && SEC="reality"
             [ -z "$FLOW" ] && FLOW="xtls-rprx-vision"
             [ -z "$SID" ]  && SID=""
 
-            printf '%s' "$PORT" | grep -qE '^[0-9]+$' || { IDX=$((IDX + 1)); continue; }
-
             jq -cn \
-              --arg  tag   "lte-${IDX}"  \
-              --arg  addr  "$HOST"        \
-              --argjson port "$PORT"      \
-              --arg  uuid  "$UUID"        \
-              --arg  flow  "$FLOW"        \
-              --arg  sec   "$SEC"         \
-              --arg  sni   "$SNI"         \
-              --arg  pbk   "$PBK"         \
-              --arg  fp    "$FP"          \
-              --arg  sid   "$SID"         \
+              --arg  tag   "lte-${IDX}" \
+              --arg  addr  "$HOST"       \
+              --argjson port "$PORT"     \
+              --arg  uuid  "$UUID"       \
+              --arg  flow  "$FLOW"       \
+              --arg  sec   "$SEC"        \
+              --arg  sni   "$SNI"        \
+              --arg  pbk   "$PBK"        \
+              --arg  fp    "$FP"         \
+              --arg  sid   "$SID"        \
               '{
-                tag: $tag,
-                protocol: "vless",
-                settings: {
-                  vnext: [{
-                    address: $addr,
-                    port: $port,
-                    users: [{id: $uuid, encryption: "none", flow: $flow}]
-                  }]
-                },
-                streamSettings: {
-                  network: "tcp",
-                  security: $sec,
-                  realitySettings: {
-                    serverName: $sni,
-                    publicKey: $pbk,
-                    shortId: $sid,
-                    fingerprint: $fp
-                  }
-                }
+                tag: $tag, protocol: "vless",
+                settings: {vnext: [{address: $addr, port: $port,
+                  users: [{id: $uuid, encryption: "none", flow: $flow}]}]},
+                streamSettings: {network: "tcp", security: $sec,
+                  realitySettings: {serverName: $sni, publicKey: $pbk,
+                    shortId: $sid, fingerprint: $fp}}
               }' >> "$ALL_OUTBOUNDS"
 
             IDX=$((IDX + 1))
@@ -280,15 +265,19 @@ jobs:
           CONF_COUNT=$((IDX - 1))
           echo "Сгенерировано outbounds: $CONF_COUNT"
 
+          # Собираем паки по 50
           PACK_SIZE=50
           PACK_NUM=1
-          CHUNK=$(mktemp)
-          LINE_COUNT=0
           PACKS_ARRAY=$(mktemp)
           echo "[]" > "$PACKS_ARRAY"
 
+          # Читаем все outbounds в массив файлов-чанков
+          CHUNK=$(mktemp)
+          LINE_COUNT=0
+
           make_pack() {
             local num="$1" chunk="$2"
+            local RETAGGED
             RETAGGED=$(mktemp)
             local i=1
             while IFS= read -r obj; do
@@ -296,53 +285,29 @@ jobs:
               i=$((i + 1))
             done < "$chunk" > "$RETAGGED"
 
-            jq -n \
-              --arg remarks "🇪🇺LTE | 1.${num} 🌐" \
-              --slurpfile out "$RETAGGED" \
-              '{
-                remarks: $remarks,
-                dns: {
-                  servers: ["1.1.1.1", "1.0.0.1", "8.8.8.8"],
-                  queryStrategy: "UseIPv4"
-                },
-                observatory: {
-                  enableConcurrency: true,
-                  probeInterval: "15s",
-                  probeUrl: "http://www.gstatic.com/generate_204",
-                  subjectSelector: ["lte-"]
-                },
-                routing: {
-                  domainMatcher: "hybrid",
-                  domainStrategy: "IPIfNonMatch",
-                  rules: [
-                    {type: "field", protocol: ["bittorrent"], outboundTag: "direct"},
-                    {type: "field", inboundTag: ["socks", "http"], balancerTag: "BALANCER"}
-                  ],
-                  balancers: [{
-                    tag: "BALANCER",
-                    selector: ["lte-"],
-                    strategy: {type: "leastPing"}
-                  }]
-                },
-                inbounds: [
-                  {
-                    tag: "socks", port: 10808, listen: "127.0.0.1",
-                    protocol: "socks",
-                    settings: {udp: true, auth: "noauth"},
-                    sniffing: {enabled: true, routeOnly: false, destOverride: ["http","tls","quic"]}
-                  },
-                  {
-                    tag: "http", port: 10809, listen: "127.0.0.1",
-                    protocol: "http",
-                    settings: {allowTransparent: false},
-                    sniffing: {enabled: true, routeOnly: false, destOverride: ["http","tls","quic"]}
-                  }
+            jq -n --arg r "🇪🇺LTE | 1.${num} 🌐" --slurpfile out "$RETAGGED" '{
+              remarks: $r,
+              dns: {servers: ["1.1.1.1","1.0.0.1","8.8.8.8"], queryStrategy: "UseIPv4"},
+              observatory: {enableConcurrency: true, probeInterval: "15s",
+                probeUrl: "http://www.gstatic.com/generate_204", subjectSelector: ["lte-"]},
+              routing: {
+                domainMatcher: "hybrid", domainStrategy: "IPIfNonMatch",
+                rules: [
+                  {type: "field", protocol: ["bittorrent"], outboundTag: "direct"},
+                  {type: "field", inboundTag: ["socks","http"], balancerTag: "BALANCER"}
                 ],
-                outbounds: ($out + [
-                  {tag: "direct", protocol: "freedom"},
-                  {tag: "block",  protocol: "blackhole"}
-                ])
-              }'
+                balancers: [{tag: "BALANCER", selector: ["lte-"], strategy: {type: "leastPing"}}]
+              },
+              inbounds: [
+                {tag: "socks", port: 10808, listen: "127.0.0.1", protocol: "socks",
+                  settings: {udp: true, auth: "noauth"},
+                  sniffing: {enabled: true, routeOnly: false, destOverride: ["http","tls","quic"]}},
+                {tag: "http", port: 10809, listen: "127.0.0.1", protocol: "http",
+                  settings: {allowTransparent: false},
+                  sniffing: {enabled: true, routeOnly: false, destOverride: ["http","tls","quic"]}}
+              ],
+              outbounds: ($out + [{tag:"direct",protocol:"freedom"},{tag:"block",protocol:"blackhole"}])
+            }'
             rm -f "$RETAGGED"
           }
 
@@ -352,25 +317,24 @@ jobs:
             if [ "$LINE_COUNT" -eq "$PACK_SIZE" ]; then
               PACK_JSON=$(make_pack "$PACK_NUM" "$CHUNK")
               TMP_ARRAY=$(mktemp)
-              jq --argjson pack "$PACK_JSON" '. + [$pack]' "$PACKS_ARRAY" > "$TMP_ARRAY"
+              jq --argjson p "$PACK_JSON" '. + [$p]' "$PACKS_ARRAY" > "$TMP_ARRAY"
               mv "$TMP_ARRAY" "$PACKS_ARRAY"
-              echo "✅ Пак 1.${PACK_NUM} добавлен (50 серверов)"
+              echo "✅ Пак 1.${PACK_NUM} (50 серверов)"
               PACK_NUM=$((PACK_NUM + 1))
-              rm -f "$CHUNK"; CHUNK=$(mktemp)
-              LINE_COUNT=0
+              rm -f "$CHUNK"; CHUNK=$(mktemp); LINE_COUNT=0
             fi
           done < "$ALL_OUTBOUNDS"
 
           if [ "$LINE_COUNT" -gt 0 ]; then
             PACK_JSON=$(make_pack "$PACK_NUM" "$CHUNK")
             TMP_ARRAY=$(mktemp)
-            jq --argjson pack "$PACK_JSON" '. + [$pack]' "$PACKS_ARRAY" > "$TMP_ARRAY"
+            jq --argjson p "$PACK_JSON" '. + [$p]' "$PACKS_ARRAY" > "$TMP_ARRAY"
             mv "$TMP_ARRAY" "$PACKS_ARRAY"
-            echo "✅ Пак 1.${PACK_NUM} добавлен ($LINE_COUNT серверов)"
+            echo "✅ Пак 1.${PACK_NUM} ($LINE_COUNT серверов)"
           fi
 
           mv "$PACKS_ARRAY" packs.json
-          rm -f "$CHUNK" "$MERGED_TMP" "$DEDUP_TMP" "$SEEN" "$ALL_OUTBOUNDS"
+          rm -f "$CHUNK" "$MERGED_TMP" "$DEDUP_TMP" "$ALL_OUTBOUNDS"
           echo "✅ Готово: $CONF_COUNT серверов в $PACK_NUM паках"
 
       - name: Validate JSON
