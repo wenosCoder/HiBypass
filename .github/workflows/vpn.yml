@@ -22,7 +22,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install dependencies
-        run: sudo apt-get install -y netcat-openbsd jq
+        run: sudo apt-get install -y jq
 
       - name: Fetch batch ${{ matrix.batch }}
         timeout-minutes: 20
@@ -30,7 +30,6 @@ jobs:
           CONFIGS_TMP="batch_${{ matrix.batch }}.tmp"
           touch "$CONFIGS_TMP"
           SEEN_HOSTS=$(mktemp)
-          ALL_CANDIDATES=$(mktemp)
 
           # Рекурсивный декодер base64
           decode_until_vless() {
@@ -68,8 +67,7 @@ jobs:
               HOSTPORT="${HOST}:${PORT}"
               grep -qF "$HOSTPORT" "$SEEN_HOSTS" 2>/dev/null && continue
               printf '%s\n' "$HOSTPORT" >> "$SEEN_HOSTS"
-              # Сохраняем поля через разделитель | (не таб — чтобы не ломать xargs)
-              printf '%s|%s|%s|%s\n' "$BASE" "$HOST" "$PORT" "$PREFIX" >> "$ALL_CANDIDATES"
+              printf '%s\t%s\t%s\t%s\n' "$BASE" "$HOST" "$PORT" "$PREFIX" >> "$CONFIGS_TMP"
             done
 
             rm -f "$TMPFILE"
@@ -154,42 +152,9 @@ jobs:
             process_source "https://gist.githubusercontent.com/angelivan388283-beep/706d96d52a24deedea0fd825d73160e0/raw/HaizFill" "61"
           fi
 
-          # --- Параллельная nc-проверка через фоновые процессы с семафором ---
-          TOTAL_CANDS=$(wc -l < "$ALL_CANDIDATES" 2>/dev/null || echo 0)
-          echo "Батч ${{ matrix.batch }}: кандидатов для проверки: $TOTAL_CANDS"
-
-          MAX_PARALLEL=60
-          RUNNING=0
-          RESULTS_TMP=$(mktemp)
-
-          check_one() {
-            local LINE="$1"
-            local BASE HOST PORT PREFIX
-            BASE=$(printf '%s' "$LINE"  | cut -d'|' -f1)
-            HOST=$(printf '%s' "$LINE"  | cut -d'|' -f2)
-            PORT=$(printf '%s' "$LINE"  | cut -d'|' -f3)
-            PREFIX=$(printf '%s' "$LINE" | cut -d'|' -f4)
-            if nc -z -w1 "$HOST" "$PORT" 2>/dev/null; then
-              printf '%s\t%s\t%s\t%s\n' "$BASE" "$HOST" "$PORT" "$PREFIX"
-            fi
-          }
-          export -f check_one
-
-          while IFS= read -r LINE; do
-            check_one "$LINE" >> "$RESULTS_TMP" &
-            RUNNING=$((RUNNING + 1))
-            if [ "$RUNNING" -ge "$MAX_PARALLEL" ]; then
-              wait
-              RUNNING=0
-            fi
-          done < "$ALL_CANDIDATES"
-          wait
-
-          cat "$RESULTS_TMP" >> "$CONFIGS_TMP"
-          rm -f "$ALL_CANDIDATES" "$SEEN_HOSTS" "$RESULTS_TMP"
-
+          rm -f "$SEEN_HOSTS"
           FOUND=$(wc -l < "$CONFIGS_TMP" 2>/dev/null || echo 0)
-          echo "Батч ${{ matrix.batch }}: найдено живых серверов: $FOUND"
+          echo "Батч ${{ matrix.batch }}: собрано конфигов: $FOUND"
 
       - name: Upload batch artifact
         uses: actions/upload-artifact@v4
@@ -234,6 +199,7 @@ jobs:
           MERGED_TMP=$(mktemp)
           cat batch_*.tmp 2>/dev/null > "$MERGED_TMP"
 
+          # Глобальная дедупликация по host:port
           DEDUP_TMP=$(mktemp)
           SEEN=$(mktemp)
           while IFS=$'\t' read -r BASE HOST PORT PREFIX; do
@@ -244,7 +210,7 @@ jobs:
           done < "$MERGED_TMP"
 
           TOTAL=$(wc -l < "$DEDUP_TMP")
-          echo "Всего уникальных живых конфигов: $TOTAL"
+          echo "Всего уникальных конфигов: $TOTAL"
 
           IDX=1
           while IFS=$'\t' read -r BASE HOST PORT PREFIX; do
@@ -330,10 +296,8 @@ jobs:
               i=$((i + 1))
             done < "$chunk" > "$RETAGGED"
 
-            REMARKS="🇪🇺LTE | 1.${num} 🌐"
-
             jq -n \
-              --arg remarks "$REMARKS" \
+              --arg remarks "🇪🇺LTE | 1.${num} 🌐" \
               --slurpfile out "$RETAGGED" \
               '{
                 remarks: $remarks,
@@ -351,16 +315,8 @@ jobs:
                   domainMatcher: "hybrid",
                   domainStrategy: "IPIfNonMatch",
                   rules: [
-                    {
-                      type: "field",
-                      protocol: ["bittorrent"],
-                      outboundTag: "direct"
-                    },
-                    {
-                      type: "field",
-                      inboundTag: ["socks", "http"],
-                      balancerTag: "BALANCER"
-                    }
+                    {type: "field", protocol: ["bittorrent"], outboundTag: "direct"},
+                    {type: "field", inboundTag: ["socks", "http"], balancerTag: "BALANCER"}
                   ],
                   balancers: [{
                     tag: "BALANCER",
@@ -370,28 +326,16 @@ jobs:
                 },
                 inbounds: [
                   {
-                    tag: "socks",
-                    port: 10808,
-                    listen: "127.0.0.1",
+                    tag: "socks", port: 10808, listen: "127.0.0.1",
                     protocol: "socks",
                     settings: {udp: true, auth: "noauth"},
-                    sniffing: {
-                      enabled: true,
-                      routeOnly: false,
-                      destOverride: ["http", "tls", "quic"]
-                    }
+                    sniffing: {enabled: true, routeOnly: false, destOverride: ["http","tls","quic"]}
                   },
                   {
-                    tag: "http",
-                    port: 10809,
-                    listen: "127.0.0.1",
+                    tag: "http", port: 10809, listen: "127.0.0.1",
                     protocol: "http",
                     settings: {allowTransparent: false},
-                    sniffing: {
-                      enabled: true,
-                      routeOnly: false,
-                      destOverride: ["http", "tls", "quic"]
-                    }
+                    sniffing: {enabled: true, routeOnly: false, destOverride: ["http","tls","quic"]}
                   }
                 ],
                 outbounds: ($out + [
@@ -405,7 +349,6 @@ jobs:
           while IFS= read -r line; do
             printf '%s\n' "$line" >> "$CHUNK"
             LINE_COUNT=$((LINE_COUNT + 1))
-
             if [ "$LINE_COUNT" -eq "$PACK_SIZE" ]; then
               PACK_JSON=$(make_pack "$PACK_NUM" "$CHUNK")
               TMP_ARRAY=$(mktemp)
@@ -413,8 +356,7 @@ jobs:
               mv "$TMP_ARRAY" "$PACKS_ARRAY"
               echo "✅ Пак 1.${PACK_NUM} добавлен (50 серверов)"
               PACK_NUM=$((PACK_NUM + 1))
-              rm -f "$CHUNK"
-              CHUNK=$(mktemp)
+              rm -f "$CHUNK"; CHUNK=$(mktemp)
               LINE_COUNT=0
             fi
           done < "$ALL_OUTBOUNDS"
