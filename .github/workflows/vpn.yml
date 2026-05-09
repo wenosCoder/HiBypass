@@ -1,4 +1,163 @@
-merge:
+name: Merge VLESS Configs
+
+on:
+  schedule:
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    timeout-minutes: 25
+
+    strategy:
+      matrix:
+        batch: [1, 2, 3, 4, 5, 6]
+      fail-fast: false
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: sudo apt-get install -y jq
+
+      - name: Fetch batch ${{ matrix.batch }}
+        timeout-minutes: 20
+        run: |
+          CONFIGS_TMP="batch_${{ matrix.batch }}.tmp"
+          touch "$CONFIGS_TMP"
+
+          decode_until_vless() {
+            local INFILE="$1"
+            local DEPTH=0
+            while [ $DEPTH -lt 5 ]; do
+              grep -qaE '^vless://' "$INFILE" && return 0
+              local TMP_DEC
+              TMP_DEC=$(mktemp)
+              base64 -d "$INFILE" > "$TMP_DEC" 2>/dev/null
+              if [ ! -s "$TMP_DEC" ]; then rm -f "$TMP_DEC"; return 1; fi
+              if head -c 512 "$TMP_DEC" | cat -v | grep -q '\^@'; then rm -f "$TMP_DEC"; return 1; fi
+              mv "$TMP_DEC" "$INFILE"
+              DEPTH=$((DEPTH + 1))
+            done
+            return 1
+          }
+
+          process_source() {
+            local URL="$1" PREFIX="$2"
+            local TMPFILE
+            TMPFILE=$(mktemp)
+            curl -fsSL --max-time 15 --connect-timeout 5 "$URL" \
+              > "$TMPFILE" 2>/dev/null || { rm -f "$TMPFILE"; return; }
+
+            if ! grep -qaE '^vless://' "$TMPFILE"; then
+              decode_until_vless "$TMPFILE" || true
+            fi
+
+            grep -aE '^vless://' "$TMPFILE" | sed 's/#.*//' | while IFS= read -r BASE; do
+              HOST=$(printf '%s' "$BASE" | sed 's/.*@//;s/[:/].*//')
+              PORT=$(printf '%s' "$BASE" | sed 's/.*@[^:]*://;s/[/?].*//')
+              printf '%s' "$PORT" | grep -qE '^[0-9]+$' || continue
+              printf '%s\t%s\t%s\t%s\n' "$BASE" "$HOST" "$PORT" "$PREFIX"
+            done >> "$CONFIGS_TMP"
+
+            rm -f "$TMPFILE"
+          }
+
+          if [ "${{ matrix.batch }}" = "1" ]; then
+            process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/Vless-Reality-White-Lists-Rus-Mobile-2.txt" "1"
+            process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/Vless-Reality-White-Lists-Rus-Mobile.txt" "2"
+            process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/BLACK_VLESS_RUS.txt" "3"
+            process_source "https://github.com/igareck/vpn-configs-for-russia/raw/refs/heads/main/BLACK_VLESS_RUS_mobile.txt" "4"
+            process_source "https://raw.githubusercontent.com/zieng2/wl/refs/heads/main/vless_universal.txt" "5"
+            process_source "https://raw.githubusercontent.com/zieng2/wl/refs/heads/main/vless_lite.txt" "6"
+            process_source "https://raw.githubusercontent.com/whoahaow/rjsxrd/refs/heads/main/githubmirror/bypass/bypass-all.txt" "7"
+            process_source "https://raw.githubusercontent.com/whoahaow/rjsxrd/refs/heads/main/githubmirror/split-by-protocols/vless-secure.txt" "8"
+            process_source "https://raw.githubusercontent.com/whoahaow/rjsxrd/refs/heads/main/githubmirror/split-by-protocols/vless.txt" "9"
+            process_source "https://sub.obbhod.online/premium" "10"
+          fi
+
+          if [ "${{ matrix.batch }}" = "2" ]; then
+            process_source "https://mifa.world/vless" "11"
+            process_source "https://raw.githubusercontent.com/Temnuk/naabuzil/refs/heads/main/whitelist_full" "12"
+            process_source "https://raw.githubusercontent.com/Temnuk/naabuzil/refs/heads/main/wifi" "13"
+            process_source "https://raw.githubusercontent.com/VOID-Anonymity/V.O.I.D-VPN_Bypass/refs/heads/main/url_work.txt" "14"
+            process_source "https://raw.githubusercontent.com/AvenCores/goida-vpn-configs/refs/heads/main/githubmirror/26.txt" "15"
+            process_source "https://raw.githubusercontent.com/EtoNeYaProject/etoneyaproject.github.io/refs/heads/main/2" "16"
+            process_source "https://raw.githubusercontent.com/ByeWhiteLists/ByeWhiteLists2/refs/heads/main/ByeWhiteLists2.txt" "17"
+            process_source "https://ety.twinkvibe.gay/whitelist" "18"
+            process_source "https://white-lists.vercel.app/api/filter?code=RU" "19"
+            process_source "https://raw.githubusercontent.com/Hidashimora/free-vpn-anti-rkn/main/configs/31.txt" "20"
+          fi
+
+          if [ "${{ matrix.batch }}" = "3" ]; then
+            process_source "https://raw.githubusercontent.com/tankist939-afk/Obhod-WL/refs/heads/main/Obhod%20WL" "21"
+            process_source "https://gbr.mydan.online/configs" "22"
+            process_source "https://gitverse.ru/api/repos/bywarm/rser/raw/branch/master/wl.txt" "23"
+            process_source "https://raw.githubusercontent.com/whoahaow/rjsxrd/refs/heads/main/githubmirror/bypass-unsecure/bypass-unsecure-all.txt" "24"
+            process_source "https://raw.githubusercontent.com/whoahaow/rjsxrd/refs/heads/main/githubmirror/bypass/raw/bypass-all-raw.txt" "25"
+            process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/WHITE-CIDR-RU-all.txt" "26"
+            process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/WHITE-CIDR-RU-checked.txt" "27"
+            process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/WHITE-SNI-RU-all.txt" "28"
+            process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/BLACK_SS%2BAll_RUS.txt" "29"
+            process_source "https://gist.github.com/DestroyST6767/50af50221ca1858ba2084efc0f524fbc.txt" "30"
+          fi
+
+          if [ "${{ matrix.batch }}" = "4" ]; then
+            process_source "https://github.com/sakha1370/OpenRay/raw/refs/heads/main/output/all_valid_proxies.txt" "31"
+            process_source "https://raw.githubusercontent.com/sevcator/5ubscrpt10n/main/protocols/vl.txt" "32"
+            process_source "https://raw.githubusercontent.com/yitong2333/proxy-minging/refs/heads/main/v2ray.txt" "33"
+            process_source "https://raw.githubusercontent.com/acymz/AutoVPN/refs/heads/main/data/V2.txt" "34"
+            process_source "https://raw.githubusercontent.com/miladtahanian/V2RayCFGDumper/refs/heads/main/sub.txt" "35"
+            process_source "https://raw.githubusercontent.com/roosterkid/openproxylist/main/V2RAY_RAW.txt" "36"
+            process_source "https://raw.githubusercontent.com/Epodonios/v2ray-configs/refs/heads/main/All_Configs_Sub.txt" "37"
+            process_source "https://raw.githubusercontent.com/CidVpn/cid-vpn-config/refs/heads/main/general.txt" "38"
+            process_source "https://raw.githubusercontent.com/mohamadfg-dev/telegram-v2ray-configs-collector/refs/heads/main/category/vless.txt" "39"
+            process_source "https://raw.githubusercontent.com/mheidari98/.proxy/refs/heads/main/vless" "40"
+          fi
+
+          if [ "${{ matrix.batch }}" = "5" ]; then
+            process_source "https://raw.githubusercontent.com/youfoundamin/V2rayCollector/main/mixed_iran.txt" "41"
+            process_source "https://raw.githubusercontent.com/expressalaki/ExpressVPN/refs/heads/main/configs3.txt" "42"
+            process_source "https://raw.githubusercontent.com/MahsaNetConfigTopic/config/refs/heads/main/xray_final.txt" "43"
+            process_source "https://github.com/LalatinaHub/Mineral/raw/refs/heads/master/result/nodes" "44"
+            process_source "https://raw.githubusercontent.com/miladtahanian/Config-Collector/refs/heads/main/mixed_iran.txt" "45"
+            process_source "https://raw.githubusercontent.com/Pawdroid/Free-servers/refs/heads/main/sub" "46"
+            process_source "https://github.com/MhdiTaheri/V2rayCollector_Py/raw/refs/heads/main/sub/Mix/mix.txt" "47"
+            process_source "https://raw.githubusercontent.com/free18/v2ray/refs/heads/main/v.txt" "48"
+            process_source "https://github.com/MhdiTaheri/V2rayCollector/raw/refs/heads/main/sub/mix" "49"
+            process_source "https://github.com/Argh94/Proxy-List/raw/refs/heads/main/All_Config.txt" "50"
+          fi
+
+          if [ "${{ matrix.batch }}" = "6" ]; then
+            process_source "https://raw.githubusercontent.com/shabane/kamaji/master/hub/merged.txt" "51"
+            process_source "https://raw.githubusercontent.com/wuqb2i4f/xray-config-toolkit/main/output/base64/mix-uri" "52"
+            process_source "https://github.com/Mr-Meshky/vify/raw/refs/heads/main/configs/vless.txt" "53"
+            process_source "https://raw.githubusercontent.com/V2RayRoot/V2RayConfig/refs/heads/main/Config/vless.txt" "54"
+            process_source "https://github.com/Epodonios/v2ray-configs/raw/main/Splitted-By-Protocol/trojan.txt" "55"
+            process_source "https://github.com/rtwo2/FastNodes/raw/refs/heads/main/sub/protocols/hysteria2.txt" "56"
+            process_source "https://raw.githubusercontent.com/whoahaow/rjsxrd/refs/heads/main/githubmirror/split-by-protocols/tuic.txt" "57"
+            process_source "https://gist.githubusercontent.com/angelivan388283-beep/706d96d52a24deedea0fd825d73160e0/raw/ae5c2309e86954dcf061d6da4bba1dfefbd3ac3c/HaizWait2.0" "58"
+            process_source "https://gist.githubusercontent.com/angelivan388283-beep/706d96d52a24deedea0fd825d73160e0/raw/ae5c2309e86954dcf061d6da4bba1dfefbd3ac3c/heisen2.0" "59"
+            process_source "https://gist.githubusercontent.com/angelivan388283-beep/706d96d52a24deedea0fd825d73160e0/raw/ae5c2309e86954dcf061d6da4bba1dfefbd3ac3c/heisen1.0" "60"
+            process_source "https://gist.githubusercontent.com/angelivan388283-beep/706d96d52a24deedea0fd825d73160e0/raw/HaizFill" "61"
+          fi
+
+          FOUND=$(wc -l < "$CONFIGS_TMP" 2>/dev/null || echo 0)
+          echo "Батч ${{ matrix.batch }}: собрано конфигов: $FOUND"
+
+      - name: Upload batch artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: batch-${{ matrix.batch }}
+          path: batch_${{ matrix.batch }}.tmp
+          retention-days: 1
+          if-no-files-found: warn
+
+  merge:
     needs: fetch
     runs-on: ubuntu-latest
     permissions:
@@ -99,8 +258,7 @@ merge:
           CONF_COUNT=$((IDX - 1))
           echo "Сгенерировано outbounds: $CONF_COUNT"
 
-          # ── Функция записывает пак прямо в файл, без subshell через $() ──
-          # ARG1=remarks ARG2=selector ARG3=chunk_file ARG4=output_file
+          # Сборка пака: write_pack REMARKS SELECTOR CHUNK_FILE OUT_FILE
           write_pack() {
             local REMARKS="$1"
             local SELECTOR="$2"
@@ -113,14 +271,16 @@ merge:
               printf '%s\n' "$obj" | jq --arg t "${SELECTOR}-${i}" '.tag = $t'
               i=$((i + 1))
             done < "$CHUNK" > "$RETAGGED"
-
             jq -n \
               --arg r "$REMARKS" \
               --arg sel "$SELECTOR" \
               --slurpfile out "$RETAGGED" \
               '{
                 remarks: $r,
-                dns: {servers: ["1.1.1.1","1.0.0.1","8.8.8.8"], queryStrategy: "UseIPv4"},
+                dns: {
+                  servers: ["1.1.1.1","1.0.0.1","8.8.8.8"],
+                  queryStrategy: "UseIPv4"
+                },
                 observatory: {
                   enableConcurrency: true,
                   probeInterval: "15s",
@@ -152,12 +312,15 @@ merge:
                     sniffing: {enabled: true, routeOnly: false, destOverride: ["http","tls","quic"]}
                   }
                 ],
-                outbounds: ($out + [{tag:"direct",protocol:"freedom"},{tag:"block",protocol:"blackhole"}])
+                outbounds: ($out + [
+                  {tag: "direct", protocol: "freedom"},
+                  {tag: "block",  protocol: "blackhole"}
+                ])
               }' > "$OUTFILE"
             rm -f "$RETAGGED"
           }
 
-          # ── LTE packs: по 50 серверов → packs.json ────────────────────────
+          # ── LTE: по 50 серверов → packs.json ─────────────────────────────
           LTE_PACK_SIZE=50
           LTE_PACK_NUM=1
           LTE_PACKS_ARRAY=$(mktemp)
@@ -177,7 +340,9 @@ merge:
               rm -f "$PACK_TMP"
               echo "✅ LTE пак 1.${LTE_PACK_NUM} (50 серверов)"
               LTE_PACK_NUM=$((LTE_PACK_NUM + 1))
-              rm -f "$LTE_CHUNK"; LTE_CHUNK=$(mktemp); LTE_LINE_COUNT=0
+              rm -f "$LTE_CHUNK"
+              LTE_CHUNK=$(mktemp)
+              LTE_LINE_COUNT=0
             fi
           done < "$ALL_OUTBOUNDS"
 
@@ -194,7 +359,7 @@ merge:
           mv "$LTE_PACKS_ARRAY" packs.json
           rm -f "$LTE_CHUNK"
 
-          # ── HARD packs: по 250 серверов → phard.json ─────────────────────
+          # ── HARD: по 250 серверов → phard.json ───────────────────────────
           HARD_PACK_SIZE=250
           HARD_PACK_NUM=1
           HARD_PACKS_ARRAY=$(mktemp)
@@ -214,7 +379,9 @@ merge:
               rm -f "$PACK_TMP"
               echo "✅ HARD пак 1.${HARD_PACK_NUM} (250 серверов)"
               HARD_PACK_NUM=$((HARD_PACK_NUM + 1))
-              rm -f "$HARD_CHUNK"; HARD_CHUNK=$(mktemp); HARD_LINE_COUNT=0
+              rm -f "$HARD_CHUNK"
+              HARD_CHUNK=$(mktemp)
+              HARD_LINE_COUNT=0
             fi
           done < "$ALL_OUTBOUNDS"
 
