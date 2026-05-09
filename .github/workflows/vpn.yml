@@ -29,49 +29,23 @@ jobs:
         run: |
           CONFIGS_TMP="batch_${{ matrix.batch }}.tmp"
           SEEN_HOSTS=$(mktemp)
-          CHECK_QUEUE=$(mktemp)
+          ALL_CANDIDATES=$(mktemp)
 
-          flush_queue() {
-            [ ! -s "$CHECK_QUEUE" ] && return
-            local RESULTS_TMP
-            RESULTS_TMP=$(mktemp)
-
-            while IFS=$'\t' read -r BASE HOST PORT PREFIX; do
-              (
-                nc -z -w1 "$HOST" "$PORT" 2>/dev/null || exit 1
-                printf '%s\t%s\t%s\t%s\n' \
-                  "$BASE" "$HOST" "$PORT" "$PREFIX"
-              ) >> "$RESULTS_TMP" &
-            done < "$CHECK_QUEUE"
-            wait
-
-            cat "$RESULTS_TMP" >> "$CONFIGS_TMP"
-            rm -f "$RESULTS_TMP"
-            > "$CHECK_QUEUE"
-          }
-
-          QUEUE_SIZE=0
-
-          # Рекурсивный декодер base64: пробует декодировать до тех пор,
-          # пока в файле не появятся строки vless://
-          # Быстрая проверка бинарности через head без od/file
+          # Рекурсивный декодер base64
           decode_until_vless() {
             local INFILE="$1"
             local MAX_DEPTH=5
             local DEPTH=0
             while [ $DEPTH -lt $MAX_DEPTH ]; do
-              # Если уже есть vless:// — готово
               grep -qaE '^vless://' "$INFILE" && return 0
               local TMP_DEC
               TMP_DEC=$(mktemp)
-              # Пробуем декодировать base64
               base64 -d "$INFILE" > "$TMP_DEC" 2>/dev/null
-              # Пустой результат — выходим
               if [ ! -s "$TMP_DEC" ]; then
                 rm -f "$TMP_DEC"
                 return 1
               fi
-              # Быстрая проверка на бинарность: ищем нулевой байт только в первых 512 байтах
+              # Быстрая проверка бинарности по первым 512 байтам
               if head -c 512 "$TMP_DEC" | cat -v | grep -q '\^@'; then
                 rm -f "$TMP_DEC"
                 return 1
@@ -89,33 +63,23 @@ jobs:
             curl -fsSL --max-time 15 --connect-timeout 5 "$URL" \
               > "$TMPFILE" 2>/dev/null || { rm -f "$TMPFILE"; return; }
 
-            # Если нет строк vless:// — пробуем рекурсивно декодировать base64
             if ! grep -qaE '^vless://' "$TMPFILE"; then
               decode_until_vless "$TMPFILE" || true
             fi
 
-            # -a: обрабатывать бинарные файлы как текст, чтобы не упасть
+            # Собираем кандидатов в общий файл (без subshell-проблем с переменными)
             grep -aE '^vless://' "$TMPFILE" | sort -u | while IFS= read -r line; do
-
               BASE=$(echo "$line" | sed 's/#.*//')
               HOST=$(echo "$BASE" | sed 's/.*@//;s/[:/].*//')
-
               PORT=$(echo "$BASE" | sed 's/.*@[^:]*://;s/[/?].*//')
               echo "$PORT" | grep -qE '^[0-9]+$' || continue
-
               HOSTPORT="${HOST}:${PORT}"
               grep -qF "$HOSTPORT" "$SEEN_HOSTS" 2>/dev/null && continue
               echo "$HOSTPORT" >> "$SEEN_HOSTS"
-
               printf '%s\t%s\t%s\t%s\n' "$BASE" "$HOST" "$PORT" "$PREFIX" \
-                >> "$CHECK_QUEUE"
-              QUEUE_SIZE=$((QUEUE_SIZE + 1))
-
-              if [ "$QUEUE_SIZE" -ge 20 ]; then
-                flush_queue
-                QUEUE_SIZE=0
-              fi
+                >> "$ALL_CANDIDATES"
             done
+
             rm -f "$TMPFILE"
           }
 
@@ -198,8 +162,26 @@ jobs:
             process_source "https://gist.githubusercontent.com/angelivan388283-beep/706d96d52a24deedea0fd825d73160e0/raw/HaizFill" "61"
           fi
 
-          flush_queue
-          rm -f "$CHECK_QUEUE" "$SEEN_HOSTS"
+          # --- Параллельная nc-проверка всех кандидатов за раз ---
+          # Ограничиваем параллелизм через xargs: не более 50 одновременных nc
+          TOTAL_CANDS=$(wc -l < "$ALL_CANDIDATES" 2>/dev/null || echo 0)
+          echo "Батч ${{ matrix.batch }}: кандидатов для проверки: $TOTAL_CANDS"
+
+          if [ -s "$ALL_CANDIDATES" ]; then
+            # Передаём каждую строку в subshell через xargs с ограничением параллелизма
+            # xargs -P 50 запускает не более 50 nc одновременно, -L 1 = одна строка на процесс
+            cat "$ALL_CANDIDATES" | xargs -I{} -P 50 -L 1 sh -c '
+              LINE="$1"
+              BASE=$(printf "%s" "$LINE" | cut -f1)
+              HOST=$(printf "%s" "$LINE" | cut -f2)
+              PORT=$(printf "%s" "$LINE" | cut -f3)
+              PREFIX=$(printf "%s" "$LINE" | cut -f4)
+              nc -z -w1 "$HOST" "$PORT" 2>/dev/null && \
+                printf "%s\t%s\t%s\t%s\n" "$BASE" "$HOST" "$PORT" "$PREFIX"
+            ' -- {} >> "$CONFIGS_TMP" 2>/dev/null || true
+          fi
+
+          rm -f "$ALL_CANDIDATES" "$SEEN_HOSTS"
           FOUND=$(wc -l < "$CONFIGS_TMP" 2>/dev/null || echo 0)
           echo "Батч ${{ matrix.batch }}: найдено живых серверов: $FOUND"
 
@@ -257,7 +239,7 @@ jobs:
           done < "$MERGED_TMP"
 
           TOTAL=$(wc -l < "$DEDUP_TMP")
-          echo "Всего уникальных живых TCP конфигов: $TOTAL"
+          echo "Всего уникальных живых конфигов: $TOTAL"
 
           IDX=1
           while IFS=$'\t' read -r BASE HOST PORT PREFIX; do
