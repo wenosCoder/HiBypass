@@ -195,7 +195,6 @@ jobs:
           echo "Всего строк до дедупликации: $(wc -l < "$MERGED_TMP")"
 
           # Дедупликация через awk по полю host:port (поля 2 и 3)
-          # Быстро, без grep в цикле, не падает на спецсимволах
           DEDUP_TMP=$(mktemp)
           awk -F'\t' '!seen[$2":"$3]++' "$MERGED_TMP" > "$DEDUP_TMP"
 
@@ -209,10 +208,10 @@ jobs:
             echo "Обрезано до 5000 конфигов"
           fi
 
-          # Генерируем vlees.txt
+          # Генерируем vlees.txt с новым именем
           IDX=1
           while IFS=$'\t' read -r BASE HOST PORT PREFIX; do
-            printf '%s\n' "${BASE}#🇪🇺LTE | ${IDX} 🌐 RU" >> vlees.txt
+            printf '%s\n' "${BASE}#🇺🇸💫 LTE | AUTO | ${IDX} 🏳🇷🇺" >> vlees.txt
             IDX=$((IDX + 1))
           done < "$DEDUP_TMP"
 
@@ -225,7 +224,7 @@ jobs:
 
             UUID=$(printf '%s' "$BASE" | sed 's/vless:\/\///;s/@.*//')
 
-            # Парсим query string через sed
+            # Парсим query string
             QUERY_RAW=$(printf '%s' "$BASE" | grep -o '?[^#]*')
             get_param() {
               printf '%s' "$QUERY_RAW" | grep -o "${1}=[^&]*" | head -1 | cut -d= -f2-
@@ -265,27 +264,21 @@ jobs:
           CONF_COUNT=$((IDX - 1))
           echo "Сгенерировано outbounds: $CONF_COUNT"
 
-          # Собираем паки по 50
-          PACK_SIZE=50
-          PACK_NUM=1
+          # Собираем всё в один единый пак
           PACKS_ARRAY=$(mktemp)
           echo "[]" > "$PACKS_ARRAY"
 
-          # Читаем все outbounds в массив файлов-чанков
-          CHUNK=$(mktemp)
-          LINE_COUNT=0
-
           make_pack() {
-            local num="$1" chunk="$2"
+            local remark="$1" chunk="$2"
             local RETAGGED
             RETAGGED=$(mktemp)
             local i=1
             while IFS= read -r obj; do
-              printf '%s' "$obj" | jq --arg t "lte-${i}" '.tag = $t'
+              printf '%s' "$obj" | jq -c --arg t "lte-${i}" '.tag = $t'
               i=$((i + 1))
             done < "$chunk" > "$RETAGGED"
 
-            jq -n --arg r "🇪🇺LTE | 1.${num} 🌐" --slurpfile out "$RETAGGED" '{
+            jq -n --arg r "$remark" --slurpfile out "$RETAGGED" '{
               remarks: $r,
               dns: {servers: ["1.1.1.1","1.0.0.1","8.8.8.8"], queryStrategy: "UseIPv4"},
               observatory: {enableConcurrency: true, probeInterval: "15s",
@@ -311,38 +304,22 @@ jobs:
             rm -f "$RETAGGED"
           }
 
-          while IFS= read -r line; do
-            printf '%s\n' "$line" >> "$CHUNK"
-            LINE_COUNT=$((LINE_COUNT + 1))
-            if [ "$LINE_COUNT" -eq "$PACK_SIZE" ]; then
-              PACK_JSON=$(make_pack "$PACK_NUM" "$CHUNK")
-              TMP_ARRAY=$(mktemp)
-              jq --argjson p "$PACK_JSON" '. + [$p]' "$PACKS_ARRAY" > "$TMP_ARRAY"
-              mv "$TMP_ARRAY" "$PACKS_ARRAY"
-              echo "✅ Пак 1.${PACK_NUM} (50 серверов)"
-              PACK_NUM=$((PACK_NUM + 1))
-              rm -f "$CHUNK"; CHUNK=$(mktemp); LINE_COUNT=0
-            fi
-          done < "$ALL_OUTBOUNDS"
-
-          if [ "$LINE_COUNT" -gt 0 ]; then
-            PACK_JSON=$(make_pack "$PACK_NUM" "$CHUNK")
+          if [ "$CONF_COUNT" -gt 0 ]; then
+            PACK_JSON=$(make_pack "🇺🇸💫 LTE | AUTO | 🏳🇷🇺" "$ALL_OUTBOUNDS")
             TMP_ARRAY=$(mktemp)
             jq --argjson p "$PACK_JSON" '. + [$p]' "$PACKS_ARRAY" > "$TMP_ARRAY"
-            mv "$TMP_ARRAY" "$PACKS_ARRAY"
-            echo "✅ Пак 1.${PACK_NUM} ($LINE_COUNT серверов)"
+            mv "$TMP_ARRAY" packs.json
+            echo "✅ Все $CONF_COUNT серверов добавлены в пак '🇺🇸💫 LTE | AUTO | 🏳🇷🇺'"
           fi
 
-          mv "$PACKS_ARRAY" packs.json
-          rm -f "$CHUNK" "$MERGED_TMP" "$DEDUP_TMP" "$ALL_OUTBOUNDS"
-          echo "✅ Готово: $CONF_COUNT серверов в $PACK_NUM паках"
+          rm -f "$PACKS_ARRAY" "$MERGED_TMP" "$DEDUP_TMP" "$ALL_OUTBOUNDS"
 
       - name: Validate JSON
         run: |
           if jq empty packs.json 2>/dev/null; then
             PACK_COUNT=$(jq 'length' packs.json)
             SERVER_COUNT=$(jq '[.[].outbounds[]|select(.tag|startswith("lte-"))]|length' packs.json)
-            echo "✅ packs.json валидный | $PACK_COUNT паков | $SERVER_COUNT серверов"
+            echo "✅ packs.json валидный | $PACK_COUNT пак | $SERVER_COUNT серверов внутри"
           else
             echo "❌ packs.json невалидный!"
             exit 1
@@ -354,6 +331,5 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add vlees.txt packs.json
           SERVER_COUNT=$(jq '[.[].outbounds[]|select(.tag|startswith("lte-"))]|length' packs.json)
-          PACK_COUNT=$(jq 'length' packs.json)
-          git diff --staged --quiet || git commit -m "Auto: $(date -u '+%Y-%m-%d %H:%M UTC') | $SERVER_COUNT серверов | $PACK_COUNT паков"
+          git diff --staged --quiet || git commit -m "Auto: $(date -u '+%Y-%m-%d %H:%M UTC') | $SERVER_COUNT серверов в едином паке"
           git push
