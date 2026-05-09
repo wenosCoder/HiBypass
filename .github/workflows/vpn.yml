@@ -211,6 +211,7 @@ jobs:
             IDX=$((IDX + 1))
           done < "$DEDUP_TMP"
 
+          # ── Генерируем ALL_OUTBOUNDS (все конфиги) ────────────────────────
           ALL_OUTBOUNDS=$(mktemp)
           IDX=1
 
@@ -258,7 +259,58 @@ jobs:
           CONF_COUNT=$((IDX - 1))
           echo "Сгенерировано outbounds: $CONF_COUNT"
 
-          # Сборка пака: write_pack REMARKS SELECTOR CHUNK_FILE OUT_FILE
+          # ── Генерируем V2_OUTBOUNDS: только IP начинающиеся на 84. 158. 51. ──
+          V2_OUTBOUNDS=$(mktemp)
+          IDX2=1
+
+          while IFS=$'\t' read -r BASE HOST PORT PREFIX; do
+            printf '%s' "$PORT" | grep -qE '^[0-9]+$' || continue
+
+            # Фильтр: HOST должен быть IP начинающимся на 84. или 158. или 51.
+            printf '%s' "$HOST" | grep -qE '^(84\.|158\.|51\.)' || continue
+
+            UUID=$(printf '%s' "$BASE" | sed 's/vless:\/\///;s/@.*//')
+            QUERY_RAW=$(printf '%s' "$BASE" | grep -o '?[^#]*')
+
+            get_param() {
+              printf '%s' "$QUERY_RAW" | grep -o "${1}=[^&]*" | head -1 | cut -d= -f2-
+            }
+
+            FLOW=$(get_param flow); SNI=$(get_param sni); PBK=$(get_param pbk)
+            FP=$(get_param fp);     SID=$(get_param sid); SEC=$(get_param security)
+
+            [ -z "$FP" ]   && FP="chrome"
+            [ -z "$SEC" ]  && SEC="reality"
+            [ -z "$FLOW" ] && FLOW="xtls-rprx-vision"
+            [ -z "$SID" ]  && SID=""
+
+            jq -cn \
+              --arg  tag   "v2-${IDX2}" \
+              --arg  addr  "$HOST"       \
+              --argjson port "$PORT"     \
+              --arg  uuid  "$UUID"       \
+              --arg  flow  "$FLOW"       \
+              --arg  sec   "$SEC"        \
+              --arg  sni   "$SNI"        \
+              --arg  pbk   "$PBK"        \
+              --arg  fp    "$FP"         \
+              --arg  sid   "$SID"        \
+              '{
+                tag: $tag, protocol: "vless",
+                settings: {vnext: [{address: $addr, port: $port,
+                  users: [{id: $uuid, encryption: "none", flow: $flow}]}]},
+                streamSettings: {network: "tcp", security: $sec,
+                  realitySettings: {serverName: $sni, publicKey: $pbk,
+                    shortId: $sid, fingerprint: $fp}}
+              }' >> "$V2_OUTBOUNDS"
+
+            IDX2=$((IDX2 + 1))
+          done < "$DEDUP_TMP"
+
+          V2_COUNT=$((IDX2 - 1))
+          echo "V2 outbounds (фильтр по IP): $V2_COUNT"
+
+          # ── Универсальная функция записи пака в файл ──────────────────────
           write_pack() {
             local REMARKS="$1"
             local SELECTOR="$2"
@@ -396,8 +448,49 @@ jobs:
           fi
 
           mv "$HARD_PACKS_ARRAY" phard.json
-          rm -f "$HARD_CHUNK" "$MERGED_TMP" "$DEDUP_TMP" "$ALL_OUTBOUNDS"
-          echo "✅ Готово: $CONF_COUNT серверов | LTE паков: $LTE_PACK_NUM | HARD паков: $HARD_PACK_NUM"
+          rm -f "$HARD_CHUNK"
+
+          # ── V2: по 100 серверов, только IP 84.* 158.* 51.* → packsV2.json ──
+          V2_PACK_SIZE=100
+          V2_PACK_NUM=1
+          V2_PACKS_ARRAY=$(mktemp)
+          echo "[]" > "$V2_PACKS_ARRAY"
+          V2_CHUNK=$(mktemp)
+          V2_LINE_COUNT=0
+
+          while IFS= read -r line; do
+            printf '%s\n' "$line" >> "$V2_CHUNK"
+            V2_LINE_COUNT=$((V2_LINE_COUNT + 1))
+            if [ "$V2_LINE_COUNT" -eq "$V2_PACK_SIZE" ]; then
+              PACK_TMP=$(mktemp)
+              write_pack "🇪🇺💫 LTE V2 | 1.${V2_PACK_NUM} 🌐" "v2" "$V2_CHUNK" "$PACK_TMP"
+              TMP_ARRAY=$(mktemp)
+              jq --slurpfile p "$PACK_TMP" '. + $p' "$V2_PACKS_ARRAY" > "$TMP_ARRAY"
+              mv "$TMP_ARRAY" "$V2_PACKS_ARRAY"
+              rm -f "$PACK_TMP"
+              echo "✅ V2 пак 1.${V2_PACK_NUM} (100 серверов)"
+              V2_PACK_NUM=$((V2_PACK_NUM + 1))
+              rm -f "$V2_CHUNK"
+              V2_CHUNK=$(mktemp)
+              V2_LINE_COUNT=0
+            fi
+          done < "$V2_OUTBOUNDS"
+
+          if [ "$V2_LINE_COUNT" -gt 0 ]; then
+            PACK_TMP=$(mktemp)
+            write_pack "🇪🇺💫 LTE V2 | 1.${V2_PACK_NUM} 🌐" "v2" "$V2_CHUNK" "$PACK_TMP"
+            TMP_ARRAY=$(mktemp)
+            jq --slurpfile p "$PACK_TMP" '. + $p' "$V2_PACKS_ARRAY" > "$TMP_ARRAY"
+            mv "$TMP_ARRAY" "$V2_PACKS_ARRAY"
+            rm -f "$PACK_TMP"
+            echo "✅ V2 пак 1.${V2_PACK_NUM} ($V2_LINE_COUNT серверов)"
+          fi
+
+          mv "$V2_PACKS_ARRAY" packsV2.json
+          rm -f "$V2_CHUNK" "$MERGED_TMP" "$DEDUP_TMP" "$ALL_OUTBOUNDS" "$V2_OUTBOUNDS"
+
+          echo "✅ Готово: $CONF_COUNT серверов всего | V2 серверов (фильтр): $V2_COUNT"
+          echo "   LTE паков: $LTE_PACK_NUM | HARD паков: $HARD_PACK_NUM | V2 паков: $V2_PACK_NUM"
 
       - name: Validate JSON
         run: |
@@ -419,14 +512,25 @@ jobs:
             exit 1
           fi
 
+          if jq empty packsV2.json 2>/dev/null; then
+            V2_PACK_COUNT=$(jq 'length' packsV2.json)
+            V2_SERVER_COUNT=$(jq '[.[].outbounds[]|select(.tag|startswith("v2-"))]|length' packsV2.json)
+            echo "✅ packsV2.json валидный | $V2_PACK_COUNT паков | $V2_SERVER_COUNT серверов"
+          else
+            echo "❌ packsV2.json невалидный!"
+            exit 1
+          fi
+
       - name: Commit and push
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add vlees.txt packs.json phard.json
+          git add vlees.txt packs.json phard.json packsV2.json
           SERVER_COUNT=$(jq '[.[].outbounds[]|select(.tag|startswith("lte-"))]|length' packs.json)
           PACK_COUNT=$(jq 'length' packs.json)
           HARD_SERVER_COUNT=$(jq '[.[].outbounds[]|select(.tag|startswith("hard-"))]|length' phard.json)
           HARD_PACK_COUNT=$(jq 'length' phard.json)
-          git diff --staged --quiet || git commit -m "Auto: $(date -u '+%Y-%m-%d %H:%M UTC') | LTE: $SERVER_COUNT серверов $PACK_COUNT паков | HARD: $HARD_SERVER_COUNT серверов $HARD_PACK_COUNT паков"
+          V2_SERVER_COUNT=$(jq '[.[].outbounds[]|select(.tag|startswith("v2-"))]|length' packsV2.json)
+          V2_PACK_COUNT=$(jq 'length' packsV2.json)
+          git diff --staged --quiet || git commit -m "Auto: $(date -u '+%Y-%m-%d %H:%M UTC') | LTE: $SERVER_COUNT серверов $PACK_COUNT паков | HARD: $HARD_SERVER_COUNT серверов $HARD_PACK_COUNT паков | V2: $V2_SERVER_COUNT серверов $V2_PACK_COUNT паков"
           git push
