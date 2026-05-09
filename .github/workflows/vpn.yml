@@ -156,7 +156,7 @@ jobs:
           name: batch-${{ matrix.batch }}
           path: batch_${{ matrix.batch }}.tmp
           retention-days: 1
-          if-no-files-found: warn
+          if-no-files-found: ignore
 
   merge:
     needs: fetch
@@ -191,41 +191,41 @@ jobs:
             > vlees.txt
 
           MERGED_TMP=$(mktemp)
-          cat batch_*.tmp 2>/dev/null > "$MERGED_TMP"
+          shopt -s nullglob # Защита от отсутствия файлов
+          cat batch_*.tmp 2>/dev/null > "$MERGED_TMP" || true
+          shopt -u nullglob
+
           echo "Всего строк до дедупликации: $(wc -l < "$MERGED_TMP")"
 
-          # Дедупликация через awk по полю host:port (поля 2 и 3)
           DEDUP_TMP=$(mktemp)
           awk -F'\t' '!seen[$2":"$3]++' "$MERGED_TMP" > "$DEDUP_TMP"
 
-          TOTAL=$(wc -l < "$DEDUP_TMP")
+          TOTAL=$(wc -l < "$DEDUP_TMP" | tr -d ' ')
           echo "Всего уникальных конфигов: $TOTAL"
 
-          # Лимит: не более 5000 конфигов чтобы merge уложился в 10 минут
-          if [ "$TOTAL" -gt 5000 ]; then
+          if [ -n "$TOTAL" ] && [ "$TOTAL" -gt 5000 ]; then
             head -n 5000 "$DEDUP_TMP" > "${DEDUP_TMP}.trimmed"
             mv "${DEDUP_TMP}.trimmed" "$DEDUP_TMP"
             echo "Обрезано до 5000 конфигов"
           fi
 
-          # Генерируем vlees.txt
           IDX=1
           while IFS=$'\t' read -r BASE HOST PORT PREFIX; do
+            [ -z "$BASE" ] && continue
             printf '%s\n' "${BASE}#🇪🇺LTE | ${IDX} 🌐 RU" >> vlees.txt
             IDX=$((IDX + 1))
           done < "$DEDUP_TMP"
 
-          # Генерируем все outbounds одним проходом
           ALL_OUTBOUNDS=$(mktemp)
           IDX=1
 
           while IFS=$'\t' read -r BASE HOST PORT PREFIX; do
+            [ -z "$BASE" ] && continue
             printf '%s' "$PORT" | grep -qE '^[0-9]+$' || { IDX=$((IDX + 1)); continue; }
 
             UUID=$(printf '%s' "$BASE" | sed 's/vless:\/\///;s/@.*//')
 
-            # Парсим query string
-            QUERY_RAW=$(printf '%s' "$BASE" | grep -o '?[^#]*')
+            QUERY_RAW=$(printf '%s' "$BASE" | grep -o '?[^#]*' || true)
             get_param() {
               printf '%s' "$QUERY_RAW" | grep -o "${1}=[^&]*" | head -1 | cut -d= -f2-
             }
@@ -264,17 +264,25 @@ jobs:
           CONF_COUNT=$((IDX - 1))
           echo "Сгенерировано outbounds: $CONF_COUNT"
 
-          # --- УНИВЕРСАЛЬНАЯ ФУНКЦИЯ ДЛЯ СБОРКИ ПАКОВ ---
+          PACK_SIZE=250 # <-- Размер пака изменен на 250
+          PACK_NUM=1
+          PACKS_ARRAY=$(mktemp)
+          echo "[]" > "$PACKS_ARRAY"
+
+          CHUNK=$(mktemp)
+          LINE_COUNT=0
+
           make_pack() {
-            local remark="$1" chunk="$2"
-            local RETAGGED=$(mktemp)
+            local num="$1" chunk="$2"
+            local RETAGGED
+            RETAGGED=$(mktemp)
             local i=1
             while IFS= read -r obj; do
-              printf '%s' "$obj" | jq -c --arg t "lte-${i}" '.tag = $t'
+              printf '%s' "$obj" | jq --arg t "lte-${i}" '.tag = $t'
               i=$((i + 1))
             done < "$chunk" > "$RETAGGED"
 
-            jq -n --arg r "$remark" --slurpfile out "$RETAGGED" '{
+            jq -n --arg r "🇺🇸💫 LTE | HARD 1.${num}" --slurpfile out "$RETAGGED" '{
               remarks: $r,
               dns: {servers: ["1.1.1.1","1.0.0.1","8.8.8.8"], queryStrategy: "UseIPv4"},
               observatory: {enableConcurrency: true, probeInterval: "15s",
@@ -300,82 +308,50 @@ jobs:
             rm -f "$RETAGGED"
           }
 
-          generate_packs() {
-            local p_size="$1"
-            local p_remark="$2"
-            local p_out="$3"
-            
-            local p_num=1
-            local p_array=$(mktemp)
-            echo "[]" > "$p_array"
-            
-            local chunk=$(mktemp)
-            local l_count=0
-            
-            while IFS= read -r line; do
-              printf '%s\n' "$line" >> "$chunk"
-              l_count=$((l_count + 1))
-              if [ "$l_count" -eq "$p_size" ]; then
-                local current_remark=$(printf "$p_remark" "$p_num")
-                PACK_JSON=$(make_pack "$current_remark" "$chunk")
-                TMP_ARRAY=$(mktemp)
-                jq --argjson p "$PACK_JSON" '. + [$p]' "$p_array" > "$TMP_ARRAY"
-                mv "$TMP_ARRAY" "$p_array"
-                echo "✅ Сборка: $current_remark ($p_size серверов)"
-                p_num=$((p_num + 1))
-                rm -f "$chunk"; chunk=$(mktemp); l_count=0
-              fi
-            done < "$ALL_OUTBOUNDS"
-
-            if [ "$l_count" -gt 0 ]; then
-              local current_remark=$(printf "$p_remark" "$p_num")
-              PACK_JSON=$(make_pack "$current_remark" "$chunk")
+          while IFS= read -r line; do
+            [ -z "$line" ] && continue
+            printf '%s\n' "$line" >> "$CHUNK"
+            LINE_COUNT=$((LINE_COUNT + 1))
+            if [ "$LINE_COUNT" -eq "$PACK_SIZE" ]; then
+              PACK_JSON=$(make_pack "$PACK_NUM" "$CHUNK")
               TMP_ARRAY=$(mktemp)
-              jq --argjson p "$PACK_JSON" '. + [$p]' "$p_array" > "$TMP_ARRAY"
-              mv "$TMP_ARRAY" "$p_array"
-              echo "✅ Сборка: $current_remark ($l_count серверов)"
+              jq --argjson p "$PACK_JSON" '. + [$p]' "$PACKS_ARRAY" > "$TMP_ARRAY"
+              mv "$TMP_ARRAY" "$PACKS_ARRAY"
+              echo "✅ Пак 1.${PACK_NUM} ($PACK_SIZE серверов)"
+              PACK_NUM=$((PACK_NUM + 1))
+              rm -f "$CHUNK"; CHUNK=$(mktemp); LINE_COUNT=0
             fi
-            
-            mv "$p_array" "$p_out"
-            rm -f "$chunk"
-          }
+          done < "$ALL_OUTBOUNDS"
 
-          # 1. Генерируем обычные паки (по 50)
-          echo "==== Сборка packs.json ===="
-          generate_packs 50 "🇪🇺LTE | 1.%d 🌐" "packs.json"
+          if [ "$LINE_COUNT" -gt 0 ]; then
+            PACK_JSON=$(make_pack "$PACK_NUM" "$CHUNK")
+            TMP_ARRAY=$(mktemp)
+            jq --argjson p "$PACK_JSON" '. + [$p]' "$PACKS_ARRAY" > "$TMP_ARRAY"
+            mv "$TMP_ARRAY" "$PACKS_ARRAY"
+            echo "✅ Пак 1.${PACK_NUM} ($LINE_COUNT серверов)"
+          fi
 
-          # 2. Генерируем HARD паки (по 250)
-          echo "==== Сборка phard.json ===="
-          generate_packs 250 "🇺🇸💫 LTE | HARD 1.%d" "phard.json"
-
-          rm -f "$MERGED_TMP" "$DEDUP_TMP" "$ALL_OUTBOUNDS"
+          mv "$PACKS_ARRAY" phard.json # <-- Имя файла изменено
+          rm -f "$CHUNK" "$MERGED_TMP" "$DEDUP_TMP" "$ALL_OUTBOUNDS"
+          echo "✅ Готово: $CONF_COUNT серверов в $PACK_NUM паках"
 
       - name: Validate JSON
         run: |
-          validate_file() {
-            local file="$1"
-            if jq empty "$file" 2>/dev/null; then
-              local p_count=$(jq 'length' "$file")
-              local s_count=$(jq '[.[].outbounds[]|select(.tag|startswith("lte-"))]|length' "$file")
-              echo "✅ $file валидный | $p_count паков | $s_count серверов"
-            else
-              echo "❌ $file невалидный!"
-              exit 1
-            fi
-          }
-          
-          validate_file "packs.json"
-          validate_file "phard.json"
+          if jq empty phard.json 2>/dev/null; then
+            PACK_COUNT=$(jq 'length' phard.json)
+            SERVER_COUNT=$(jq '[.[].outbounds[]|select(.tag|startswith("lte-"))]|length' phard.json)
+            echo "✅ phard.json валидный | $PACK_COUNT паков | $SERVER_COUNT серверов"
+          else
+            echo "❌ phard.json невалидный!"
+            exit 1
+          fi
 
       - name: Commit and push
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add vlees.txt packs.json phard.json
-          
-          SERVER_COUNT=$(jq '[.[].outbounds[]|select(.tag|startswith("lte-"))]|length' packs.json)
-          PACK_COUNT=$(jq 'length' packs.json)
-          HARD_PACK_COUNT=$(jq 'length' phard.json)
-          
-          git diff --staged --quiet || git commit -m "Auto: $(date -u '+%Y-%m-%d %H:%M UTC') | $SERVER_COUNT серв. | $PACK_COUNT обычных | $HARD_PACK_COUNT HARD"
+          git add vlees.txt phard.json
+          SERVER_COUNT=$(jq '[.[].outbounds[]|select(.tag|startswith("lte-"))]|length' phard.json)
+          PACK_COUNT=$(jq 'length' phard.json)
+          git diff --staged --quiet || git commit -m "Auto: $(date -u '+%Y-%m-%d %H:%M UTC') | $SERVER_COUNT серверов | $PACK_COUNT паков HARD"
           git push
