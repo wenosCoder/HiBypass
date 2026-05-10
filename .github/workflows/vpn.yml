@@ -193,24 +193,21 @@ jobs:
           cat batch_*.tmp 2>/dev/null > "$MERGED_TMP"
           echo "Всего строк до дедупликации: $(wc -l < "$MERGED_TMP")"
 
+          # Дедупликация по host:port
           DEDUP_TMP=$(mktemp)
           awk -F'\t' '!seen[$2":"$3]++' "$MERGED_TMP" > "$DEDUP_TMP"
 
           TOTAL=$(wc -l < "$DEDUP_TMP")
           echo "Всего уникальных конфигов: $TOTAL"
 
-          if [ "$TOTAL" -gt 5000 ]; then
-            head -n 5000 "$DEDUP_TMP" > "${DEDUP_TMP}.trimmed"
-            mv "${DEDUP_TMP}.trimmed" "$DEDUP_TMP"
-            echo "Обрезано до 5000 конфигов"
-          fi
-
+          # Генерируем vlees.txt
           IDX=1
           while IFS=$'\t' read -r BASE HOST PORT PREFIX; do
             printf '%s\n' "${BASE}#🇪🇺LTE | ${IDX} 🌐 RU" >> vlees.txt
             IDX=$((IDX + 1))
           done < "$DEDUP_TMP"
 
+          # Генерируем outbounds
           ALL_OUTBOUNDS=$(mktemp)
           IDX=1
 
@@ -218,6 +215,7 @@ jobs:
             printf '%s' "$PORT" | grep -qE '^[0-9]+$' || { IDX=$((IDX + 1)); continue; }
 
             UUID=$(printf '%s' "$BASE" | sed 's/vless:\/\///;s/@.*//')
+
             QUERY_RAW=$(printf '%s' "$BASE" | grep -o '?[^#]*')
             get_param() {
               printf '%s' "$QUERY_RAW" | grep -o "${1}=[^&]*" | head -1 | cut -d= -f2-
@@ -257,6 +255,7 @@ jobs:
           CONF_COUNT=$((IDX - 1))
           echo "Сгенерировано outbounds: $CONF_COUNT"
 
+          # Собираем паки по 20
           PACK_SIZE=20
           PACK_NUM=1
           PACKS_ARRAY=$(mktemp)
@@ -300,37 +299,31 @@ jobs:
                   {type: "field", protocol: ["bittorrent"], outboundTag: "direct"},
                   {type: "field", inboundTag: ["socks","http"], balancerTag: "BALANCER"}
                 ],
-                balancers: [{
-                  tag: "BALANCER",
-                  selector: ["lte-"],
-                  fallbackTag: "backup",
-                  strategy: {
-                    type: "leastLoad",
-                    settings: {
-                      expected: 1,
-                      maxRTT: "4s",
-                      baselines: ["3s"]
+                balancers: [
+                  {
+                    tag: "BALANCER",
+                    selector: ["lte-"],
+                    fallbackTag: "backup",
+                    strategy: {
+                      type: "leastLoad",
+                      settings: {
+                        expected: 1,
+                        maxRTT: "4s",
+                        baselines: ["3s"]
+                      }
                     }
                   }
-                }]
+                ]
               },
               inbounds: [
-                {
-                  tag: "socks", port: 10808, listen: "127.0.0.1", protocol: "socks",
+                {tag: "socks", port: 10808, listen: "127.0.0.1", protocol: "socks",
                   settings: {udp: true, auth: "noauth"},
-                  sniffing: {enabled: true, routeOnly: false, destOverride: ["http","tls","quic"]}
-                },
-                {
-                  tag: "http", port: 10809, listen: "127.0.0.1", protocol: "http",
+                  sniffing: {enabled: true, routeOnly: false, destOverride: ["http","tls","quic"]}},
+                {tag: "http", port: 10809, listen: "127.0.0.1", protocol: "http",
                   settings: {allowTransparent: false},
-                  sniffing: {enabled: true, routeOnly: false, destOverride: ["http","tls","quic"]}
-                }
+                  sniffing: {enabled: true, routeOnly: false, destOverride: ["http","tls","quic"]}}
               ],
-              outbounds: ($out + [
-                {tag: "direct",  protocol: "freedom"},
-                {tag: "block",   protocol: "blackhole"},
-                {tag: "backup",  protocol: "freedom"}
-              ])
+              outbounds: ($out + [{tag:"direct",protocol:"freedom"},{tag:"backup",protocol:"freedom"},{tag:"block",protocol:"blackhole"}])
             }'
             rm -f "$RETAGGED"
           }
@@ -357,26 +350,28 @@ jobs:
             echo "✅ Пак 1.${PACK_NUM} ($LINE_COUNT серверов)"
           fi
 
-          # Добавляем метаданные в начало packs.json
-          FINAL_PACKS=$(mktemp)
-          printf '# profile-title: HiBypass 🗽 | FREE LTE | ∞\n' > "$FINAL_PACKS"
-          printf '# subscription-userinfo: upload=0; download=0; total=999999999999999; expire=4102444800\n' >> "$FINAL_PACKS"
-          printf '# profile-update-interval: 1\n' >> "$FINAL_PACKS"
-          printf '# announce: Бесплатный обход белых списков 🏳🇷🇺 | Если перестало работать — обновите подписку 🔄\n' >> "$FINAL_PACKS"
-          printf '# announce-url: https://t.me/HiBypass\n' >> "$FINAL_PACKS"
-          printf '# update-always: true\n' >> "$FINAL_PACKS"
-          cat "$PACKS_ARRAY" >> "$FINAL_PACKS"
-          mv "$FINAL_PACKS" packs.json
+          # Добавляем заголовок в packs.json
+          FINAL_JSON=$(mktemp)
+          {
+            printf '// profile-title: HiBypass 🗽 | FREE LTE | ∞\n'
+            printf '// subscription-userinfo: upload=0; download=0; total=999999999999999; expire=4102444800\n'
+            printf '// profile-update-interval: 1\n'
+            printf '// announce: Бесплатный обход белых списков 🏳🇷🇺 | Если перестало работать — обновите подписку 🔄\n'
+            printf '// announce-url: https://t.me/HiBypass\n'
+            printf '// update-always: true\n'
+            cat "$PACKS_ARRAY"
+          } > "$FINAL_JSON"
+          mv "$FINAL_JSON" packs.json
 
           rm -f "$CHUNK" "$MERGED_TMP" "$DEDUP_TMP" "$ALL_OUTBOUNDS"
           echo "✅ Готово: $CONF_COUNT серверов в $PACK_NUM паках"
 
       - name: Validate JSON
         run: |
-          # Валидируем только JSON-часть, пропуская строки-комментарии
-          if grep -v '^#' packs.json | jq empty 2>/dev/null; then
-            PACK_COUNT=$(grep -v '^#' packs.json | jq 'length')
-            SERVER_COUNT=$(grep -v '^#' packs.json | jq '[.[].outbounds[]|select(.tag|startswith("lte-"))]|length')
+          # Валидируем только JSON-часть (без строк-комментариев сверху)
+          if grep -v '^//' packs.json | jq empty 2>/dev/null; then
+            PACK_COUNT=$(grep -v '^//' packs.json | jq 'length')
+            SERVER_COUNT=$(grep -v '^//' packs.json | jq '[.[].outbounds[]|select(.tag|startswith("lte-"))]|length')
             echo "✅ packs.json валидный | $PACK_COUNT паков | $SERVER_COUNT серверов"
           else
             echo "❌ packs.json невалидный!"
@@ -388,7 +383,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add vlees.txt packs.json
-          SERVER_COUNT=$(grep -v '^#' packs.json | jq '[.[].outbounds[]|select(.tag|startswith("lte-"))]|length')
-          PACK_COUNT=$(grep -v '^#' packs.json | jq 'length')
+          SERVER_COUNT=$(grep -v '^//' packs.json | jq '[.[].outbounds[]|select(.tag|startswith("lte-"))]|length')
+          PACK_COUNT=$(grep -v '^//' packs.json | jq 'length')
           git diff --staged --quiet || git commit -m "Auto: $(date -u '+%Y-%m-%d %H:%M UTC') | $SERVER_COUNT серверов | $PACK_COUNT паков"
           git push
