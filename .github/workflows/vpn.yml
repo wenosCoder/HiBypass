@@ -166,13 +166,170 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install dependencies
-        run: sudo apt-get install -y jq
+        run: sudo apt-get install -y jq python3
 
       - name: Download all batches
         uses: actions/download-artifact@v4
         with:
           pattern: batch-*
           merge-multiple: true
+
+      - name: Write helper scripts
+        run: |
+          cat > /tmp/make_packs.py << 'EOF'
+          import json, sys, re
+
+          dedup_file   = sys.argv[1]
+          output_file  = sys.argv[2]
+
+          DNS = {
+            "queryStrategy": "UseIPv4",
+            "servers": [
+              "1.1.1.1",
+              "8.8.8.8",
+              "tls://1.1.1.1",
+              "https://dns.google/dns-query",
+              "https://cloudflare-dns.com/dns-query"
+            ]
+          }
+
+          OBSERVATORY = {
+            "enableConcurrency": True,
+            "probeInterval": "15s",
+            "probeUrl": [
+              "https://cp.cloudflare.com/generate_204",
+              "http://www.gstatic.com/generate_204"
+            ],
+            "subjectSelector": ["lte-"]
+          }
+
+          DIRECT_DOMAINS = [
+            "domain:oneme.ru","domain:max.ru","domain:sferum-dev.ru","domain:okcdn.ru",
+            "domain:vk-apps.ru","domain:vk.ru","domain:vk.com","domain:vk.cc",
+            "domain:vk.link","domain:vkontakte.ru","domain:vkontakte.com",
+            "domain:vk-cdn.net","domain:userapi.com","domain:vkuser.net",
+            "domain:vkuseraudio.com","domain:vkuseraudio.net",
+            "domain:vkuservideo.com","domain:vkuservideo.net",
+            "domain:vkuserlive.com","domain:vkuserlive.net",
+            "domain:vkpay.io","domain:vkpay.com","domain:vkpay.app",
+            "domain:vkcs.cloud","domain:ok.ru","domain:odkl.ru",
+            "domain:tamtam.chat","domain:mycdn.me","domain:ok.me",
+            "domain:apiok.ru","domain:apptracer.ru","domain:vkvideo.ru",
+            "domain:vk.company","domain:mail.ru","domain:tech-mail.ru",
+            "domain:vmailru.net","domain:smailru.net","domain:appsmail.ru",
+            "domain:cxhub.ru","domain:dzen.ru","domain:dzeninfra.ru",
+            "domain:vkplay.ru","domain:my.games","domain:algoritmika.org",
+            "domain:yaklass.ru","domain:umschool.net","domain:code-class.ru",
+            "domain:summerstage.ru","domain:vk-stadium.ru","domain:tetrika-school.ru",
+            "domain:yandex.ru","domain:yandex.net","domain:yandex.com",
+            "domain:ya.ru","full:go.yandex"
+          ]
+
+          ROUTING = {
+            "domainMatcher": "hybrid",
+            "domainStrategy": "IPIfNonMatch",
+            "rules": [
+              {"type": "field", "protocol": ["bittorrent"], "outboundTag": "block"},
+              {"type": "field", "outboundTag": "direct", "domain": DIRECT_DOMAINS},
+              {"type": "field", "inboundTag": ["socks","http"], "balancerTag": "BALANCER"}
+            ],
+            "balancers": [
+              {"tag": "BALANCER", "selector": ["lte-"], "strategy": {"type": "leastLoad"}}
+            ]
+          }
+
+          INBOUNDS = [
+            {
+              "tag": "socks", "port": 10808, "listen": "127.0.0.1", "protocol": "socks",
+              "settings": {"udp": True, "auth": "noauth"},
+              "sniffing": {"enabled": True, "routeOnly": False, "destOverride": ["http","tls","quic"]}
+            },
+            {
+              "tag": "http", "port": 10809, "listen": "127.0.0.1", "protocol": "http",
+              "settings": {"allowTransparent": False},
+              "sniffing": {"enabled": True, "routeOnly": False, "destOverride": ["http","tls","quic"]}
+            }
+          ]
+
+          TAIL_OUTBOUNDS = [
+            {"tag": "direct", "protocol": "freedom"},
+            {"tag": "block",  "protocol": "blackhole"}
+          ]
+
+          def get_param(query, name):
+            m = re.search(r'(?:^|&)' + re.escape(name) + r'=([^&]*)', query)
+            return m.group(1) if m else ""
+
+          def parse_line(line):
+            parts = line.rstrip('\n').split('\t')
+            if len(parts) < 3:
+              return None
+            base, host, port = parts[0], parts[1], parts[2]
+            if not re.match(r'^\d+$', port):
+              return None
+            uuid = re.sub(r'^vless://', '', base)
+            uuid = re.sub(r'@.*', '', uuid)
+            m = re.search(r'\?([^#]*)', base)
+            query = m.group(1) if m else ""
+            flow = get_param(query, "flow") or "xtls-rprx-vision"
+            sni  = get_param(query, "sni")
+            pbk  = get_param(query, "pbk")
+            fp   = get_param(query, "fp") or "chrome"
+            sid  = get_param(query, "sid")
+            sec  = get_param(query, "security") or "reality"
+            return {
+              "protocol": "vless",
+              "settings": {"vnext": [{"address": host, "port": int(port),
+                "users": [{"id": uuid, "encryption": "none", "flow": flow}]}]},
+              "streamSettings": {"network": "tcp", "security": sec,
+                "realitySettings": {"serverName": sni, "publicKey": pbk,
+                  "shortId": sid, "fingerprint": fp}}
+            }
+
+          PACK_SIZE = 50
+          packs = []
+          chunk = []
+          pack_num = 1
+          total = 0
+
+          def flush_chunk(chunk, pack_num):
+            outbounds = []
+            for i, ob in enumerate(chunk, 1):
+              ob["tag"] = f"lte-{i}"
+              outbounds.append(ob)
+            outbounds += TAIL_OUTBOUNDS
+            pack = {
+              "remarks": f"LTE | 1.{pack_num}",
+              "dns": DNS,
+              "observatory": OBSERVATORY,
+              "routing": ROUTING,
+              "inbounds": INBOUNDS,
+              "outbounds": outbounds
+            }
+            return pack
+
+          with open(dedup_file) as f:
+            for line in f:
+              ob = parse_line(line)
+              if ob is None:
+                continue
+              total += 1
+              chunk.append(ob)
+              if len(chunk) == PACK_SIZE:
+                packs.append(flush_chunk(chunk, pack_num))
+                print(f"Pack 1.{pack_num} (50 servers)")
+                pack_num += 1
+                chunk = []
+
+          if chunk:
+            packs.append(flush_chunk(chunk, pack_num))
+            print(f"Pack 1.{pack_num} ({len(chunk)} servers)")
+
+          with open(output_file, 'w', encoding='utf-8') as f:
+            json.dump(packs, f, ensure_ascii=False)
+
+          print(f"Done: {total} servers in {len(packs)} packs")
+          EOF
 
       - name: Merge and generate files
         run: |
@@ -197,221 +354,11 @@ jobs:
           TOTAL=$(wc -l < "$DEDUP_TMP")
           echo "Всего уникальных конфигов: $TOTAL"
 
-          # vlees.txt — одним проходом awk
           awk -F'\t' '{print $1 "#🇪🇺LTE | " NR " 🌐 RU"}' "$DEDUP_TMP" >> vlees.txt
 
-          # Генерируем NDJSON outbounds через awk (без jq в цикле)
-          ALL_OUTBOUNDS=$(mktemp)
-          awk -F'\t' '
-          function get_param(query, name,    re, val, s) {
-            s = query
-            while (length(s) > 0) {
-              if (match(s, name "=[^&]*")) {
-                val = substr(s, RSTART + length(name) + 1, RLENGTH - length(name) - 1)
-                return val
-              }
-              if (!match(s, /&/)) break
-              s = substr(s, RSTART + 1)
-            }
-            return ""
-          }
-          function esc(s,    out, i, c) {
-            out = ""
-            for (i = 1; i <= length(s); i++) {
-              c = substr(s, i, 1)
-              if      (c == "\"") out = out "\\\""
-              else if (c == "\\") out = out "\\\\"
-              else                out = out c
-            }
-            return out
-          }
-          {
-            base = $1; host = $2; port = $3
-            if (port !~ /^[0-9]+$/) next
+          python3 /tmp/make_packs.py "$DEDUP_TMP" packs.json
 
-            uuid = base
-            sub(/^vless:\/\//, "", uuid)
-            sub(/@.*/, "", uuid)
-
-            query = ""
-            if (match(base, /\?[^#]*/)) query = substr(base, RSTART+1, RLENGTH-1)
-
-            flow = get_param(query, "flow")
-            sni  = get_param(query, "sni")
-            pbk  = get_param(query, "pbk")
-            fp   = get_param(query, "fp")
-            sid  = get_param(query, "sid")
-            sec  = get_param(query, "security")
-
-            if (flow == "") flow = "xtls-rprx-vision"
-            if (fp   == "") fp   = "chrome"
-            if (sec  == "") sec  = "reality"
-
-            printf "{\"tag\":\"lte-%d\",\"protocol\":\"vless\",\"settings\":{\"vnext\":[{\"address\":\"%s\",\"port\":%s,\"users\":[{\"id\":\"%s\",\"encryption\":\"none\",\"flow\":\"%s\"}]}]},\"streamSettings\":{\"network\":\"tcp\",\"security\":\"%s\",\"realitySettings\":{\"serverName\":\"%s\",\"publicKey\":\"%s\",\"shortId\":\"%s\",\"fingerprint\":\"%s\"}}}\n",
-              NR, esc(host), port, esc(uuid), esc(flow), esc(sec), esc(sni), esc(pbk), esc(sid), esc(fp)
-          }
-          ' "$DEDUP_TMP" > "$ALL_OUTBOUNDS"
-
-          CONF_COUNT=$(wc -l < "$ALL_OUTBOUNDS")
-          echo "Сгенерировано outbounds: $CONF_COUNT"
-
-          # Шаблон пака — записываем один раз
-          TEMPLATE_FILE=$(mktemp)
-          cat > "$TEMPLATE_FILE" << 'ENDTEMPLATE'
-{
-  "dns": {
-    "queryStrategy": "UseIPv4",
-    "servers": [
-      "1.1.1.1",
-      "8.8.8.8",
-      "tls://1.1.1.1",
-      "https://dns.google/dns-query",
-      "https://cloudflare-dns.com/dns-query"
-    ]
-  },
-  "observatory": {
-    "enableConcurrency": true,
-    "probeInterval": "15s",
-    "probeUrl": [
-      "https://cp.cloudflare.com/generate_204",
-      "http://www.gstatic.com/generate_204"
-    ],
-    "subjectSelector": ["lte-"]
-  },
-  "routing": {
-    "domainMatcher": "hybrid",
-    "domainStrategy": "IPIfNonMatch",
-    "rules": [
-      {
-        "type": "field",
-        "protocol": ["bittorrent"],
-        "outboundTag": "block"
-      },
-      {
-        "type": "field",
-        "outboundTag": "direct",
-        "domain": [
-          "domain:oneme.ru","domain:max.ru","domain:sferum-dev.ru","domain:okcdn.ru",
-          "domain:vk-apps.ru","domain:vk.ru","domain:vk.com","domain:vk.cc",
-          "domain:vk.link","domain:vkontakte.ru","domain:vkontakte.com",
-          "domain:vk-cdn.net","domain:userapi.com","domain:vkuser.net",
-          "domain:vkuseraudio.com","domain:vkuseraudio.net",
-          "domain:vkuservideo.com","domain:vkuservideo.net",
-          "domain:vkuserlive.com","domain:vkuserlive.net",
-          "domain:vkpay.io","domain:vkpay.com","domain:vkpay.app",
-          "domain:vkcs.cloud","domain:ok.ru","domain:odkl.ru",
-          "domain:tamtam.chat","domain:mycdn.me","domain:ok.me",
-          "domain:apiok.ru","domain:apptracer.ru","domain:vkvideo.ru",
-          "domain:vk.company","domain:mail.ru","domain:tech-mail.ru",
-          "domain:vmailru.net","domain:smailru.net","domain:appsmail.ru",
-          "domain:cxhub.ru","domain:dzen.ru","domain:dzeninfra.ru",
-          "domain:vkplay.ru","domain:my.games","domain:algoritmika.org",
-          "domain:yaklass.ru","domain:umschool.net","domain:code-class.ru",
-          "domain:summerstage.ru","domain:vk-stadium.ru","domain:tetrika-school.ru",
-          "domain:yandex.ru","domain:yandex.net","domain:yandex.com",
-          "domain:ya.ru","full:go.yandex"
-        ]
-      },
-      {
-        "type": "field",
-        "inboundTag": ["socks","http"],
-        "balancerTag": "BALANCER"
-      }
-    ],
-    "balancers": [
-      {
-        "tag": "BALANCER",
-        "selector": ["lte-"],
-        "strategy": {"type": "leastLoad"}
-      }
-    ]
-  },
-  "inbounds": [
-    {
-      "tag": "socks","port": 10808,"listen": "127.0.0.1","protocol": "socks",
-      "settings": {"udp": true,"auth": "noauth"},
-      "sniffing": {"enabled": true,"routeOnly": false,"destOverride": ["http","tls","quic"]}
-    },
-    {
-      "tag": "http","port": 10809,"listen": "127.0.0.1","protocol": "http",
-      "settings": {"allowTransparent": false},
-      "sniffing": {"enabled": true,"routeOnly": false,"destOverride": ["http","tls","quic"]}
-    }
-  ]
-}
-ENDTEMPLATE
-
-          # Собираем паки по 50 — awk режет на чанки, python собирает JSON
-          PACK_SIZE=50
-          PACKS_ARRAY=$(mktemp)
-          echo "[]" > "$PACKS_ARRAY"
-
-          PACK_NUM=1
-          CHUNK=$(mktemp)
-          LINE_COUNT=0
-
-          flush_pack() {
-            local num="$1" chunk="$2"
-            # Читаем чанк NDJSON, перенумеровываем теги, собираем пак
-            python3 - "$num" "$chunk" "$TEMPLATE_FILE" "$PACKS_ARRAY" << 'PYEOF'
-import sys, json
-
-num    = sys.argv[1]
-chunk  = sys.argv[2]
-tmpl   = sys.argv[3]
-arr_f  = sys.argv[4]
-
-with open(tmpl) as f:
-    base = json.load(f)
-
-outbounds = []
-with open(chunk) as f:
-    for i, line in enumerate(f, 1):
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            obj = json.loads(line)
-        except Exception:
-            continue
-        obj["tag"] = f"lte-{i}"
-        outbounds.append(obj)
-
-outbounds += [{"tag": "direct", "protocol": "freedom"}, {"tag": "block", "protocol": "blackhole"}]
-
-pack = dict(base)
-pack["remarks"] = f"🇪🇺LTE | 1.{num} 🌐"
-pack["outbounds"] = outbounds
-
-with open(arr_f) as f:
-    arr = json.load(f)
-
-arr.append(pack)
-
-with open(arr_f, "w") as f:
-    json.dump(arr, f, ensure_ascii=False)
-PYEOF
-          }
-
-          while IFS= read -r line; do
-            printf '%s\n' "$line" >> "$CHUNK"
-            LINE_COUNT=$((LINE_COUNT + 1))
-            if [ "$LINE_COUNT" -eq "$PACK_SIZE" ]; then
-              flush_pack "$PACK_NUM" "$CHUNK"
-              echo "✅ Пак 1.${PACK_NUM} (50 серверов)"
-              PACK_NUM=$((PACK_NUM + 1))
-              rm -f "$CHUNK"; CHUNK=$(mktemp); LINE_COUNT=0
-            fi
-          done < "$ALL_OUTBOUNDS"
-
-          if [ "$LINE_COUNT" -gt 0 ]; then
-            flush_pack "$PACK_NUM" "$CHUNK"
-            echo "✅ Пак 1.${PACK_NUM} ($LINE_COUNT серверов)"
-          fi
-
-          mv "$PACKS_ARRAY" packs.json
-          rm -f "$CHUNK" "$DEDUP_TMP" "$ALL_OUTBOUNDS" "$TEMPLATE_FILE"
-          echo "✅ Готово: $CONF_COUNT серверов в $PACK_NUM паках"
+          rm -f "$DEDUP_TMP"
 
       - name: Validate JSON
         run: |
