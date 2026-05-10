@@ -177,7 +177,7 @@ jobs:
           pattern: batch-*
           merge-multiple: true
 
-      - name: Merge and deduplicate
+      - name: Merge and generate files
         run: |
           printf '%s\n' \
             '#profile-title: HiBypass | LTE FREE 🏳🇷🇺' \
@@ -189,217 +189,246 @@ jobs:
             '#traffic-remaining: ∞' \
             > vlees.txt
 
-          cat batch_*.tmp 2>/dev/null > merged.tmp
-          echo "Всего строк до дедупликации: $(wc -l < merged.tmp)"
+          MERGED_TMP=$(mktemp)
+          cat batch_*.tmp 2>/dev/null > "$MERGED_TMP"
+          echo "Всего строк до дедупликации: $(wc -l < "$MERGED_TMP")"
 
-          awk -F'\t' '!seen[$2":"$3]++' merged.tmp > dedup.tmp
-          echo "Всего уникальных конфигов: $(wc -l < dedup.tmp)"
+          # Дедупликация по host:port
+          DEDUP_TMP=$(mktemp)
+          awk -F'\t' '!seen[$2":"$3]++' "$MERGED_TMP" > "$DEDUP_TMP"
 
+          TOTAL=$(wc -l < "$DEDUP_TMP")
+          echo "Всего уникальных конфигов (без лимита): $TOTAL"
+
+          # Генерируем vlees.txt
           IDX=1
           while IFS=$'\t' read -r BASE HOST PORT PREFIX; do
             printf '%s\n' "${BASE}#🇪🇺LTE | ${IDX} 🌐 RU" >> vlees.txt
             IDX=$((IDX + 1))
-          done < dedup.tmp
+          done < "$DEDUP_TMP"
 
-      - name: Parse configs to JSONL
-        run: |
-          cat > parse_configs.py << 'PYEOF'
-          import sys, json, re
+          # Генерируем outbounds
+          ALL_OUTBOUNDS=$(mktemp)
+          IDX=1
 
-          infile  = "dedup.tmp"
-          outfile = "outbounds.jsonl"
+          while IFS=$'\t' read -r BASE HOST PORT PREFIX; do
+            printf '%s' "$PORT" | grep -qE '^[0-9]+$' || { IDX=$((IDX + 1)); continue; }
 
-          results = []
-          idx = 1
+            UUID=$(printf '%s' "$BASE" | sed 's/vless:\/\///;s/@.*//')
 
-          with open(infile, encoding="utf-8", errors="replace") as f:
-              for line in f:
-                  parts = line.rstrip("\n").split("\t")
-                  if len(parts) < 3:
-                      idx += 1
-                      continue
-                  base, host, port = parts[0], parts[1], parts[2]
-                  if not port.isdigit():
-                      idx += 1
-                      continue
+            QUERY_RAW=$(printf '%s' "$BASE" | grep -o '?[^#]*')
+            get_param() {
+              printf '%s' "$QUERY_RAW" | grep -o "${1}=[^&]*" | head -1 | cut -d= -f2-
+            }
 
-                  m = re.match(r"vless://([^@]+)@", base)
-                  uuid = m.group(1) if m else ""
+            FLOW=$(get_param flow); SNI=$(get_param sni); PBK=$(get_param pbk)
+            FP=$(get_param fp);     SID=$(get_param sid); SEC=$(get_param security)
 
-                  m2 = re.search(r"\?([^#]*)", base)
-                  query = m2.group(1) if m2 else ""
+            [ -z "$FP" ]   && FP="chrome"
+            [ -z "$SEC" ]  && SEC="reality"
+            [ -z "$FLOW" ] && FLOW="xtls-rprx-vision"
+            [ -z "$SID" ]  && SID=""
 
-                  def get_param(key):
-                      m = re.search(r"(?:^|&)" + key + r"=([^&]*)", query)
-                      return m.group(1) if m else ""
+            jq -cn \
+              --arg  tag   "lte-${IDX}" \
+              --arg  addr  "$HOST"       \
+              --argjson port "$PORT"     \
+              --arg  uuid  "$UUID"       \
+              --arg  flow  "$FLOW"       \
+              --arg  sec   "$SEC"        \
+              --arg  sni   "$SNI"        \
+              --arg  pbk   "$PBK"        \
+              --arg  fp    "$FP"         \
+              --arg  sid   "$SID"        \
+              '{
+                tag: $tag, protocol: "vless",
+                settings: {vnext: [{address: $addr, port: $port,
+                  users: [{id: $uuid, encryption: "none", flow: $flow}]}]},
+                streamSettings: {network: "tcp", security: $sec,
+                  realitySettings: {serverName: $sni, publicKey: $pbk,
+                    shortId: $sid, fingerprint: $fp}}
+              }' >> "$ALL_OUTBOUNDS"
 
-                  flow = get_param("flow") or "xtls-rprx-vision"
-                  sni  = get_param("sni")
-                  pbk  = get_param("pbk")
-                  fp   = get_param("fp") or "chrome"
-                  sid  = get_param("sid")
-                  sec  = get_param("security") or "reality"
+            IDX=$((IDX + 1))
+          done < "$DEDUP_TMP"
 
-                  obj = {
-                      "tag": f"lte-{idx}",
-                      "protocol": "vless",
-                      "settings": {
-                          "vnext": [{
-                              "address": host,
-                              "port": int(port),
-                              "users": [{"id": uuid, "encryption": "none", "flow": flow}]
-                          }]
-                      },
-                      "streamSettings": {
-                          "network": "tcp",
-                          "security": sec,
-                          "realitySettings": {
-                              "serverName": sni,
-                              "publicKey": pbk,
-                              "shortId": sid,
-                              "fingerprint": fp
-                          }
-                      }
-                  }
-                  results.append(json.dumps(obj, ensure_ascii=False))
-                  idx += 1
+          CONF_COUNT=$((IDX - 1))
+          echo "Сгенерировано outbounds: $CONF_COUNT"
 
-          with open(outfile, "w", encoding="utf-8") as f:
-              f.write("\n".join(results))
+          # Собираем паки по 50
+          PACK_SIZE=50
+          PACK_NUM=1
+          PACKS_ARRAY=$(mktemp)
+          echo "[]" > "$PACKS_ARRAY"
 
-          print(f"Сгенерировано outbounds: {len(results)}")
-          PYEOF
-          python3 parse_configs.py
+          CHUNK=$(mktemp)
+          LINE_COUNT=0
 
-      - name: Build packs JSON
-        run: |
-          cat > build_packs.py << 'PYEOF'
-          import json
+          make_pack() {
+            local num="$1" chunk="$2"
+            local RETAGGED
+            RETAGGED=$(mktemp)
+            local i=1
+            while IFS= read -r obj; do
+              printf '%s' "$obj" | jq --arg t "lte-${i}" '.tag = $t'
+              i=$((i + 1))
+            done < "$chunk" > "$RETAGGED"
 
-          infile  = "outbounds.jsonl"
-          outfile = "packs.json"
-
-          PACK_SIZE = 20
-
-          DNS_CFG = {
-              "queryStrategy": "UseIPv4",
-              "servers": [
+            jq -n --arg r "🇪🇺LTE | 1.${num} 🌐" --slurpfile out "$RETAGGED" '{
+              remarks: $r,
+              dns: {
+                queryStrategy: "UseIPv4",
+                servers: [
                   "1.1.1.1",
                   "8.8.8.8",
                   "tls://1.1.1.1",
                   "https://dns.google/dns-query",
                   "https://cloudflare-dns.com/dns-query"
-              ]
-          }
-
-          OBSERVATORY_CFG = {
-              "enableConcurrency": True,
-              "probeInterval": "5s",
-              "probeUrl": "http://www.gstatic.com/generate_204",
-              "subjectSelector": ["lte-"]
-          }
-
-          ROUTING_CFG = {
-              "domainMatcher": "hybrid",
-              "domainStrategy": "IPIfNonMatch",
-              "rules": [
-                  {"type": "field", "protocol": ["bittorrent"], "outboundTag": "direct"},
-                  {"type": "field", "inboundTag": ["socks", "http"], "balancerTag": "BALANCER"}
-              ],
-              "balancers": [{
-                  "tag": "BALANCER",
-                  "selector": ["lte-"],
-                  "fallbackTag": "backup",
-                  "strategy": {
-                      "type": "leastLoad",
-                      "settings": {
-                          "expected": 1,
-                          "maxRTT": "4s",
-                          "baselines": ["3s"]
-                      }
-                  }
-              }]
-          }
-
-          INBOUNDS_CFG = [
-              {
-                  "tag": "socks",
-                  "port": 10808,
-                  "listen": "127.0.0.1",
-                  "protocol": "socks",
-                  "settings": {"udp": True, "auth": "noauth"},
-                  "sniffing": {"enabled": True, "routeOnly": False, "destOverride": ["http","tls","quic"]}
+                ]
               },
-              {
-                  "tag": "http",
-                  "port": 10809,
-                  "listen": "127.0.0.1",
-                  "protocol": "http",
-                  "settings": {"allowTransparent": False},
-                  "sniffing": {"enabled": True, "routeOnly": False, "destOverride": ["http","tls","quic"]}
-              }
-          ]
+              observatory: {
+                enableConcurrency: true,
+                probeInterval: "15s",
+                probeUrl: ["https://cp.cloudflare.com/generate_204", "http://www.gstatic.com/generate_204"],
+                subjectSelector: ["lte-"]
+              },
+              routing: {
+                domainMatcher: "hybrid",
+                domainStrategy: "IPIfNonMatch",
+                rules: [
+                  {
+                    type: "field",
+                    protocol: ["bittorrent"],
+                    outboundTag: "block"
+                  },
+                  {
+                    type: "field",
+                    outboundTag: "direct",
+                    domain: [
+                      "domain:oneme.ru",
+                      "domain:max.ru",
+                      "domain:sferum-dev.ru",
+                      "domain:okcdn.ru",
+                      "domain:vk-apps.ru",
+                      "domain:vk.ru",
+                      "domain:vk.com",
+                      "domain:vk.cc",
+                      "domain:vk.link",
+                      "domain:vkontakte.ru",
+                      "domain:vkontakte.com",
+                      "domain:vk-cdn.net",
+                      "domain:userapi.com",
+                      "domain:vkuser.net",
+                      "domain:vkuseraudio.com",
+                      "domain:vkuseraudio.net",
+                      "domain:vkuservideo.com",
+                      "domain:vkuservideo.net",
+                      "domain:vkuserlive.com",
+                      "domain:vkuserlive.net",
+                      "domain:vkpay.io",
+                      "domain:vkpay.com",
+                      "domain:vkpay.app",
+                      "domain:vkcs.cloud",
+                      "domain:ok.ru",
+                      "domain:odkl.ru",
+                      "domain:tamtam.chat",
+                      "domain:mycdn.me",
+                      "domain:ok.me",
+                      "domain:apiok.ru",
+                      "domain:apptracer.ru",
+                      "domain:vkvideo.ru",
+                      "domain:vk.company",
+                      "domain:mail.ru",
+                      "domain:tech-mail.ru",
+                      "domain:vmailru.net",
+                      "domain:smailru.net",
+                      "domain:appsmail.ru",
+                      "domain:cxhub.ru",
+                      "domain:dzen.ru",
+                      "domain:dzeninfra.ru",
+                      "domain:vkplay.ru",
+                      "domain:my.games",
+                      "domain:algoritmika.org",
+                      "domain:yaklass.ru",
+                      "domain:umschool.net",
+                      "domain:code-class.ru",
+                      "domain:summerstage.ru",
+                      "domain:vk-stadium.ru",
+                      "domain:tetrika-school.ru",
+                      "domain:yandex.ru",
+                      "domain:yandex.net",
+                      "domain:yandex.com",
+                      "domain:ya.ru",
+                      "domain:dzen.ru",
+                      "full:go.yandex"
+                    ]
+                  },
+                  {
+                    type: "field",
+                    inboundTag: ["socks", "http"],
+                    balancerTag: "BALANCER"
+                  }
+                ],
+                balancers: [{
+                  tag: "BALANCER",
+                  selector: ["lte-"],
+                  strategy: {type: "leastLoad"}
+                }]
+              },
+              inbounds: [
+                {
+                  tag: "socks",
+                  port: 10808,
+                  listen: "127.0.0.1",
+                  protocol: "socks",
+                  settings: {udp: true, auth: "noauth"},
+                  sniffing: {enabled: true, routeOnly: false, destOverride: ["http","tls","quic"]}
+                },
+                {
+                  tag: "http",
+                  port: 10809,
+                  listen: "127.0.0.1",
+                  protocol: "http",
+                  settings: {allowTransparent: false},
+                  sniffing: {enabled: true, routeOnly: false, destOverride: ["http","tls","quic"]}
+                }
+              ],
+              outbounds: ($out + [{tag:"direct",protocol:"freedom"},{tag:"block",protocol:"blackhole"}])
+            }'
+            rm -f "$RETAGGED"
+          }
 
-          SYSTEM_OUTBOUNDS = [
-              {"tag": "direct",  "protocol": "freedom"},
-              {"tag": "backup",  "protocol": "freedom"},
-              {"tag": "block",   "protocol": "blackhole"}
-          ]
+          while IFS= read -r line; do
+            printf '%s\n' "$line" >> "$CHUNK"
+            LINE_COUNT=$((LINE_COUNT + 1))
+            if [ "$LINE_COUNT" -eq "$PACK_SIZE" ]; then
+              PACK_JSON=$(make_pack "$PACK_NUM" "$CHUNK")
+              TMP_ARRAY=$(mktemp)
+              jq --argjson p "$PACK_JSON" '. + [$p]' "$PACKS_ARRAY" > "$TMP_ARRAY"
+              mv "$TMP_ARRAY" "$PACKS_ARRAY"
+              echo "✅ Пак 1.${PACK_NUM} (50 серверов)"
+              PACK_NUM=$((PACK_NUM + 1))
+              rm -f "$CHUNK"; CHUNK=$(mktemp); LINE_COUNT=0
+            fi
+          done < "$ALL_OUTBOUNDS"
 
-          with open(infile, encoding="utf-8") as f:
-              lines = [l.strip() for l in f if l.strip()]
+          if [ "$LINE_COUNT" -gt 0 ]; then
+            PACK_JSON=$(make_pack "$PACK_NUM" "$CHUNK")
+            TMP_ARRAY=$(mktemp)
+            jq --argjson p "$PACK_JSON" '. + [$p]' "$PACKS_ARRAY" > "$TMP_ARRAY"
+            mv "$TMP_ARRAY" "$PACKS_ARRAY"
+            echo "✅ Пак 1.${PACK_NUM} ($LINE_COUNT серверов)"
+          fi
 
-          packs = []
-          pack_num = 1
-
-          for i in range(0, len(lines), PACK_SIZE):
-              chunk = lines[i:i+PACK_SIZE]
-              outbounds = []
-              for local_idx, raw in enumerate(chunk, 1):
-                  try:
-                      obj = json.loads(raw)
-                      obj["tag"] = f"lte-{local_idx}"
-                      outbounds.append(obj)
-                  except Exception:
-                      continue
-
-              pack = {
-                  "remarks":     f"\U0001f1ea\U0001f1faLTE | 1.{pack_num} \U0001f310",
-                  "dns":         DNS_CFG,
-                  "observatory": OBSERVATORY_CFG,
-                  "routing":     ROUTING_CFG,
-                  "inbounds":    INBOUNDS_CFG,
-                  "outbounds":   outbounds + SYSTEM_OUTBOUNDS
-              }
-              packs.append(pack)
-              print(f"Пак 1.{pack_num} ({len(outbounds)} серверов)")
-              pack_num += 1
-
-          header_lines = [
-              "// profile-title: HiBypass \U0001f5fd | FREE LTE | \u221e",
-              "// subscription-userinfo: upload=0; download=0; total=999999999999999; expire=4102444800",
-              "// profile-update-interval: 1",
-              "// announce: \u0411\u0435\u0441\u043f\u043b\u0430\u0442\u043d\u044b\u0439 \u043e\u0431\u0445\u043e\u0434 \u0431\u0435\u043b\u044b\u0445 \u0441\u043f\u0438\u0441\u043a\u043e\u0432 \U0001f3f3\U0001f1f7\U0001f1fa | \u0415\u0441\u043b\u0438 \u043f\u0435\u0440\u0435\u0441\u0442\u0430\u043b\u043e \u0440\u0430\u0431\u043e\u0442\u0430\u0442\u044c \u2014 \u043e\u0431\u043d\u043e\u0432\u0438\u0442\u0435 \u043f\u043e\u0434\u043f\u0438\u0441\u043a\u0443 \U0001f504",
-              "// announce-url: https://t.me/HiBypass",
-              "// update-always: true",
-          ]
-
-          with open(outfile, "w", encoding="utf-8") as f:
-              f.write("\n".join(header_lines) + "\n")
-              json.dump(packs, f, ensure_ascii=False, indent=2)
-
-          print(f"Итого: {len(lines)} серверов в {pack_num - 1} паках")
-          PYEOF
-          python3 build_packs.py
-
-      - name: Cleanup temp files
-        run: rm -f merged.tmp dedup.tmp outbounds.jsonl parse_configs.py build_packs.py
+          mv "$PACKS_ARRAY" packs.json
+          rm -f "$CHUNK" "$MERGED_TMP" "$DEDUP_TMP" "$ALL_OUTBOUNDS"
+          echo "✅ Готово: $CONF_COUNT серверов в $PACK_NUM паках"
 
       - name: Validate JSON
         run: |
-          if grep -v '^//' packs.json | jq empty 2>/dev/null; then
-            PACK_COUNT=$(grep -v '^//' packs.json | jq 'length')
-            SERVER_COUNT=$(grep -v '^//' packs.json | jq '[.[].outbounds[]|select(.tag|startswith("lte-"))]|length')
+          if jq empty packs.json 2>/dev/null; then
+            PACK_COUNT=$(jq 'length' packs.json)
+            SERVER_COUNT=$(jq '[.[].outbounds[]|select(.tag|startswith("lte-"))]|length' packs.json)
             echo "✅ packs.json валидный | $PACK_COUNT паков | $SERVER_COUNT серверов"
           else
             echo "❌ packs.json невалидный!"
@@ -411,7 +440,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add vlees.txt packs.json
-          SERVER_COUNT=$(grep -v '^//' packs.json | jq '[.[].outbounds[]|select(.tag|startswith("lte-"))]|length')
-          PACK_COUNT=$(grep -v '^//' packs.json | jq 'length')
+          SERVER_COUNT=$(jq '[.[].outbounds[]|select(.tag|startswith("lte-"))]|length' packs.json)
+          PACK_COUNT=$(jq 'length' packs.json)
           git diff --staged --quiet || git commit -m "Auto: $(date -u '+%Y-%m-%d %H:%M UTC') | $SERVER_COUNT серверов | $PACK_COUNT паков"
           git push
