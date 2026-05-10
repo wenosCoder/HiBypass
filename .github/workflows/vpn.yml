@@ -1,4 +1,163 @@
-merge:
+name: Merge VLESS Configs
+
+on:
+  schedule:
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    timeout-minutes: 25
+
+    strategy:
+      matrix:
+        batch: [1, 2, 3, 4, 5, 6]
+      fail-fast: false
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: sudo apt-get install -y jq
+
+      - name: Fetch batch ${{ matrix.batch }}
+        timeout-minutes: 20
+        run: |
+          CONFIGS_TMP="batch_${{ matrix.batch }}.tmp"
+          touch "$CONFIGS_TMP"
+
+          decode_until_vless() {
+            local INFILE="$1"
+            local DEPTH=0
+            while [ $DEPTH -lt 5 ]; do
+              grep -qaE '^vless://' "$INFILE" && return 0
+              local TMP_DEC
+              TMP_DEC=$(mktemp)
+              base64 -d "$INFILE" > "$TMP_DEC" 2>/dev/null
+              if [ ! -s "$TMP_DEC" ]; then rm -f "$TMP_DEC"; return 1; fi
+              if head -c 512 "$TMP_DEC" | cat -v | grep -q '\^@'; then rm -f "$TMP_DEC"; return 1; fi
+              mv "$TMP_DEC" "$INFILE"
+              DEPTH=$((DEPTH + 1))
+            done
+            return 1
+          }
+
+          process_source() {
+            local URL="$1" PREFIX="$2"
+            local TMPFILE
+            TMPFILE=$(mktemp)
+            curl -fsSL --max-time 15 --connect-timeout 5 "$URL" \
+              > "$TMPFILE" 2>/dev/null || { rm -f "$TMPFILE"; return; }
+
+            if ! grep -qaE '^vless://' "$TMPFILE"; then
+              decode_until_vless "$TMPFILE" || true
+            fi
+
+            grep -aE '^vless://' "$TMPFILE" | sed 's/#.*//' | while IFS= read -r BASE; do
+              HOST=$(printf '%s' "$BASE" | sed 's/.*@//;s/[:/].*//')
+              PORT=$(printf '%s' "$BASE" | sed 's/.*@[^:]*://;s/[/?].*//')
+              printf '%s' "$PORT" | grep -qE '^[0-9]+$' || continue
+              printf '%s\t%s\t%s\t%s\n' "$BASE" "$HOST" "$PORT" "$PREFIX"
+            done >> "$CONFIGS_TMP"
+
+            rm -f "$TMPFILE"
+          }
+
+          if [ "${{ matrix.batch }}" = "1" ]; then
+            process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/Vless-Reality-White-Lists-Rus-Mobile-2.txt" "1"
+            process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/Vless-Reality-White-Lists-Rus-Mobile.txt" "2"
+            process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/BLACK_VLESS_RUS.txt" "3"
+            process_source "https://github.com/igareck/vpn-configs-for-russia/raw/refs/heads/main/BLACK_VLESS_RUS_mobile.txt" "4"
+            process_source "https://raw.githubusercontent.com/zieng2/wl/refs/heads/main/vless_universal.txt" "5"
+            process_source "https://raw.githubusercontent.com/zieng2/wl/refs/heads/main/vless_lite.txt" "6"
+            process_source "https://raw.githubusercontent.com/whoahaow/rjsxrd/refs/heads/main/githubmirror/bypass/bypass-all.txt" "7"
+            process_source "https://raw.githubusercontent.com/whoahaow/rjsxrd/refs/heads/main/githubmirror/split-by-protocols/vless-secure.txt" "8"
+            process_source "https://raw.githubusercontent.com/whoahaow/rjsxrd/refs/heads/main/githubmirror/split-by-protocols/vless.txt" "9"
+            process_source "https://sub.obbhod.online/premium" "10"
+          fi
+
+          if [ "${{ matrix.batch }}" = "2" ]; then
+            process_source "https://mifa.world/vless" "11"
+            process_source "https://raw.githubusercontent.com/Temnuk/naabuzil/refs/heads/main/whitelist_full" "12"
+            process_source "https://raw.githubusercontent.com/Temnuk/naabuzil/refs/heads/main/wifi" "13"
+            process_source "https://raw.githubusercontent.com/VOID-Anonymity/V.O.I.D-VPN_Bypass/refs/heads/main/url_work.txt" "14"
+            process_source "https://raw.githubusercontent.com/AvenCores/goida-vpn-configs/refs/heads/main/githubmirror/26.txt" "15"
+            process_source "https://raw.githubusercontent.com/EtoNeYaProject/etoneyaproject.github.io/refs/heads/main/2" "16"
+            process_source "https://raw.githubusercontent.com/ByeWhiteLists/ByeWhiteLists2/refs/heads/main/ByeWhiteLists2.txt" "17"
+            process_source "https://ety.twinkvibe.gay/whitelist" "18"
+            process_source "https://white-lists.vercel.app/api/filter?code=RU" "19"
+            process_source "https://raw.githubusercontent.com/Hidashimora/free-vpn-anti-rkn/main/configs/31.txt" "20"
+          fi
+
+          if [ "${{ matrix.batch }}" = "3" ]; then
+            process_source "https://raw.githubusercontent.com/tankist939-afk/Obhod-WL/refs/heads/main/Obhod%20WL" "21"
+            process_source "https://gbr.mydan.online/configs" "22"
+            process_source "https://gitverse.ru/api/repos/bywarm/rser/raw/branch/master/wl.txt" "23"
+            process_source "https://raw.githubusercontent.com/whoahaow/rjsxrd/refs/heads/main/githubmirror/bypass-unsecure/bypass-unsecure-all.txt" "24"
+            process_source "https://raw.githubusercontent.com/whoahaow/rjsxrd/refs/heads/main/githubmirror/bypass/raw/bypass-all-raw.txt" "25"
+            process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/WHITE-CIDR-RU-all.txt" "26"
+            process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/WHITE-CIDR-RU-checked.txt" "27"
+            process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/WHITE-SNI-RU-all.txt" "28"
+            process_source "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/BLACK_SS%2BAll_RUS.txt" "29"
+            process_source "https://gist.github.com/DestroyST6767/50af50221ca1858ba2084efc0f524fbc.txt" "30"
+          fi
+
+          if [ "${{ matrix.batch }}" = "4" ]; then
+            process_source "https://github.com/sakha1370/OpenRay/raw/refs/heads/main/output/all_valid_proxies.txt" "31"
+            process_source "https://raw.githubusercontent.com/sevcator/5ubscrpt10n/main/protocols/vl.txt" "32"
+            process_source "https://raw.githubusercontent.com/yitong2333/proxy-minging/refs/heads/main/v2ray.txt" "33"
+            process_source "https://raw.githubusercontent.com/acymz/AutoVPN/refs/heads/main/data/V2.txt" "34"
+            process_source "https://raw.githubusercontent.com/miladtahanian/V2RayCFGDumper/refs/heads/main/sub.txt" "35"
+            process_source "https://raw.githubusercontent.com/roosterkid/openproxylist/main/V2RAY_RAW.txt" "36"
+            process_source "https://raw.githubusercontent.com/Epodonios/v2ray-configs/refs/heads/main/All_Configs_Sub.txt" "37"
+            process_source "https://raw.githubusercontent.com/CidVpn/cid-vpn-config/refs/heads/main/general.txt" "38"
+            process_source "https://raw.githubusercontent.com/mohamadfg-dev/telegram-v2ray-configs-collector/refs/heads/main/category/vless.txt" "39"
+            process_source "https://raw.githubusercontent.com/mheidari98/.proxy/refs/heads/main/vless" "40"
+          fi
+
+          if [ "${{ matrix.batch }}" = "5" ]; then
+            process_source "https://raw.githubusercontent.com/youfoundamin/V2rayCollector/main/mixed_iran.txt" "41"
+            process_source "https://raw.githubusercontent.com/expressalaki/ExpressVPN/refs/heads/main/configs3.txt" "42"
+            process_source "https://raw.githubusercontent.com/MahsaNetConfigTopic/config/refs/heads/main/xray_final.txt" "43"
+            process_source "https://github.com/LalatinaHub/Mineral/raw/refs/heads/master/result/nodes" "44"
+            process_source "https://raw.githubusercontent.com/miladtahanian/Config-Collector/refs/heads/main/mixed_iran.txt" "45"
+            process_source "https://raw.githubusercontent.com/Pawdroid/Free-servers/refs/heads/main/sub" "46"
+            process_source "https://github.com/MhdiTaheri/V2rayCollector_Py/raw/refs/heads/main/sub/Mix/mix.txt" "47"
+            process_source "https://raw.githubusercontent.com/free18/v2ray/refs/heads/main/v.txt" "48"
+            process_source "https://github.com/MhdiTaheri/V2rayCollector/raw/refs/heads/main/sub/mix" "49"
+            process_source "https://github.com/Argh94/Proxy-List/raw/refs/heads/main/All_Config.txt" "50"
+          fi
+
+          if [ "${{ matrix.batch }}" = "6" ]; then
+            process_source "https://raw.githubusercontent.com/shabane/kamaji/master/hub/merged.txt" "51"
+            process_source "https://raw.githubusercontent.com/wuqb2i4f/xray-config-toolkit/main/output/base64/mix-uri" "52"
+            process_source "https://github.com/Mr-Meshky/vify/raw/refs/heads/main/configs/vless.txt" "53"
+            process_source "https://raw.githubusercontent.com/V2RayRoot/V2RayConfig/refs/heads/main/Config/vless.txt" "54"
+            process_source "https://github.com/Epodonios/v2ray-configs/raw/main/Splitted-By-Protocol/trojan.txt" "55"
+            process_source "https://github.com/rtwo2/FastNodes/raw/refs/heads/main/sub/protocols/hysteria2.txt" "56"
+            process_source "https://raw.githubusercontent.com/whoahaow/rjsxrd/refs/heads/main/githubmirror/split-by-protocols/tuic.txt" "57"
+            process_source "https://gist.githubusercontent.com/angelivan388283-beep/706d96d52a24deedea0fd825d73160e0/raw/ae5c2309e86954dcf061d6da4bba1dfefbd3ac3c/HaizWait2.0" "58"
+            process_source "https://gist.githubusercontent.com/angelivan388283-beep/706d96d52a24deedea0fd825d73160e0/raw/ae5c2309e86954dcf061d6da4bba1dfefbd3ac3c/heisen2.0" "59"
+            process_source "https://gist.githubusercontent.com/angelivan388283-beep/706d96d52a24deedea0fd825d73160e0/raw/ae5c2309e86954dcf061d6da4bba1dfefbd3ac3c/heisen1.0" "60"
+            process_source "https://gist.githubusercontent.com/angelivan388283-beep/706d96d52a24deedea0fd825d73160e0/raw/HaizFill" "61"
+          fi
+
+          FOUND=$(wc -l < "$CONFIGS_TMP" 2>/dev/null || echo 0)
+          echo "Батч ${{ matrix.batch }}: собрано конфигов: $FOUND"
+
+      - name: Upload batch artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: batch-${{ matrix.batch }}
+          path: batch_${{ matrix.batch }}.tmp
+          retention-days: 1
+          if-no-files-found: warn
+
+  merge:
     needs: fetch
     runs-on: ubuntu-latest
     permissions:
@@ -47,189 +206,197 @@ merge:
             IDX=$((IDX + 1))
           done < "$DEDUP_TMP"
 
-          # Генерируем все outbounds через Python (быстро, без jq в цикле)
+          # Шаг 1: парсим конфиги в JSONL через Python
           ALL_OUTBOUNDS=$(mktemp)
 
-          python3 - "$DEDUP_TMP" "$ALL_OUTBOUNDS" << 'PYEOF'
-          import sys, json, re
+          python3 << PYEOF
+import sys, json, re
 
-          infile  = sys.argv[1]
-          outfile = sys.argv[2]
+infile  = "$DEDUP_TMP"
+outfile = "$ALL_OUTBOUNDS"
 
-          results = []
-          idx = 1
+results = []
+idx = 1
 
-          with open(infile, encoding='utf-8', errors='replace') as f:
-            for line in f:
-              parts = line.rstrip('\n').split('\t')
-              if len(parts) < 3:
-                idx += 1
-                continue
-              base, host, port = parts[0], parts[1], parts[2]
-              if not port.isdigit():
-                idx += 1
-                continue
+with open(infile, encoding='utf-8', errors='replace') as f:
+    for line in f:
+        parts = line.rstrip('\n').split('\t')
+        if len(parts) < 3:
+            idx += 1
+            continue
+        base, host, port = parts[0], parts[1], parts[2]
+        if not port.isdigit():
+            idx += 1
+            continue
 
-              # UUID
-              m = re.match(r'vless://([^@]+)@', base)
-              uuid = m.group(1) if m else ''
+        m = re.match(r'vless://([^@]+)@', base)
+        uuid = m.group(1) if m else ''
 
-              # Query params
-              m2 = re.search(r'\?([^#]*)', base)
-              query = m2.group(1) if m2 else ''
-              def get_param(key):
-                m = re.search(rf'(?:^|&){key}=([^&]*)', query)
-                return m.group(1) if m else ''
+        m2 = re.search(r'\?([^#]*)', base)
+        query = m2.group(1) if m2 else ''
 
-              flow = get_param('flow') or 'xtls-rprx-vision'
-              sni  = get_param('sni')
-              pbk  = get_param('pbk')
-              fp   = get_param('fp') or 'chrome'
-              sid  = get_param('sid')
-              sec  = get_param('security') or 'reality'
+        def get_param(key):
+            m = re.search(r'(?:^|&)' + key + r'=([^&]*)', query)
+            return m.group(1) if m else ''
 
-              obj = {
-                "tag": f"lte-{idx}",
-                "protocol": "vless",
-                "settings": {
-                  "vnext": [{
+        flow = get_param('flow') or 'xtls-rprx-vision'
+        sni  = get_param('sni')
+        pbk  = get_param('pbk')
+        fp   = get_param('fp') or 'chrome'
+        sid  = get_param('sid')
+        sec  = get_param('security') or 'reality'
+
+        obj = {
+            "tag": f"lte-{idx}",
+            "protocol": "vless",
+            "settings": {
+                "vnext": [{
                     "address": host,
                     "port": int(port),
                     "users": [{"id": uuid, "encryption": "none", "flow": flow}]
-                  }]
-                },
-                "streamSettings": {
-                  "network": "tcp",
-                  "security": sec,
-                  "realitySettings": {
+                }]
+            },
+            "streamSettings": {
+                "network": "tcp",
+                "security": sec,
+                "realitySettings": {
                     "serverName": sni,
                     "publicKey": pbk,
                     "shortId": sid,
                     "fingerprint": fp
-                  }
                 }
-              }
-              results.append(json.dumps(obj, ensure_ascii=False))
-              idx += 1
+            }
+        }
+        results.append(json.dumps(obj, ensure_ascii=False))
+        idx += 1
 
-          with open(outfile, 'w', encoding='utf-8') as f:
-            f.write('\n'.join(results))
+with open(outfile, 'w', encoding='utf-8') as f:
+    f.write('\n'.join(results))
 
-          print(f"Python: сгенерировано {len(results)} outbounds")
-          PYEOF
+print(f"Python: сгенерировано {len(results)} outbounds")
+PYEOF
 
           CONF_COUNT=$(wc -l < "$ALL_OUTBOUNDS")
           echo "Сгенерировано outbounds: $CONF_COUNT"
 
-          # Собираем паки по 20 через Python (быстро)
-          python3 - "$ALL_OUTBOUNDS" packs.json << 'PYEOF'
-          import sys, json
+          # Шаг 2: собираем паки через Python
+          python3 << PYEOF
+import json
 
-          infile  = sys.argv[1]
-          outfile = sys.argv[2]
+infile  = "$ALL_OUTBOUNDS"
+outfile = "packs.json"
 
-          PACK_SIZE = 20
+PACK_SIZE = 20
 
-          HEADER = {
-            "dns": {
-              "queryStrategy": "UseIPv4",
-              "servers": [
-                "1.1.1.1",
-                "8.8.8.8",
-                "tls://1.1.1.1",
-                "https://dns.google/dns-query",
-                "https://cloudflare-dns.com/dns-query"
-              ]
-            },
-            "observatory": {
-              "enableConcurrency": True,
-              "probeInterval": "5s",
-              "probeUrl": "http://www.gstatic.com/generate_204",
-              "subjectSelector": ["lte-"]
-            },
-            "routing": {
-              "domainMatcher": "hybrid",
-              "domainStrategy": "IPIfNonMatch",
-              "rules": [
-                {"type": "field", "protocol": ["bittorrent"], "outboundTag": "direct"},
-                {"type": "field", "inboundTag": ["socks", "http"], "balancerTag": "BALANCER"}
-              ],
-              "balancers": [{
-                "tag": "BALANCER",
-                "selector": ["lte-"],
-                "fallbackTag": "backup",
-                "strategy": {
-                  "type": "leastLoad",
-                  "settings": {
-                    "expected": 1,
-                    "maxRTT": "4s",
-                    "baselines": ["3s"]
-                  }
-                }
-              }]
-            },
-            "inbounds": [
-              {
-                "tag": "socks", "port": 10808, "listen": "127.0.0.1",
-                "protocol": "socks",
-                "settings": {"udp": True, "auth": "noauth"},
-                "sniffing": {"enabled": True, "routeOnly": False, "destOverride": ["http","tls","quic"]}
-              },
-              {
-                "tag": "http", "port": 10809, "listen": "127.0.0.1",
-                "protocol": "http",
-                "settings": {"allowTransparent": False},
-                "sniffing": {"enabled": True, "routeOnly": False, "destOverride": ["http","tls","quic"]}
-              }
-            ]
-          }
+DNS_CFG = {
+    "queryStrategy": "UseIPv4",
+    "servers": [
+        "1.1.1.1",
+        "8.8.8.8",
+        "tls://1.1.1.1",
+        "https://dns.google/dns-query",
+        "https://cloudflare-dns.com/dns-query"
+    ]
+}
 
-          SYSTEM_OUTBOUNDS = [
-            {"tag": "direct",  "protocol": "freedom"},
-            {"tag": "backup",  "protocol": "freedom"},
-            {"tag": "block",   "protocol": "blackhole"}
-          ]
+OBSERVATORY_CFG = {
+    "enableConcurrency": True,
+    "probeInterval": "5s",
+    "probeUrl": "http://www.gstatic.com/generate_204",
+    "subjectSelector": ["lte-"]
+}
 
-          with open(infile, encoding='utf-8') as f:
-            lines = [l.strip() for l in f if l.strip()]
+ROUTING_CFG = {
+    "domainMatcher": "hybrid",
+    "domainStrategy": "IPIfNonMatch",
+    "rules": [
+        {"type": "field", "protocol": ["bittorrent"], "outboundTag": "direct"},
+        {"type": "field", "inboundTag": ["socks", "http"], "balancerTag": "BALANCER"}
+    ],
+    "balancers": [{
+        "tag": "BALANCER",
+        "selector": ["lte-"],
+        "fallbackTag": "backup",
+        "strategy": {
+            "type": "leastLoad",
+            "settings": {
+                "expected": 1,
+                "maxRTT": "4s",
+                "baselines": ["3s"]
+            }
+        }
+    }]
+}
 
-          packs = []
-          pack_num = 1
+INBOUNDS_CFG = [
+    {
+        "tag": "socks",
+        "port": 10808,
+        "listen": "127.0.0.1",
+        "protocol": "socks",
+        "settings": {"udp": True, "auth": "noauth"},
+        "sniffing": {"enabled": True, "routeOnly": False, "destOverride": ["http","tls","quic"]}
+    },
+    {
+        "tag": "http",
+        "port": 10809,
+        "listen": "127.0.0.1",
+        "protocol": "http",
+        "settings": {"allowTransparent": False},
+        "sniffing": {"enabled": True, "routeOnly": False, "destOverride": ["http","tls","quic"]}
+    }
+]
 
-          for i in range(0, len(lines), PACK_SIZE):
-            chunk = lines[i:i+PACK_SIZE]
-            outbounds = []
-            for local_idx, raw in enumerate(chunk, 1):
-              try:
-                obj = json.loads(raw)
-                obj["tag"] = f"lte-{local_idx}"
-                outbounds.append(obj)
-              except Exception:
-                continue
+SYSTEM_OUTBOUNDS = [
+    {"tag": "direct",  "protocol": "freedom"},
+    {"tag": "backup",  "protocol": "freedom"},
+    {"tag": "block",   "protocol": "blackhole"}
+]
 
-            pack = {"remarks": f"🇪🇺LTE | 1.{pack_num} 🌐"}
-            pack.update(HEADER)
-            pack["outbounds"] = outbounds + SYSTEM_OUTBOUNDS
-            packs.append(pack)
-            print(f"✅ Пак 1.{pack_num} ({len(outbounds)} серверов)")
-            pack_num += 1
+with open(infile, encoding='utf-8') as f:
+    lines = [l.strip() for l in f if l.strip()]
 
-          # Записываем с заголовками
-          header_lines = [
-            "// profile-title: HiBypass 🗽 | FREE LTE | ∞",
-            "// subscription-userinfo: upload=0; download=0; total=999999999999999; expire=4102444800",
-            "// profile-update-interval: 1",
-            "// announce: Бесплатный обход белых списков 🏳🇷🇺 | Если перестало работать — обновите подписку 🔄",
-            "// announce-url: https://t.me/HiBypass",
-            "// update-always: true",
-          ]
+packs = []
+pack_num = 1
 
-          with open(outfile, 'w', encoding='utf-8') as f:
-            f.write('\n'.join(header_lines) + '\n')
-            json.dump(packs, f, ensure_ascii=False, indent=2)
+for i in range(0, len(lines), PACK_SIZE):
+    chunk = lines[i:i+PACK_SIZE]
+    outbounds = []
+    for local_idx, raw in enumerate(chunk, 1):
+        try:
+            obj = json.loads(raw)
+            obj["tag"] = f"lte-{local_idx}"
+            outbounds.append(obj)
+        except Exception:
+            continue
 
-          print(f"✅ Готово: {len(lines)} серверов в {pack_num-1} паках")
-          PYEOF
+    pack = {
+        "remarks":     f"🇪🇺LTE | 1.{pack_num} 🌐",
+        "dns":         DNS_CFG,
+        "observatory": OBSERVATORY_CFG,
+        "routing":     ROUTING_CFG,
+        "inbounds":    INBOUNDS_CFG,
+        "outbounds":   outbounds + SYSTEM_OUTBOUNDS
+    }
+    packs.append(pack)
+    print(f"✅ Пак 1.{pack_num} ({len(outbounds)} серверов)")
+    pack_num += 1
+
+header_lines = [
+    "// profile-title: HiBypass 🗽 | FREE LTE | ∞",
+    "// subscription-userinfo: upload=0; download=0; total=999999999999999; expire=4102444800",
+    "// profile-update-interval: 1",
+    "// announce: Бесплатный обход белых списков 🏳🇷🇺 | Если перестало работать — обновите подписку 🔄",
+    "// announce-url: https://t.me/HiBypass",
+    "// update-always: true",
+]
+
+with open(outfile, 'w', encoding='utf-8') as f:
+    f.write('\n'.join(header_lines) + '\n')
+    json.dump(packs, f, ensure_ascii=False, indent=2)
+
+print(f"✅ Итого: {len(lines)} серверов в {pack_num - 1} паках")
+PYEOF
 
           rm -f "$MERGED_TMP" "$DEDUP_TMP" "$ALL_OUTBOUNDS"
 
