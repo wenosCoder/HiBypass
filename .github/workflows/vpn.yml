@@ -177,7 +177,7 @@ jobs:
           pattern: batch-*
           merge-multiple: true
 
-      - name: Merge and generate files
+      - name: Merge and deduplicate
         run: |
           printf '%s\n' \
             '#profile-title: HiBypass | LTE FREE 🏳🇷🇺' \
@@ -189,216 +189,211 @@ jobs:
             '#traffic-remaining: ∞' \
             > vlees.txt
 
-          MERGED_TMP=$(mktemp)
-          cat batch_*.tmp 2>/dev/null > "$MERGED_TMP"
-          echo "Всего строк до дедупликации: $(wc -l < "$MERGED_TMP")"
+          cat batch_*.tmp 2>/dev/null > merged.tmp
+          echo "Всего строк до дедупликации: $(wc -l < merged.tmp)"
 
-          DEDUP_TMP=$(mktemp)
-          awk -F'\t' '!seen[$2":"$3]++' "$MERGED_TMP" > "$DEDUP_TMP"
+          awk -F'\t' '!seen[$2":"$3]++' merged.tmp > dedup.tmp
+          echo "Всего уникальных конфигов: $(wc -l < dedup.tmp)"
 
-          TOTAL=$(wc -l < "$DEDUP_TMP")
-          echo "Всего уникальных конфигов: $TOTAL"
-
-          # Генерируем vlees.txt
           IDX=1
           while IFS=$'\t' read -r BASE HOST PORT PREFIX; do
             printf '%s\n' "${BASE}#🇪🇺LTE | ${IDX} 🌐 RU" >> vlees.txt
             IDX=$((IDX + 1))
-          done < "$DEDUP_TMP"
+          done < dedup.tmp
 
-          # Шаг 1: парсим конфиги в JSONL через Python
-          ALL_OUTBOUNDS=$(mktemp)
+      - name: Parse configs to JSONL
+        run: |
+          cat > parse_configs.py << 'PYEOF'
+          import sys, json, re
 
-          python3 << PYEOF
-import sys, json, re
+          infile  = "dedup.tmp"
+          outfile = "outbounds.jsonl"
 
-infile  = "$DEDUP_TMP"
-outfile = "$ALL_OUTBOUNDS"
+          results = []
+          idx = 1
 
-results = []
-idx = 1
+          with open(infile, encoding="utf-8", errors="replace") as f:
+              for line in f:
+                  parts = line.rstrip("\n").split("\t")
+                  if len(parts) < 3:
+                      idx += 1
+                      continue
+                  base, host, port = parts[0], parts[1], parts[2]
+                  if not port.isdigit():
+                      idx += 1
+                      continue
 
-with open(infile, encoding='utf-8', errors='replace') as f:
-    for line in f:
-        parts = line.rstrip('\n').split('\t')
-        if len(parts) < 3:
-            idx += 1
-            continue
-        base, host, port = parts[0], parts[1], parts[2]
-        if not port.isdigit():
-            idx += 1
-            continue
+                  m = re.match(r"vless://([^@]+)@", base)
+                  uuid = m.group(1) if m else ""
 
-        m = re.match(r'vless://([^@]+)@', base)
-        uuid = m.group(1) if m else ''
+                  m2 = re.search(r"\?([^#]*)", base)
+                  query = m2.group(1) if m2 else ""
 
-        m2 = re.search(r'\?([^#]*)', base)
-        query = m2.group(1) if m2 else ''
+                  def get_param(key):
+                      m = re.search(r"(?:^|&)" + key + r"=([^&]*)", query)
+                      return m.group(1) if m else ""
 
-        def get_param(key):
-            m = re.search(r'(?:^|&)' + key + r'=([^&]*)', query)
-            return m.group(1) if m else ''
+                  flow = get_param("flow") or "xtls-rprx-vision"
+                  sni  = get_param("sni")
+                  pbk  = get_param("pbk")
+                  fp   = get_param("fp") or "chrome"
+                  sid  = get_param("sid")
+                  sec  = get_param("security") or "reality"
 
-        flow = get_param('flow') or 'xtls-rprx-vision'
-        sni  = get_param('sni')
-        pbk  = get_param('pbk')
-        fp   = get_param('fp') or 'chrome'
-        sid  = get_param('sid')
-        sec  = get_param('security') or 'reality'
+                  obj = {
+                      "tag": f"lte-{idx}",
+                      "protocol": "vless",
+                      "settings": {
+                          "vnext": [{
+                              "address": host,
+                              "port": int(port),
+                              "users": [{"id": uuid, "encryption": "none", "flow": flow}]
+                          }]
+                      },
+                      "streamSettings": {
+                          "network": "tcp",
+                          "security": sec,
+                          "realitySettings": {
+                              "serverName": sni,
+                              "publicKey": pbk,
+                              "shortId": sid,
+                              "fingerprint": fp
+                          }
+                      }
+                  }
+                  results.append(json.dumps(obj, ensure_ascii=False))
+                  idx += 1
 
-        obj = {
-            "tag": f"lte-{idx}",
-            "protocol": "vless",
-            "settings": {
-                "vnext": [{
-                    "address": host,
-                    "port": int(port),
-                    "users": [{"id": uuid, "encryption": "none", "flow": flow}]
-                }]
-            },
-            "streamSettings": {
-                "network": "tcp",
-                "security": sec,
-                "realitySettings": {
-                    "serverName": sni,
-                    "publicKey": pbk,
-                    "shortId": sid,
-                    "fingerprint": fp
-                }
-            }
-        }
-        results.append(json.dumps(obj, ensure_ascii=False))
-        idx += 1
+          with open(outfile, "w", encoding="utf-8") as f:
+              f.write("\n".join(results))
 
-with open(outfile, 'w', encoding='utf-8') as f:
-    f.write('\n'.join(results))
+          print(f"Сгенерировано outbounds: {len(results)}")
+          PYEOF
+          python3 parse_configs.py
 
-print(f"Python: сгенерировано {len(results)} outbounds")
-PYEOF
+      - name: Build packs JSON
+        run: |
+          cat > build_packs.py << 'PYEOF'
+          import json
 
-          CONF_COUNT=$(wc -l < "$ALL_OUTBOUNDS")
-          echo "Сгенерировано outbounds: $CONF_COUNT"
+          infile  = "outbounds.jsonl"
+          outfile = "packs.json"
 
-          # Шаг 2: собираем паки через Python
-          python3 << PYEOF
-import json
+          PACK_SIZE = 20
 
-infile  = "$ALL_OUTBOUNDS"
-outfile = "packs.json"
+          DNS_CFG = {
+              "queryStrategy": "UseIPv4",
+              "servers": [
+                  "1.1.1.1",
+                  "8.8.8.8",
+                  "tls://1.1.1.1",
+                  "https://dns.google/dns-query",
+                  "https://cloudflare-dns.com/dns-query"
+              ]
+          }
 
-PACK_SIZE = 20
+          OBSERVATORY_CFG = {
+              "enableConcurrency": True,
+              "probeInterval": "5s",
+              "probeUrl": "http://www.gstatic.com/generate_204",
+              "subjectSelector": ["lte-"]
+          }
 
-DNS_CFG = {
-    "queryStrategy": "UseIPv4",
-    "servers": [
-        "1.1.1.1",
-        "8.8.8.8",
-        "tls://1.1.1.1",
-        "https://dns.google/dns-query",
-        "https://cloudflare-dns.com/dns-query"
-    ]
-}
+          ROUTING_CFG = {
+              "domainMatcher": "hybrid",
+              "domainStrategy": "IPIfNonMatch",
+              "rules": [
+                  {"type": "field", "protocol": ["bittorrent"], "outboundTag": "direct"},
+                  {"type": "field", "inboundTag": ["socks", "http"], "balancerTag": "BALANCER"}
+              ],
+              "balancers": [{
+                  "tag": "BALANCER",
+                  "selector": ["lte-"],
+                  "fallbackTag": "backup",
+                  "strategy": {
+                      "type": "leastLoad",
+                      "settings": {
+                          "expected": 1,
+                          "maxRTT": "4s",
+                          "baselines": ["3s"]
+                      }
+                  }
+              }]
+          }
 
-OBSERVATORY_CFG = {
-    "enableConcurrency": True,
-    "probeInterval": "5s",
-    "probeUrl": "http://www.gstatic.com/generate_204",
-    "subjectSelector": ["lte-"]
-}
+          INBOUNDS_CFG = [
+              {
+                  "tag": "socks",
+                  "port": 10808,
+                  "listen": "127.0.0.1",
+                  "protocol": "socks",
+                  "settings": {"udp": True, "auth": "noauth"},
+                  "sniffing": {"enabled": True, "routeOnly": False, "destOverride": ["http","tls","quic"]}
+              },
+              {
+                  "tag": "http",
+                  "port": 10809,
+                  "listen": "127.0.0.1",
+                  "protocol": "http",
+                  "settings": {"allowTransparent": False},
+                  "sniffing": {"enabled": True, "routeOnly": False, "destOverride": ["http","tls","quic"]}
+              }
+          ]
 
-ROUTING_CFG = {
-    "domainMatcher": "hybrid",
-    "domainStrategy": "IPIfNonMatch",
-    "rules": [
-        {"type": "field", "protocol": ["bittorrent"], "outboundTag": "direct"},
-        {"type": "field", "inboundTag": ["socks", "http"], "balancerTag": "BALANCER"}
-    ],
-    "balancers": [{
-        "tag": "BALANCER",
-        "selector": ["lte-"],
-        "fallbackTag": "backup",
-        "strategy": {
-            "type": "leastLoad",
-            "settings": {
-                "expected": 1,
-                "maxRTT": "4s",
-                "baselines": ["3s"]
-            }
-        }
-    }]
-}
+          SYSTEM_OUTBOUNDS = [
+              {"tag": "direct",  "protocol": "freedom"},
+              {"tag": "backup",  "protocol": "freedom"},
+              {"tag": "block",   "protocol": "blackhole"}
+          ]
 
-INBOUNDS_CFG = [
-    {
-        "tag": "socks",
-        "port": 10808,
-        "listen": "127.0.0.1",
-        "protocol": "socks",
-        "settings": {"udp": True, "auth": "noauth"},
-        "sniffing": {"enabled": True, "routeOnly": False, "destOverride": ["http","tls","quic"]}
-    },
-    {
-        "tag": "http",
-        "port": 10809,
-        "listen": "127.0.0.1",
-        "protocol": "http",
-        "settings": {"allowTransparent": False},
-        "sniffing": {"enabled": True, "routeOnly": False, "destOverride": ["http","tls","quic"]}
-    }
-]
+          with open(infile, encoding="utf-8") as f:
+              lines = [l.strip() for l in f if l.strip()]
 
-SYSTEM_OUTBOUNDS = [
-    {"tag": "direct",  "protocol": "freedom"},
-    {"tag": "backup",  "protocol": "freedom"},
-    {"tag": "block",   "protocol": "blackhole"}
-]
+          packs = []
+          pack_num = 1
 
-with open(infile, encoding='utf-8') as f:
-    lines = [l.strip() for l in f if l.strip()]
+          for i in range(0, len(lines), PACK_SIZE):
+              chunk = lines[i:i+PACK_SIZE]
+              outbounds = []
+              for local_idx, raw in enumerate(chunk, 1):
+                  try:
+                      obj = json.loads(raw)
+                      obj["tag"] = f"lte-{local_idx}"
+                      outbounds.append(obj)
+                  except Exception:
+                      continue
 
-packs = []
-pack_num = 1
+              pack = {
+                  "remarks":     f"\U0001f1ea\U0001f1faLTE | 1.{pack_num} \U0001f310",
+                  "dns":         DNS_CFG,
+                  "observatory": OBSERVATORY_CFG,
+                  "routing":     ROUTING_CFG,
+                  "inbounds":    INBOUNDS_CFG,
+                  "outbounds":   outbounds + SYSTEM_OUTBOUNDS
+              }
+              packs.append(pack)
+              print(f"Пак 1.{pack_num} ({len(outbounds)} серверов)")
+              pack_num += 1
 
-for i in range(0, len(lines), PACK_SIZE):
-    chunk = lines[i:i+PACK_SIZE]
-    outbounds = []
-    for local_idx, raw in enumerate(chunk, 1):
-        try:
-            obj = json.loads(raw)
-            obj["tag"] = f"lte-{local_idx}"
-            outbounds.append(obj)
-        except Exception:
-            continue
+          header_lines = [
+              "// profile-title: HiBypass \U0001f5fd | FREE LTE | \u221e",
+              "// subscription-userinfo: upload=0; download=0; total=999999999999999; expire=4102444800",
+              "// profile-update-interval: 1",
+              "// announce: \u0411\u0435\u0441\u043f\u043b\u0430\u0442\u043d\u044b\u0439 \u043e\u0431\u0445\u043e\u0434 \u0431\u0435\u043b\u044b\u0445 \u0441\u043f\u0438\u0441\u043a\u043e\u0432 \U0001f3f3\U0001f1f7\U0001f1fa | \u0415\u0441\u043b\u0438 \u043f\u0435\u0440\u0435\u0441\u0442\u0430\u043b\u043e \u0440\u0430\u0431\u043e\u0442\u0430\u0442\u044c \u2014 \u043e\u0431\u043d\u043e\u0432\u0438\u0442\u0435 \u043f\u043e\u0434\u043f\u0438\u0441\u043a\u0443 \U0001f504",
+              "// announce-url: https://t.me/HiBypass",
+              "// update-always: true",
+          ]
 
-    pack = {
-        "remarks":     f"🇪🇺LTE | 1.{pack_num} 🌐",
-        "dns":         DNS_CFG,
-        "observatory": OBSERVATORY_CFG,
-        "routing":     ROUTING_CFG,
-        "inbounds":    INBOUNDS_CFG,
-        "outbounds":   outbounds + SYSTEM_OUTBOUNDS
-    }
-    packs.append(pack)
-    print(f"✅ Пак 1.{pack_num} ({len(outbounds)} серверов)")
-    pack_num += 1
+          with open(outfile, "w", encoding="utf-8") as f:
+              f.write("\n".join(header_lines) + "\n")
+              json.dump(packs, f, ensure_ascii=False, indent=2)
 
-header_lines = [
-    "// profile-title: HiBypass 🗽 | FREE LTE | ∞",
-    "// subscription-userinfo: upload=0; download=0; total=999999999999999; expire=4102444800",
-    "// profile-update-interval: 1",
-    "// announce: Бесплатный обход белых списков 🏳🇷🇺 | Если перестало работать — обновите подписку 🔄",
-    "// announce-url: https://t.me/HiBypass",
-    "// update-always: true",
-]
+          print(f"Итого: {len(lines)} серверов в {pack_num - 1} паках")
+          PYEOF
+          python3 build_packs.py
 
-with open(outfile, 'w', encoding='utf-8') as f:
-    f.write('\n'.join(header_lines) + '\n')
-    json.dump(packs, f, ensure_ascii=False, indent=2)
-
-print(f"✅ Итого: {len(lines)} серверов в {pack_num - 1} паках")
-PYEOF
-
-          rm -f "$MERGED_TMP" "$DEDUP_TMP" "$ALL_OUTBOUNDS"
+      - name: Cleanup temp files
+        run: rm -f merged.tmp dedup.tmp outbounds.jsonl parse_configs.py build_packs.py
 
       - name: Validate JSON
         run: |
