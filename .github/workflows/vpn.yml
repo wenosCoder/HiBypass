@@ -162,14 +162,14 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-    timeout-minutes: 30
+    timeout-minutes: 60
 
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
 
       - name: Install dependencies
-        run: sudo apt-get install -y jq
+        run: sudo apt-get install -y jq python3
 
       - name: Download all batches
         uses: actions/download-artifact@v4
@@ -206,142 +206,150 @@ jobs:
             IDX=$((IDX + 1))
           done < "$DEDUP_TMP"
 
-          ALL_OUTBOUNDS=$(mktemp)
-          IDX=1
-
+          # Генерируем все outbounds построчно в TSV для python
+          OUTBOUNDS_TSV=$(mktemp)
           while IFS=$'\t' read -r BASE HOST PORT PREFIX; do
-            printf '%s' "$PORT" | grep -qE '^[0-9]+$' || { IDX=$((IDX + 1)); continue; }
-
+            printf '%s' "$PORT" | grep -qE '^[0-9]+$' || continue
             UUID=$(printf '%s' "$BASE" | sed 's/vless:\/\///;s/@.*//')
-
             QUERY_RAW=$(printf '%s' "$BASE" | grep -o '?[^#]*')
-            get_param() {
-              printf '%s' "$QUERY_RAW" | grep -o "${1}=[^&]*" | head -1 | cut -d= -f2-
-            }
-
+            get_param() { printf '%s' "$QUERY_RAW" | grep -o "${1}=[^&]*" | head -1 | cut -d= -f2-; }
             FLOW=$(get_param flow); SNI=$(get_param sni); PBK=$(get_param pbk)
             FP=$(get_param fp);     SID=$(get_param sid); SEC=$(get_param security)
-
             [ -z "$FP" ]   && FP="chrome"
             [ -z "$SEC" ]  && SEC="reality"
             [ -z "$FLOW" ] && FLOW="xtls-rprx-vision"
             [ -z "$SID" ]  && SID=""
-
-            jq -cn \
-              --arg  tag   "lte-${IDX}" \
-              --arg  addr  "$HOST"       \
-              --argjson port "$PORT"     \
-              --arg  uuid  "$UUID"       \
-              --arg  flow  "$FLOW"       \
-              --arg  sec   "$SEC"        \
-              --arg  sni   "$SNI"        \
-              --arg  pbk   "$PBK"        \
-              --arg  fp    "$FP"         \
-              --arg  sid   "$SID"        \
-              '{
-                tag: $tag, protocol: "vless",
-                settings: {vnext: [{address: $addr, port: $port,
-                  users: [{id: $uuid, encryption: "none", flow: $flow}]}]},
-                streamSettings: {network: "tcp", security: $sec,
-                  realitySettings: {serverName: $sni, publicKey: $pbk,
-                    shortId: $sid, fingerprint: $fp}}
-              }' >> "$ALL_OUTBOUNDS"
-
-            IDX=$((IDX + 1))
+            printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+              "$HOST" "$PORT" "$UUID" "$FLOW" "$SEC" "$SNI" "$PBK" "$FP" "$SID" >> "$OUTBOUNDS_TSV"
           done < "$DEDUP_TMP"
 
-          CONF_COUNT=$((IDX - 1))
-          echo "Сгенерировано outbounds: $CONF_COUNT"
+          echo "Передаём в python: $(wc -l < "$OUTBOUNDS_TSV") outbounds"
 
-          PACK_SIZE=50
-          PACK_NUM=1
-          PACKS_ARRAY=$(mktemp)
-          echo "[]" > "$PACKS_ARRAY"
+          # Python собирает packs.json быстро без jq в цикле
+          python3 - "$OUTBOUNDS_TSV" <<'PYEOF'
+import json, sys, os
 
-          CHUNK=$(mktemp)
-          LINE_COUNT=0
+tsv_path = sys.argv[1]
+pack_size = 50
+dns_block = {
+    "queryStrategy": "UseIPv4",
+    "servers": [
+        "1.1.1.1",
+        "8.8.8.8",
+        "tls://1.1.1.1",
+        "https://dns.google/dns-query",
+        "https://cloudflare-dns.com/dns-query"
+    ]
+}
+observatory_block = {
+    "enableConcurrency": True,
+    "probeInterval": "15s",
+    "probeUrl": "https://cp.cloudflare.com/generate_204",
+    "subjectSelector": ["lte-"]
+}
+routing_block = {
+    "domainMatcher": "hybrid",
+    "domainStrategy": "IPIfNonMatch",
+    "rules": [
+        {"type": "field", "protocol": ["bittorrent"], "outboundTag": "direct"},
+        {"type": "field", "inboundTag": ["socks", "http"], "balancerTag": "BALANCER"}
+    ],
+    "balancers": [{"tag": "BALANCER", "selector": ["lte-"], "strategy": {"type": "leastPing"}}]
+}
+inbounds_block = [
+    {
+        "tag": "socks", "port": 10808, "listen": "127.0.0.1", "protocol": "socks",
+        "settings": {"udp": True, "auth": "noauth"},
+        "sniffing": {"enabled": True, "routeOnly": False, "destOverride": ["http", "tls", "quic"]}
+    },
+    {
+        "tag": "http", "port": 10809, "listen": "127.0.0.1", "protocol": "http",
+        "settings": {"allowTransparent": False},
+        "sniffing": {"enabled": True, "routeOnly": False, "destOverride": ["http", "tls", "quic"]}
+    }
+]
+tail_outbounds = [
+    {"tag": "direct", "protocol": "freedom"},
+    {"tag": "block", "protocol": "blackhole"}
+]
 
-          make_pack() {
-            local num="$1" chunk="$2"
-            local RETAGGED
-            RETAGGED=$(mktemp)
-            local i=1
-            while IFS= read -r obj; do
-              printf '%s' "$obj" | jq --arg t "lte-${i}" '.tag = $t'
-              i=$((i + 1))
-            done < "$chunk" > "$RETAGGED"
+def make_outbound(i, host, port, uuid, flow, sec, sni, pbk, fp, sid):
+    return {
+        "tag": f"lte-{i}",
+        "protocol": "vless",
+        "settings": {
+            "vnext": [{
+                "address": host,
+                "port": int(port),
+                "users": [{"id": uuid, "encryption": "none", "flow": flow}]
+            }]
+        },
+        "streamSettings": {
+            "network": "tcp",
+            "security": sec,
+            "realitySettings": {
+                "serverName": sni,
+                "publicKey": pbk,
+                "shortId": sid,
+                "fingerprint": fp
+            }
+        }
+    }
 
-            jq -n --arg r "🇪🇺LTE | 1.${num} 🌐" --slurpfile out "$RETAGGED" '{
-              remarks: $r,
-              dns: {
-                queryStrategy: "UseIPv4",
-                servers: [
-                  "1.1.1.1",
-                  "8.8.8.8",
-                  "tls://1.1.1.1",
-                  "https://dns.google/dns-query",
-                  "https://cloudflare-dns.com/dns-query"
-                ]
-              },
-              observatory: {
-                enableConcurrency: true,
-                probeInterval: "15s",
-                probeUrl: "https://cp.cloudflare.com/generate_204",
-                subjectSelector: ["lte-"]
-              },
-              routing: {
-                domainMatcher: "hybrid", domainStrategy: "IPIfNonMatch",
-                rules: [
-                  {type: "field", protocol: ["bittorrent"], outboundTag: "direct"},
-                  {type: "field", inboundTag: ["socks","http"], balancerTag: "BALANCER"}
-                ],
-                balancers: [{tag: "BALANCER", selector: ["lte-"], strategy: {type: "leastPing"}}]
-              },
-              inbounds: [
-                {tag: "socks", port: 10808, listen: "127.0.0.1", protocol: "socks",
-                  settings: {udp: true, auth: "noauth"},
-                  sniffing: {enabled: true, routeOnly: false, destOverride: ["http","tls","quic"]}},
-                {tag: "http", port: 10809, listen: "127.0.0.1", protocol: "http",
-                  settings: {allowTransparent: false},
-                  sniffing: {enabled: true, routeOnly: false, destOverride: ["http","tls","quic"]}}
-              ],
-              outbounds: ($out + [{tag:"direct",protocol:"freedom"},{tag:"block",protocol:"blackhole"}])
-            }'
-            rm -f "$RETAGGED"
-          }
+packs = []
+chunk = []
+pack_num = 1
+total = 0
 
-          while IFS= read -r line; do
-            printf '%s\n' "$line" >> "$CHUNK"
-            LINE_COUNT=$((LINE_COUNT + 1))
-            if [ "$LINE_COUNT" -eq "$PACK_SIZE" ]; then
-              PACK_JSON=$(make_pack "$PACK_NUM" "$CHUNK")
-              TMP_ARRAY=$(mktemp)
-              jq --argjson p "$PACK_JSON" '. + [$p]' "$PACKS_ARRAY" > "$TMP_ARRAY"
-              mv "$TMP_ARRAY" "$PACKS_ARRAY"
-              echo "✅ Пак 1.${PACK_NUM} (50 серверов)"
-              PACK_NUM=$((PACK_NUM + 1))
-              rm -f "$CHUNK"; CHUNK=$(mktemp); LINE_COUNT=0
-            fi
-          done < "$ALL_OUTBOUNDS"
+with open(tsv_path, encoding="utf-8", errors="replace") as f:
+    for line in f:
+        parts = line.rstrip("\n").split("\t")
+        if len(parts) < 9:
+            continue
+        host, port, uuid, flow, sec, sni, pbk, fp, sid = parts[:9]
+        total += 1
+        ob = make_outbound(len(chunk) + 1, host, port, uuid, flow, sec, sni, pbk, fp, sid)
+        chunk.append(ob)
 
-          if [ "$LINE_COUNT" -gt 0 ]; then
-            PACK_JSON=$(make_pack "$PACK_NUM" "$CHUNK")
-            TMP_ARRAY=$(mktemp)
-            jq --argjson p "$PACK_JSON" '. + [$p]' "$PACKS_ARRAY" > "$TMP_ARRAY"
-            mv "$TMP_ARRAY" "$PACKS_ARRAY"
-            echo "✅ Пак 1.${PACK_NUM} ($LINE_COUNT серверов)"
-          fi
+        if len(chunk) == pack_size:
+            pack = {
+                "remarks": f"🇪🇺LTE | 1.{pack_num} 🌐",
+                "dns": dns_block,
+                "observatory": observatory_block,
+                "routing": routing_block,
+                "inbounds": inbounds_block,
+                "outbounds": chunk + tail_outbounds
+            }
+            packs.append(pack)
+            print(f"✅ Пак 1.{pack_num} (50 серверов)")
+            pack_num += 1
+            chunk = []
 
-          mv "$PACKS_ARRAY" packs.json
-          rm -f "$CHUNK" "$MERGED_TMP" "$DEDUP_TMP" "$ALL_OUTBOUNDS"
-          echo "✅ Готово: $CONF_COUNT серверов в $PACK_NUM паках"
+if chunk:
+    pack = {
+        "remarks": f"🇪🇺LTE | 1.{pack_num} 🌐",
+        "dns": dns_block,
+        "observatory": observatory_block,
+        "routing": routing_block,
+        "inbounds": inbounds_block,
+        "outbounds": chunk + tail_outbounds
+    }
+    packs.append(pack)
+    print(f"✅ Пак 1.{pack_num} ({len(chunk)} серверов)")
+    pack_num += 1
+
+with open("packs.json", "w", encoding="utf-8") as out:
+    json.dump(packs, out, ensure_ascii=False, separators=(",", ":"))
+
+print(f"✅ Готово: {total} серверов в {pack_num - 1} паках")
+PYEOF
+
+          rm -f "$MERGED_TMP" "$DEDUP_TMP" "$OUTBOUNDS_TSV"
 
       - name: Validate JSON
         run: |
-          if jq empty packs.json 2>/dev/null; then
-            PACK_COUNT=$(jq 'length' packs.json)
-            SERVER_COUNT=$(jq '[.[].outbounds[]|select(.tag|startswith("lte-"))]|length' packs.json)
-            echo "✅ packs.json валидный | $PACK_COUNT паков | $SERVER_COUNT серверов"
+          if python3 -c "import json,sys; d=json.load(open('packs.json')); print(f'✅ packs.json валидный | {len(d)} паков | {sum(sum(1 for o in p[\"outbounds\"] if o[\"tag\"].startswith(\"lte-\")) for p in d)} серверов')"; then
+            echo "OK"
           else
             echo "❌ packs.json невалидный!"
             exit 1
@@ -352,7 +360,11 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add vlees.txt packs.json
-          SERVER_COUNT=$(jq '[.[].outbounds[]|select(.tag|startswith("lte-"))]|length' packs.json)
-          PACK_COUNT=$(jq 'length' packs.json)
-          git diff --staged --quiet || git commit -m "Auto: $(date -u '+%Y-%m-%d %H:%M UTC') | $SERVER_COUNT серверов | $PACK_COUNT паков"
+          INFO=$(python3 -c "
+import json
+d=json.load(open('packs.json'))
+servers=sum(sum(1 for o in p['outbounds'] if o['tag'].startswith('lte-')) for p in d)
+print(f'{servers} серверов | {len(d)} паков')
+")
+          git diff --staged --quiet || git commit -m "Auto: $(date -u '+%Y-%m-%d %H:%M UTC') | $INFO"
           git push
