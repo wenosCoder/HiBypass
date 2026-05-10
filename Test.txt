@@ -4,7 +4,6 @@ profile-update-interval: 1
 announce: Бесплатный обход белых списков 🏳🇷🇺 | Если перестало работать — обновите подписку 🔄
 announce-url: https://t.me/HiBypass
 update-always: true
-
 {
   "remarks": "🇪🇺LTE | 1.1 🌐",
   "dns": {
