@@ -1,0 +1,84 @@
+profile-title: HiBypass 🗽 | FREE LTE | ∞
+subscription-userinfo: upload=0; download=0; total=999999999999999; expire=4102444800
+profile-update-interval: 1
+announce: Бесплатный обход белых списков 🏳🇷🇺 | Если перестало работать — обновите подписку 🔄
+announce-url: https://t.me/HiBypass
+update-always: true
+
+{
+  "remarks": "🇪🇺LTE | 1.1 🌐",
+  "dns": {
+    "servers": ["1.1.1.1", "1.0.0.1", "8.8.8.8"],
+    "queryStrategy": "UseIPv4"
+  },
+  "routing": {
+    "domainMatcher": "hybrid",
+    "domainStrategy": "IPIfNonMatch",
+    "rules": [
+      {
+        "type": "field",
+        "protocol": ["bittorrent"],
+        "outboundTag": "direct"
+      },
+      {
+        "type": "field",
+        "inboundTag": ["socks", "http"],
+        "balancerTag": "BALANCER"
+      }
+    ],
+    "balancers": [
+      {
+        "tag": "BALANCER",
+        "selector": ["lte-"],
+        "strategy": {"type": "leastPing"}
+      }
+    ]
+  },
+  "inbounds": [
+    {
+      "tag": "socks",
+      "port": 10808,
+      "listen": "127.0.0.1",
+      "protocol": "socks",
+      "settings": {"udp": true, "auth": "noauth"},
+      "sniffing": {"enabled": true, "destOverride": ["http","tls","quic"]}
+    },
+    {
+      "tag": "http",
+      "port": 10809,
+      "listen": "127.0.0.1",
+      "protocol": "http",
+      "settings": {"allowTransparent": false},
+      "sniffing": {"enabled": true, "destOverride": ["http","tls","quic"]}
+    }
+  ],
+  "outbounds": [
+    {
+      "tag": "lte-1",
+      "protocol": "vless",
+      "settings": {
+        "vnext": [{
+          "address": "185.236.200.45",
+          "port": 443,
+          "users": [{
+            "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+            "encryption": "none",
+            "flow": "xtls-rprx-vision"
+          }]
+        }]
+      },
+      "streamSettings": {
+        "network": "tcp",
+        "security": "reality",
+        "realitySettings": {
+          "serverName": "www.samsung.com",
+          "publicKey": "ABC123randomPublicKeyHere",
+          "shortId": "ab12cd34",
+          "fingerprint": "chrome"
+        }
+      }
+    },
+    {"tag": "direct", "protocol": "freedom"},
+    {"tag": "block", "protocol": "blackhole"}
+  ]
+}
