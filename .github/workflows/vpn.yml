@@ -61,6 +61,13 @@ jobs:
               HOST=$(printf '%s' "$BASE" | sed 's/.*@//;s/[:/].*//')
               PORT=$(printf '%s' "$BASE" | sed 's/.*@[^:]*://;s/[/?].*//')
               printf '%s' "$PORT" | grep -qE '^[0-9]+$' || continue
+
+              # Если HOST это IP (начинается с цифры) — пропускаем все кроме 84. 89. 158.
+              # Если HOST это домен (начинается с буквы) — впихиваем без фильтра
+              if printf '%s' "$HOST" | grep -qE '^[0-9]'; then
+                printf '%s' "$HOST" | grep -qE '^(84|89|158)\.' || continue
+              fi
+
               printf '%s\t%s\t%s\t%s\n' "$BASE" "$HOST" "$PORT" "$PREFIX"
             done >> "$CONFIGS_TMP"
 
