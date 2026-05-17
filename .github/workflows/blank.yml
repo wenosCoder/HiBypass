@@ -24,46 +24,42 @@ jobs:
       - name: Install dependencies
         run: sudo apt-get install -y jq
 
+      - name: Write check_one.sh
+        run: |
+          cat > /tmp/check_one.sh << 'EOF'
+          #!/usr/bin/env bash
+          FILE="$1"
+          OUT="$2"
+          [ -f "$FILE" ] || exit 0
+          IFS=$'\t' read -r BASE HOST PORT PREFIX < "$FILE"
+          [ -z "$HOST" ] || [ -z "$PORT" ] && exit 0
+          CODE=$(curl -sk --max-time 2 --connect-timeout 2 \
+            --resolve "www.gstatic.com:${PORT}:${HOST}" \
+            "https://www.gstatic.com/generate_204" \
+            -o /dev/null -w "%{http_code}" 2>/dev/null)
+          if [ "$CODE" = "204" ]; then
+            printf '%s\t%s\t%s\t%s\n' "$BASE" "$HOST" "$PORT" "$PREFIX" >> "$OUT"
+            exit 0
+          fi
+          curl -sk --max-time 2 --connect-timeout 2 \
+            "https://${HOST}:${PORT}" -o /dev/null 2>/dev/null \
+            && printf '%s\t%s\t%s\t%s\n' "$BASE" "$HOST" "$PORT" "$PREFIX" >> "$OUT"
+          exit 0
+          EOF
+          chmod +x /tmp/check_one.sh
+          echo "check_one.sh OK: $(ls -la /tmp/check_one.sh)"
+
       - name: Fetch batch ${{ matrix.batch }}
         timeout-minutes: 20
         run: |
           CONFIGS_TMP="batch_${{ matrix.batch }}.tmp"
           touch "$CONFIGS_TMP"
 
-          # check_one.sh принимает ПУТЬ К ФАЙЛУ с одной строкой BASE\tHOST\tPORT\tPREFIX
-          cat > /tmp/check_one.sh << 'CHECKEOF'
-          #!/usr/bin/env bash
-          FILE="$1"
-          [ -f "$FILE" ] || exit 1
-          IFS=$'\t' read -r BASE HOST PORT PREFIX < "$FILE"
-          rm -f "$FILE"
-
-          [ -z "$HOST" ] || [ -z "$PORT" ] && exit 1
-
-          CODE=$(curl -sk --max-time 2 --connect-timeout 2 \
-            --resolve "www.gstatic.com:${PORT}:${HOST}" \
-            "https://www.gstatic.com/generate_204" \
-            -o /dev/null -w "%{http_code}" 2>/dev/null)
-
-          if [ "$CODE" = "204" ]; then
-            printf '%s\t%s\t%s\t%s\n' "$BASE" "$HOST" "$PORT" "$PREFIX"
-            exit 0
-          fi
-
-          curl -sk --max-time 2 --connect-timeout 2 \
-            "https://${HOST}:${PORT}" \
-            -o /dev/null 2>/dev/null && \
-            printf '%s\t%s\t%s\t%s\n' "$BASE" "$HOST" "$PORT" "$PREFIX"
-          CHECKEOF
-          chmod +x /tmp/check_one.sh
-
           decode_until_vless() {
-            local INFILE="$1"
-            local DEPTH=0
+            local INFILE="$1" DEPTH=0
             while [ $DEPTH -lt 5 ]; do
               grep -qaE '^vless://' "$INFILE" && return 0
-              local TMP_DEC
-              TMP_DEC=$(mktemp)
+              local TMP_DEC; TMP_DEC=$(mktemp)
               base64 -d "$INFILE" > "$TMP_DEC" 2>/dev/null
               if [ ! -s "$TMP_DEC" ]; then rm -f "$TMP_DEC"; return 1; fi
               if head -c 512 "$TMP_DEC" | cat -v | grep -q '\^@'; then rm -f "$TMP_DEC"; return 1; fi
@@ -73,45 +69,61 @@ jobs:
             return 1
           }
 
+          # Параллельный запуск через background jobs, макс MAXJOBS одновременно
+          MAXJOBS=40
+          run_parallel() {
+            local WORKDIR="$1" OUT="$2"
+            local PIDS=() F
+            for F in "$WORKDIR"/*.candidate; do
+              [ -f "$F" ] || continue
+              bash /tmp/check_one.sh "$F" "$OUT" &
+              PIDS+=($!)
+              # Ждём если набрали MAXJOBS
+              while [ ${#PIDS[@]} -ge $MAXJOBS ]; do
+                local NEWPIDS=()
+                for P in "${PIDS[@]}"; do
+                  kill -0 "$P" 2>/dev/null && NEWPIDS+=($P)
+                done
+                PIDS=("${NEWPIDS[@]}")
+                [ ${#PIDS[@]} -ge $MAXJOBS ] && sleep 0.1
+              done
+            done
+            # Ждём все оставшиеся
+            wait
+          }
+
           process_source() {
             local URL="$1" PREFIX="$2"
-            local TMPFILE WORKDIR FILE_LIST
+            local TMPFILE WORKDIR N=0
             TMPFILE=$(mktemp)
-            # Каждый кандидат — отдельный файл в tmp-директории
             WORKDIR=$(mktemp -d)
-            FILE_LIST=$(mktemp)
 
             curl -fsSL --max-time 15 --connect-timeout 5 "$URL" \
-              > "$TMPFILE" 2>/dev/null || { rm -f "$TMPFILE" "$FILE_LIST"; rm -rf "$WORKDIR"; return; }
+              > "$TMPFILE" 2>/dev/null || { rm -f "$TMPFILE"; rm -rf "$WORKDIR"; return; }
 
             if ! grep -qaE '^vless://' "$TMPFILE"; then
               decode_until_vless "$TMPFILE" || true
             fi
 
-            local N=0
-            grep -aE '^vless://' "$TMPFILE" | sed 's/#.*//' | while IFS= read -r BASE; do
+            while IFS= read -r BASE; do
               HOST=$(printf '%s' "$BASE" | sed 's/.*@//;s/[:/].*//')
               PORT=$(printf '%s' "$BASE" | sed 's/.*@[^:]*://;s/[/?].*//')
               printf '%s' "$PORT" | grep -qE '^[0-9]+$' || continue
-
               if printf '%s' "$HOST" | grep -qE '^[0-9]'; then
                 printf '%s' "$HOST" | grep -qE '^(84|89|158)\.' || continue
               fi
-
-              # Каждый кандидат — в отдельный файл, имя файла → в список
-              local F="${WORKDIR}/${N}.candidate"
-              printf '%s\t%s\t%s\t%s\n' "$BASE" "$HOST" "$PORT" "$PREFIX" > "$F"
-              printf '%s\n' "$F" >> "$FILE_LIST"
+              printf '%s\t%s\t%s\t%s\n' "$BASE" "$HOST" "$PORT" "$PREFIX" \
+                > "${WORKDIR}/${N}.candidate"
               N=$((N + 1))
-            done
+            done < <(grep -aE '^vless://' "$TMPFILE" | sed 's/#.*//')
 
-            # Параллельная проверка: xargs читает имена файлов, 30 потоков
-            if [ -s "$FILE_LIST" ]; then
-              xargs -P 30 -I FILE bash /tmp/check_one.sh FILE \
-                < "$FILE_LIST" >> "$CONFIGS_TMP"
+            echo "  [batch ${{ matrix.batch }}] $URL → $N кандидатов"
+
+            if [ "$N" -gt 0 ]; then
+              run_parallel "$WORKDIR" "$CONFIGS_TMP"
             fi
 
-            rm -f "$TMPFILE" "$FILE_LIST"
+            rm -f "$TMPFILE"
             rm -rf "$WORKDIR"
           }
 
@@ -405,12 +417,10 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add vlees.txt packs.json
-
           if git diff --staged --quiet; then
             echo "⏭️ Нет изменений — коммит пропущен"
             exit 0
           fi
-
           SERVER_COUNT=$(jq '[.[].outbounds[]|select(.tag|startswith("lte-"))]|length' packs.json)
           PACK_COUNT=$(jq 'length' packs.json)
           git commit -m "Auto: $(date -u '+%Y-%m-%d %H:%M UTC') | $SERVER_COUNT серверов | $PACK_COUNT паков"
