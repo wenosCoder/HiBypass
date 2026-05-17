@@ -46,6 +46,23 @@ jobs:
             return 1
           }
 
+          # Проверка доступности сервера через HTTPS (ping-style)
+          check_alive() {
+            local HOST="$1"
+            local PORT="$2"
+            # Пробуем подключиться к хосту:порту через curl с HTTPS
+            curl -sk --max-time 5 --connect-timeout 3 \
+              --resolve "www.gstatic.com:${PORT}:${HOST}" \
+              "https://www.gstatic.com/generate_204" \
+              -o /dev/null -w "%{http_code}" 2>/dev/null | grep -q "204" && return 0
+
+            # Fallback: просто TCP connect через curl к хосту:порту
+            curl -sk --max-time 5 --connect-timeout 3 \
+              "https://${HOST}:${PORT}" \
+              -o /dev/null 2>/dev/null
+            return $?
+          }
+
           process_source() {
             local URL="$1" PREFIX="$2"
             local TMPFILE
@@ -62,11 +79,12 @@ jobs:
               PORT=$(printf '%s' "$BASE" | sed 's/.*@[^:]*://;s/[/?].*//')
               printf '%s' "$PORT" | grep -qE '^[0-9]+$' || continue
 
-              # Если HOST это IP (начинается с цифры) — пропускаем все кроме 84. 89. 158.
-              # Если HOST это домен (начинается с буквы) — впихиваем без фильтра
               if printf '%s' "$HOST" | grep -qE '^[0-9]'; then
                 printf '%s' "$HOST" | grep -qE '^(84|89|158)\.' || continue
               fi
+
+              # Проверяем живость сервера
+              check_alive "$HOST" "$PORT" || continue
 
               printf '%s\t%s\t%s\t%s\n' "$BASE" "$HOST" "$PORT" "$PREFIX"
             done >> "$CONFIGS_TMP"
@@ -202,7 +220,7 @@ jobs:
           cat batch_*.tmp 2>/dev/null > "$MERGED_TMP" || true
           echo "Всего строк до дедупликации: $(wc -l < "$MERGED_TMP")"
 
-          # Дедупликация по host:port
+          # Дедупликация по host:port (строгая — никаких повторов)
           DEDUP_TMP=$(mktemp)
           awk -F'\t' 'NF>=3 && $2!="" && $3!="" && !seen[$2":"$3]++' "$MERGED_TMP" > "$DEDUP_TMP"
 
@@ -221,7 +239,6 @@ jobs:
           IDX=1
 
           while IFS=$'\t' read -r BASE HOST PORT PREFIX; do
-            # Валидация порта
             case "$PORT" in
               ''|*[!0-9]*) IDX=$((IDX + 1)); continue ;;
             esac
@@ -271,7 +288,6 @@ jobs:
           CONF_COUNT=$((IDX - 1))
           echo "Сгенерировано outbounds: $CONF_COUNT"
 
-          # Собираем паки по 50 — пишем каждый пак в отдельный файл, потом собираем массив
           PACK_SIZE=50
           PACK_NUM=1
           PACKS_DIR=$(mktemp -d)
@@ -279,7 +295,6 @@ jobs:
           make_pack() {
             local num="$1"
             local chunk_file="$2"
-            # Перетегируем outbounds внутри пака с lte-1..N
             local i=1
             local outbounds_json="[]"
             while IFS= read -r obj; do
@@ -350,7 +365,6 @@ jobs:
             fi
           done < "$ALL_OUTBOUNDS"
 
-          # Последний неполный пак
           if [ "$LINE_COUNT" -gt 0 ]; then
             PACK_JSON=$(make_pack "$PACK_NUM" "$CHUNK")
             printf '%s\n' "$PACK_JSON" > "${PACKS_DIR}/pack_${PACK_NUM}.json"
@@ -359,7 +373,6 @@ jobs:
 
           rm -f "$CHUNK"
 
-          # Собираем все паки в единый массив через jq --slurp
           find "$PACKS_DIR" -name 'pack_*.json' | sort -t_ -k2 -n | xargs jq -s '.' > packs.json
 
           rm -rf "$PACKS_DIR" "$MERGED_TMP" "$DEDUP_TMP" "$ALL_OUTBOUNDS"
@@ -381,7 +394,14 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add vlees.txt packs.json
+
+          # Проверяем — есть ли реальные изменения перед коммитом
+          if git diff --staged --quiet; then
+            echo "⏭️ Нет изменений — коммит пропущен"
+            exit 0
+          fi
+
           SERVER_COUNT=$(jq '[.[].outbounds[]|select(.tag|startswith("lte-"))]|length' packs.json)
           PACK_COUNT=$(jq 'length' packs.json)
-          git diff --staged --quiet || git commit -m "Auto: $(date -u '+%Y-%m-%d %H:%M UTC') | $SERVER_COUNT серверов | $PACK_COUNT паков"
+          git commit -m "Auto: $(date -u '+%Y-%m-%d %H:%M UTC') | $SERVER_COUNT серверов | $PACK_COUNT паков"
           git push
