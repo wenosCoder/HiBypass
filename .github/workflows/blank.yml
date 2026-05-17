@@ -30,17 +30,16 @@ jobs:
           CONFIGS_TMP="batch_${{ matrix.batch }}.tmp"
           touch "$CONFIGS_TMP"
 
-          # Скрипт проверки одного сервера — записывается на диск,
-          # вызывается через bash /tmp/check_one.sh "строка"
+          # check_one.sh принимает ПУТЬ К ФАЙЛУ с одной строкой BASE\tHOST\tPORT\tPREFIX
           cat > /tmp/check_one.sh << 'CHECKEOF'
           #!/usr/bin/env bash
-          LINE="$1"
-          BASE=$(printf '%s' "$LINE" | cut -f1)
-          HOST=$(printf '%s' "$LINE" | cut -f2)
-          PORT=$(printf '%s' "$LINE" | cut -f3)
-          PREFIX=$(printf '%s' "$LINE" | cut -f4)
+          FILE="$1"
+          [ -f "$FILE" ] || exit 1
+          IFS=$'\t' read -r BASE HOST PORT PREFIX < "$FILE"
+          rm -f "$FILE"
 
-          # Проверка через gstatic generate_204 с resolve на нужный IP
+          [ -z "$HOST" ] || [ -z "$PORT" ] && exit 1
+
           CODE=$(curl -sk --max-time 2 --connect-timeout 2 \
             --resolve "www.gstatic.com:${PORT}:${HOST}" \
             "https://www.gstatic.com/generate_204" \
@@ -51,7 +50,6 @@ jobs:
             exit 0
           fi
 
-          # Fallback: просто TCP-коннект к хосту:порту
           curl -sk --max-time 2 --connect-timeout 2 \
             "https://${HOST}:${PORT}" \
             -o /dev/null 2>/dev/null && \
@@ -77,18 +75,20 @@ jobs:
 
           process_source() {
             local URL="$1" PREFIX="$2"
-            local TMPFILE CANDIDATES
+            local TMPFILE WORKDIR FILE_LIST
             TMPFILE=$(mktemp)
-            CANDIDATES=$(mktemp)
+            # Каждый кандидат — отдельный файл в tmp-директории
+            WORKDIR=$(mktemp -d)
+            FILE_LIST=$(mktemp)
 
             curl -fsSL --max-time 15 --connect-timeout 5 "$URL" \
-              > "$TMPFILE" 2>/dev/null || { rm -f "$TMPFILE" "$CANDIDATES"; return; }
+              > "$TMPFILE" 2>/dev/null || { rm -f "$TMPFILE" "$FILE_LIST"; rm -rf "$WORKDIR"; return; }
 
             if ! grep -qaE '^vless://' "$TMPFILE"; then
               decode_until_vless "$TMPFILE" || true
             fi
 
-            # Собираем кандидатов — каждая строка: BASE\tHOST\tPORT\tPREFIX
+            local N=0
             grep -aE '^vless://' "$TMPFILE" | sed 's/#.*//' | while IFS= read -r BASE; do
               HOST=$(printf '%s' "$BASE" | sed 's/.*@//;s/[:/].*//')
               PORT=$(printf '%s' "$BASE" | sed 's/.*@[^:]*://;s/[/?].*//')
@@ -98,18 +98,21 @@ jobs:
                 printf '%s' "$HOST" | grep -qE '^(84|89|158)\.' || continue
               fi
 
-              # Пишем строку с \0 в конце для xargs -0
-              printf '%s\t%s\t%s\t%s\0' "$BASE" "$HOST" "$PORT" "$PREFIX"
-            done > "$CANDIDATES"
+              # Каждый кандидат — в отдельный файл, имя файла → в список
+              local F="${WORKDIR}/${N}.candidate"
+              printf '%s\t%s\t%s\t%s\n' "$BASE" "$HOST" "$PORT" "$PREFIX" > "$F"
+              printf '%s\n' "$F" >> "$FILE_LIST"
+              N=$((N + 1))
+            done
 
-            # Параллельная проверка: 30 потоков, передаём через -0 чтобы
-            # спецсимволы в URL не ломали xargs
-            if [ -s "$CANDIDATES" ]; then
-              xargs -0 -P 30 -I {} bash /tmp/check_one.sh {} \
-                < "$CANDIDATES" >> "$CONFIGS_TMP"
+            # Параллельная проверка: xargs читает имена файлов, 30 потоков
+            if [ -s "$FILE_LIST" ]; then
+              xargs -P 30 -I FILE bash /tmp/check_one.sh FILE \
+                < "$FILE_LIST" >> "$CONFIGS_TMP"
             fi
 
-            rm -f "$TMPFILE" "$CANDIDATES"
+            rm -f "$TMPFILE" "$FILE_LIST"
+            rm -rf "$WORKDIR"
           }
 
           if [ "${{ matrix.batch }}" = "1" ]; then
