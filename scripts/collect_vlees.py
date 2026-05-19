@@ -2,13 +2,13 @@
 """
 Сборщик VLESS-конфигов для v2rayTun
 - Собирает конфиги из источников
-- Фильтрует по IP (158.x / 89.x / 84.x) + все домены
-- Проверяет каждый сервер через xray (реальное подключение)
-- Генерирует bb.json (паки по 10 живых серверов) и vlees.txt
+- Фильтрует: SNI из РФ whitelist ИЛИ хост-домен ИЛИ IP 158./89./84.
+- TCP-проверка живых серверов
+- Генерирует bb.json (паки по 10) и vlees.txt
 """
 
 import re
-import os
+import ipaddress
 import json
 import time
 import base64
@@ -23,15 +23,13 @@ log = logging.getLogger(__name__)
 
 # ─── Настройки ────────────────────────────────────────────────────────────────
 
-XRAY_BIN      = "scripts/xray"       # больше не используется
 PACK_SIZE     = 10
-CHECK_WORKERS = 100                  # параллельных TCP проверок
-TCP_TIMEOUT   = 3                    # секунд на TCP connect
-CHECK_URL     = "http://connectivitycheck.gstatic.com/generate_204"
+CHECK_WORKERS = 100
+TCP_TIMEOUT   = 2
 
 IP_PREFIXES   = ("158.", "89.", "84.")
 
-# ─── Источники ────────────────────────────────────────────────────────────────
+# ─── Источники VLESS ──────────────────────────────────────────────────────────
 
 SOURCES = [
     "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/main/BLACK_VLESS_RUS.txt",
@@ -63,13 +61,92 @@ SOURCES = [
     "https://raw.githubusercontent.com/V2RayRoot/V2RayConfig/refs/heads/main/Config/vless.txt",
 ]
 
-# ─── IP-фильтр ────────────────────────────────────────────────────────────────
+# ─── Whitelist РФ ─────────────────────────────────────────────────────────────
 
-def is_allowed_host(host: str) -> bool:
-    ip_pattern = re.compile(r"^\d{1,3}(\.\d{1,3}){3}$")
-    if ip_pattern.match(host):
-        return any(host.startswith(p) for p in IP_PREFIXES)
-    return True  # домен — всегда разрешён
+SNI_WHITELIST_URL  = "https://raw.githubusercontent.com/hxehex/russia-mobile-internet-whitelist/refs/heads/main/whitelist.txt"
+CIDR_WHITELIST_URL = "https://raw.githubusercontent.com/hxehex/russia-mobile-internet-whitelist/refs/heads/main/cidrwhitelist.txt"
+IP_WHITELIST_URL   = "https://raw.githubusercontent.com/hxehex/russia-mobile-internet-whitelist/refs/heads/main/ip%20whitelist.txt"
+
+# Глобальные наборы — заполняются в load_whitelists()
+SNI_WHITELIST:  set[str] = set()
+IP_WHITELIST:   set[str] = set()
+CIDR_WHITELIST: list     = []
+
+
+def load_whitelists():
+    """Загружает SNI/IP/CIDR whitelist РФ."""
+    global SNI_WHITELIST, IP_WHITELIST, CIDR_WHITELIST
+
+    # SNI (домены)
+    text = fetch_text(SNI_WHITELIST_URL)
+    for line in text.splitlines():
+        line = line.strip().lower()
+        if line and not line.startswith("#"):
+            SNI_WHITELIST.add(line)
+    log.info(f"SNI whitelist: {len(SNI_WHITELIST)} доменов")
+
+    # IP whitelist
+    text = fetch_text(IP_WHITELIST_URL)
+    for line in text.splitlines():
+        line = line.strip()
+        if line and not line.startswith("#"):
+            IP_WHITELIST.add(line)
+    log.info(f"IP whitelist: {len(IP_WHITELIST)} адресов")
+
+    # CIDR whitelist
+    text = fetch_text(CIDR_WHITELIST_URL)
+    for line in text.splitlines():
+        line = line.strip()
+        if line and not line.startswith("#"):
+            try:
+                CIDR_WHITELIST.append(ipaddress.ip_network(line, strict=False))
+            except ValueError:
+                pass
+    log.info(f"CIDR whitelist: {len(CIDR_WHITELIST)} подсетей")
+
+
+# ─── Фильтр ───────────────────────────────────────────────────────────────────
+
+IP_RE = re.compile(r"^\d{1,3}(\.\d{1,3}){3}$")
+
+def is_ip(host: str) -> bool:
+    return bool(IP_RE.match(host))
+
+def ip_in_whitelist(host: str) -> bool:
+    if host in IP_WHITELIST:
+        return True
+    try:
+        addr = ipaddress.ip_address(host)
+        return any(addr in net for net in CIDR_WHITELIST)
+    except ValueError:
+        return False
+
+def is_allowed(cfg: dict) -> bool:
+    """
+    Сервер проходит если выполняется хотя бы одно:
+    1. SNI в РФ whitelist
+    2. Хост — домен (не IP)
+    3. Хост — IP с префиксом 158./89./84.
+    4. Хост — IP из IP/CIDR whitelist РФ
+    """
+    host = cfg["host"]
+    sni  = cfg.get("sni", "").lower()
+
+    # SNI в whitelist
+    if sni and sni in SNI_WHITELIST:
+        return True
+
+    if is_ip(host):
+        # IP префикс
+        if any(host.startswith(p) for p in IP_PREFIXES):
+            return True
+        # IP/CIDR whitelist
+        if ip_in_whitelist(host):
+            return True
+        return False
+
+    # Домен — всегда разрешён
+    return True
 
 # ─── Загрузка и парсинг ───────────────────────────────────────────────────────
 
@@ -153,7 +230,7 @@ def collect_configs() -> list[dict]:
             key = f"{cfg['host']}:{cfg['port']}"
             if key in seen:
                 continue
-            if not is_allowed_host(cfg["host"]):
+            if not is_allowed(cfg):
                 continue
 
             seen.add(key)
@@ -236,22 +313,24 @@ def check_server(cfg: dict) -> tuple[dict, float] | None:
 
 
 def check_all(configs: list[dict]) -> list[tuple[dict, float]]:
-    """Параллельная проверка всех конфигов через xray."""
-    log.info(f"Проверяем {len(configs)} серверов через xray ({CHECK_WORKERS} потоков)...")
+    """Параллельная проверка всех конфигов через TCP."""
+    log.info(f"Проверяем {len(configs)} серверов ({CHECK_WORKERS} потоков)...")
     results = []
 
     with ThreadPoolExecutor(max_workers=CHECK_WORKERS) as ex:
         futures = {ex.submit(check_server, cfg): cfg for cfg in configs}
         done = 0
-        for fut in as_completed(futures):
+        for fut in as_completed(futures, timeout=300):
             done += 1
             if done % 50 == 0:
                 log.info(f"Проверено: {done}/{len(configs)} | живых: {len(results)}")
-            res = fut.result()
-            if res is not None:
-                results.append(res)
+            try:
+                res = fut.result(timeout=TCP_TIMEOUT + 1)
+                if res is not None:
+                    results.append(res)
+            except Exception:
+                pass
 
-    # Сортируем по RTT (быстрые первые)
     results.sort(key=lambda x: x[1])
     log.info(f"Живых серверов: {len(results)} из {len(configs)}")
     return results
@@ -391,13 +470,16 @@ def make_pack(configs: list[dict], rtts: list[float], pack_num: int) -> dict:
 # ─── Главная функция ──────────────────────────────────────────────────────────
 
 def main():
-    # 1. Собираем конфиги
+    # 1. Загружаем whitelist РФ
+    load_whitelists()
+
+    # 2. Собираем конфиги
     configs = collect_configs()
     if not configs:
         log.error("Нет конфигов!")
         return
 
-    # 2. Проверяем через TCP
+    # 3. Проверяем через TCP
     alive = check_all(configs)
     if not alive:
         log.error("Нет живых серверов!")
@@ -406,7 +488,7 @@ def main():
     alive_cfgs = [c for c, _ in alive]
     alive_rtts = [r for _, r in alive]
 
-    # 3. Генерируем vlees.txt (только живые)
+    # 4. Генерируем vlees.txt
     with open("vlees.txt", "w", encoding="utf-8") as f:
         f.write("#profile-title: HiBypass 🗽 | FREE LTE | ∞\n")
         f.write("#subscription-userinfo: upload=0; download=0; total=999999999999999; expire=4102444800\n")
@@ -425,7 +507,7 @@ def main():
             f.write(uri + "\n")
     log.info(f"vlees.txt: {len(alive)} живых конфигов")
 
-    # 4. Нарезаем на паки
+    # 5. Нарезаем на паки
     packs = []
     for i in range(0, len(alive_cfgs), PACK_SIZE):
         chunk_cfgs = alive_cfgs[i:i + PACK_SIZE]
@@ -433,7 +515,7 @@ def main():
         pack_num   = (i // PACK_SIZE) + 1
         packs.append(make_pack(chunk_cfgs, chunk_rtts, pack_num))
 
-    # 5. Сохраняем bb.json
+    # 6. Сохраняем bb.json
     with open("bb.json", "w", encoding="utf-8") as f:
         json.dump(packs, f, ensure_ascii=False, indent=2)
 
