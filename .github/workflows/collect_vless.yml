@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-    timeout-minutes: 30
+    timeout-minutes: 60
 
     steps:
       - name: Checkout repo
@@ -24,8 +24,16 @@ jobs:
       - name: Install dependencies
         run: pip install requests
 
+      - name: Download xray
+        run: |
+          wget -q https://github.com/XTLS/Xray-core/releases/download/v25.4.30/Xray-linux-64.zip
+          unzip -q Xray-linux-64.zip xray
+          chmod +x xray
+          mv xray scripts/xray
+          echo "✅ xray готов: $(scripts/xray version | head -1)"
+
       - name: Run collector
-        timeout-minutes: 25
+        timeout-minutes: 50
         run: python scripts/collect_vlees.py
 
       - name: Validate bb.json
@@ -36,7 +44,11 @@ jobs:
               with open('bb.json') as f:
                   data = json.load(f)
               packs = len(data) if isinstance(data, list) else 1
-              print(f'✅ bb.json валидный | паков: {packs}')
+              total = sum(
+                  sum(1 for o in p.get('outbounds', []) if o.get('tag','').startswith('lte-'))
+                  for p in data
+              )
+              print(f'✅ bb.json валидный | паков: {packs} | серверов: {total}')
           except Exception as e:
               print(f'❌ bb.json невалидный: {e}')
               sys.exit(1)
