@@ -320,16 +320,19 @@ def check_all(configs: list[dict]) -> list[tuple[dict, float]]:
     with ThreadPoolExecutor(max_workers=CHECK_WORKERS) as ex:
         futures = {ex.submit(check_server, cfg): cfg for cfg in configs}
         done = 0
-        for fut in as_completed(futures, timeout=300):
-            done += 1
-            if done % 50 == 0:
-                log.info(f"Проверено: {done}/{len(configs)} | живых: {len(results)}")
-            try:
-                res = fut.result(timeout=TCP_TIMEOUT + 1)
-                if res is not None:
-                    results.append(res)
-            except Exception:
-                pass
+        try:
+            for fut in as_completed(futures, timeout=600):
+                done += 1
+                if done % 50 == 0:
+                    log.info(f"Проверено: {done}/{len(configs)} | живых: {len(results)}")
+                try:
+                    res = fut.result(timeout=TCP_TIMEOUT + 1)
+                    if res is not None:
+                        results.append(res)
+                except Exception:
+                    pass
+        except Exception:
+            log.warning(f"Таймаут пула — собрано {len(results)} живых, продолжаем...")
 
     results.sort(key=lambda x: x[1])
     log.info(f"Живых серверов: {len(results)} из {len(configs)}")
