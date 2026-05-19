@@ -2,7 +2,7 @@ name: Collect VLESS Configs
 
 on:
   schedule:
-    - cron: '0 */1 * * *'   # каждые 6 часов
+    - cron: '0 */2 * * *'   # каждые 2 часа
   workflow_dispatch:          # ручной запуск
 
 permissions:
@@ -24,7 +24,7 @@ jobs:
         run: pip install requests
 
       - name: Run collector
-        run: python .github/workflows/collect_vless.py
+        run: python scripts/collect_vless.py
 
       - name: Commit & push bb.json
         run: |
