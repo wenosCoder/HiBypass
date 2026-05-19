@@ -1,47 +1,28 @@
 #!/usr/bin/env python3
 """
-VLESS Collector → bb.json (один готовый v2rayTun JSON-конфиг, топ-10 LTE)
+Сборщик VLESS-конфигов для v2rayTun
+Генерирует bb.json (паки по 10 серверов) и vlees.txt
 """
 
+import re
 import json
 import base64
-import urllib.parse
-import os
-import ipaddress
-from datetime import datetime, timezone
+import logging
+import requests
+from urllib.parse import urlparse, parse_qs, unquote
 
-try:
-    import requests
-except ImportError:
-    import subprocess, sys
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "requests"])
-    import requests
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+log = logging.getLogger(__name__)
 
-# ──────────────────────────────────────────────
-# Настройки
-# ──────────────────────────────────────────────
-
-PROFILE_TITLE   = "HiBypass 🗽 | FREE LTE | ∞"
-SUPPORT_URL     = "https://t.me/HiBypass"
-ANNOUNCE        = "Бесплатный обход белых списков 🏳🇷🇺 | Если перестало работать — обновите подписку 🔄"
-TOP_N           = 10          # сколько серверов в паке
-
-# Метки серверов в паке
-def lte_tag(n: int) -> str:
-    return f"🇳🇴LTE | 📶 — {n} ⚡ | RU"
-
-# Внутренние теги для балансировщика (короткие, ASCII)
-def lte_internal(n: int) -> str:
-    return f"lte-{n}"
-
-# ──────────────────────────────────────────────
-# Источники
-# ──────────────────────────────────────────────
+# ─── Источники ────────────────────────────────────────────────────────────────
 SOURCES = [
     "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/main/BLACK_VLESS_RUS.txt",
     "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/main/BLACK_VLESS_RUS_mobile.txt",
     "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/main/Vless-Reality-White-Lists-Rus-Mobile-2.txt",
     "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/main/Vless-Reality-White-Lists-Rus-Mobile.txt",
+    "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/main/WHITE-CIDR-RU-all.txt",
+    "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/main/WHITE-CIDR-RU-checked.txt",
+    "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/main/WHITE-SNI-RU-all.txt",
     "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/main/BLACK_SS%2BAll_RUS.txt",
     "https://raw.githubusercontent.com/whoahaow/rjsxrd/refs/heads/main/githubmirror/bypass-unsecure/raw/bypass-unsecure-all-raw.txt",
     "https://raw.githubusercontent.com/whoahaow/rjsxrd/refs/heads/main/githubmirror/bypass/raw/bypass-all-raw.txt",
@@ -50,360 +31,328 @@ SOURCES = [
     "https://raw.githubusercontent.com/VOID-Anonymity/V.O.I.D-VPN_Bypass/refs/heads/main/url_work.txt",
     "https://raw.githubusercontent.com/zieng2/wl/refs/heads/main/vless_universal.txt",
     "https://raw.githubusercontent.com/zieng2/wl/refs/heads/main/vless_lite.txt",
+    "https://raw.githubusercontent.com/whoahaow/rjsxrd/refs/heads/main/githubmirror/bypass/bypass-all.txt",
+    "https://raw.githubusercontent.com/whoahaow/rjsxrd/refs/heads/main/githubmirror/split-by-protocols/vless-secure.txt",
+    "https://raw.githubusercontent.com/whoahaow/rjsxrd/refs/heads/main/githubmirror/split-by-protocols/vless.txt",
+    "https://raw.githubusercontent.com/Temnuk/naabuzil/refs/heads/main/whitelist_full",
+    "https://raw.githubusercontent.com/Temnuk/naabuzil/refs/heads/main/wifi",
+    "https://raw.githubusercontent.com/AvenCores/goida-vpn-configs/refs/heads/main/githubmirror/26.txt",
+    "https://raw.githubusercontent.com/sevcator/5ubscrpt10n/main/protocols/vl.txt",
+    "https://raw.githubusercontent.com/Epodonios/v2ray-configs/refs/heads/main/All_Configs_Sub.txt",
+    "https://raw.githubusercontent.com/mohamadfg-dev/telegram-v2ray-configs-collector/refs/heads/main/category/vless.txt",
+    "https://raw.githubusercontent.com/mheidari98/.proxy/refs/heads/main/vless",
+    "https://raw.githubusercontent.com/Mr-Meshky/vify/raw/refs/heads/main/configs/vless.txt",
+    "https://raw.githubusercontent.com/V2RayRoot/V2RayConfig/refs/heads/main/Config/vless.txt",
 ]
 
-# ──────────────────────────────────────────────
-# IP-фильтр: 158/8, 89/8, 84/8 + домены
-# ──────────────────────────────────────────────
-ALLOWED_NETS = [
-    ipaddress.ip_network("158.0.0.0/8"),
-    ipaddress.ip_network("89.0.0.0/8"),
-    ipaddress.ip_network("84.0.0.0/8"),
-]
+# ─── IP-фильтр ────────────────────────────────────────────────────────────────
+# Пропускаем только IP из диапазонов 158.x / 89.x / 84.x
+# Домены (не IP) — пропускаем всегда
 
-HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; vless-collector/1.0)"}
+IP_PREFIXES = ("158.", "89.", "84.")
+
+def is_allowed_host(host: str) -> bool:
+    """True → конфиг допустим (домен или нужный IP-префикс)."""
+    # Проверяем, IP ли это вообще
+    ip_pattern = re.compile(r"^\d{1,3}(\.\d{1,3}){3}$")
+    if ip_pattern.match(host):
+        return any(host.startswith(p) for p in IP_PREFIXES)
+    # Домен — всегда разрешён
+    return True
 
 
-# ──────────────────────────────────────────────
-# Утилиты
-# ──────────────────────────────────────────────
+# ─── Загрузка и парсинг ───────────────────────────────────────────────────────
 
-def is_domain(host: str) -> bool:
+def fetch_text(url: str) -> str:
     try:
-        ipaddress.ip_address(host)
-        return False
-    except ValueError:
-        return True
-
-
-def ip_allowed(host: str) -> bool:
-    if is_domain(host):
-        return True          # домены всегда проходят
-    try:
-        addr = ipaddress.ip_address(host)
-        return any(addr in net for net in ALLOWED_NETS)
-    except ValueError:
-        return False
-
-
-def fetch_lines(url: str) -> list[str]:
-    try:
-        r = requests.get(url, headers=HEADERS, timeout=20)
+        r = requests.get(url, timeout=15)
         r.raise_for_status()
-        text = r.text.strip()
-        # Рекурсивное base64-декодирование (до 5 попыток)
-        for _ in range(5):
-            if any(text.startswith(p) for p in ("vless://", "vmess://", "ss://", "trojan://")):
-                break
-            try:
-                dec = base64.b64decode(text + "==").decode("utf-8", errors="ignore")
-                if "://" in dec:
-                    text = dec
-                else:
-                    break
-            except Exception:
-                break
-        return [l.strip() for l in text.splitlines() if "://" in l]
+        return r.text
     except Exception as e:
-        print(f"  ⚠ {url.split('/')[-1]}: {e}")
-        return []
+        log.warning(f"Пропуск {url}: {e}")
+        return ""
+
+
+def try_base64_decode(text: str) -> str:
+    """Пытаемся раскодировать base64 (до 5 раз рекурсивно)."""
+    for _ in range(5):
+        if "vless://" in text:
+            return text
+        try:
+            decoded = base64.b64decode(text.strip()).decode("utf-8", errors="ignore")
+            if "vless://" in decoded:
+                return decoded
+            text = decoded
+        except Exception:
+            break
+    return text
+
+
+def extract_vless(text: str) -> list[str]:
+    """Извлекает строки vless:// из текста (без #-комментария)."""
+    lines = []
+    for line in text.splitlines():
+        line = line.strip()
+        if line.startswith("vless://"):
+            # Обрезаем имя (#...) в конце
+            base = re.sub(r"#.*$", "", line).strip()
+            lines.append(base)
+    return lines
 
 
 def parse_vless(uri: str) -> dict | None:
+    """Парсит vless:// URI в словарь параметров."""
     try:
-        body = uri[len("vless://"):]
-        name = ""
-        if "#" in body:
-            body, name = body.rsplit("#", 1)
-            name = urllib.parse.unquote(name)
+        # vless://UUID@HOST:PORT?params
+        m = re.match(r"vless://([^@]+)@([^:/?#]+):(\d+)([/?].*)?", uri)
+        if not m:
+            return None
+        uuid, host, port_str, rest = m.group(1), m.group(2), m.group(3), m.group(4) or ""
+        port = int(port_str)
 
-        userinfo, rest = body.split("@", 1)
-        hostport, params_raw = (rest.split("?", 1) + [""])[:2]
+        # Парсим query-параметры
+        qs = {}
+        if "?" in rest:
+            query = rest.split("?", 1)[1].split("#")[0]
+            for pair in query.split("&"):
+                if "=" in pair:
+                    k, v = pair.split("=", 1)
+                    qs[k] = unquote(v)
 
-        if hostport.startswith("["):
-            end = hostport.index("]")
-            host = hostport[1:end]
-            port = int(hostport[end + 2:])
-        else:
-            host, port_str = hostport.rsplit(":", 1)
-            port = int(port_str)
-
-        p = dict(urllib.parse.parse_qsl(params_raw))
         return {
-            "uuid":        userinfo,
-            "address":     host,
-            "port":        port,
-            "name":        name,
-            "encryption":  p.get("encryption", "none"),
-            "flow":        p.get("flow", "xtls-rprx-vision"),
-            "network":     p.get("type", "tcp"),
-            "security":    p.get("security", "none"),
-            "sni":         p.get("sni", host),
-            "fp":          p.get("fp", "chrome"),
-            "pbk":         p.get("pbk", ""),
-            "sid":         p.get("sid", ""),
-            "path":        p.get("path", "/"),
-            "host_header": p.get("host", ""),
-            "mode":        p.get("mode", ""),
-            "_uri":        uri,
+            "uuid": uuid,
+            "host": host,
+            "port": port,
+            "flow": qs.get("flow", "xtls-rprx-vision"),
+            "security": qs.get("security", "reality"),
+            "sni": qs.get("sni", ""),
+            "pbk": qs.get("pbk", ""),
+            "fp": qs.get("fp", "chrome"),
+            "sid": qs.get("sid", ""),
+            "type": qs.get("type", "tcp"),
         }
     except Exception:
         return None
 
 
-def score(cfg: dict) -> int:
-    s = 0
-    if cfg["security"] == "reality": s += 30
-    elif cfg["security"] == "tls":   s += 20
-    if "xtls" in cfg["flow"]:        s += 10
-    if is_domain(cfg["address"]):    s += 15
-    if cfg["network"] in ("xhttp", "ws", "grpc", "h2"): s += 10
-    if cfg["port"] in (443, 8443, 2083, 2053):           s += 5
-    return s
+# ─── Сборка ───────────────────────────────────────────────────────────────────
+
+def collect_configs() -> list[dict]:
+    seen: set[str] = set()
+    configs: list[dict] = []
+
+    for url in SOURCES:
+        log.info(f"Загружаем: {url}")
+        raw = fetch_text(url)
+        if not raw:
+            continue
+
+        text = try_base64_decode(raw)
+        uris = extract_vless(text)
+
+        for uri in uris:
+            cfg = parse_vless(uri)
+            if cfg is None:
+                continue
+
+            host = cfg["host"]
+            port = cfg["port"]
+            key = f"{host}:{port}"
+
+            if key in seen:
+                continue
+
+            if not is_allowed_host(host):
+                log.debug(f"Пропуск по IP-фильтру: {host}")
+                continue
+
+            seen.add(key)
+            configs.append(cfg)
+
+    log.info(f"Уникальных конфигов после фильтра: {len(configs)}")
+    return configs
 
 
-def build_outbound(cfg: dict, tag: str) -> dict:
-    """Строит один outbound-блок для v2rayTun / Xray."""
-    stream: dict = {"network": cfg["network"], "security": cfg["security"]}
+# ─── Генерация outbound ───────────────────────────────────────────────────────
 
-    if cfg["security"] == "reality":
-        stream["realitySettings"] = {
-            "serverName":  cfg["sni"],
-            "fingerprint": cfg["fp"],
-            "publicKey":   cfg["pbk"],
-            "shortId":     cfg["sid"],
-        }
-    elif cfg["security"] == "tls":
-        stream["tlsSettings"] = {
-            "serverName":  cfg["sni"],
-            "fingerprint": cfg["fp"],
-        }
-
-    net = cfg["network"]
-    if net == "ws":
-        stream["wsSettings"] = {
-            "path": cfg["path"],
-            "headers": {"Host": cfg["host_header"] or cfg["sni"]},
-        }
-    elif net == "grpc":
-        stream["grpcSettings"] = {"serviceName": cfg["path"]}
-    elif net == "h2":
-        stream["httpSettings"] = {
-            "path": cfg["path"],
-            "host": [cfg["host_header"] or cfg["sni"]],
-        }
-    elif net == "xhttp":
-        stream["xhttpSettings"] = {"path": cfg["path"], "mode": cfg["mode"] or "auto"}
-
-    return {
-        "tag":      tag,
+def make_outbound(cfg: dict, tag: str) -> dict:
+    ob = {
+        "tag": tag,
         "protocol": "vless",
         "settings": {
             "vnext": [{
-                "address": cfg["address"],
-                "port":    cfg["port"],
-                "users":  [{
-                    "id":         cfg["uuid"],
-                    "encryption": cfg["encryption"],
-                    "flow":       cfg["flow"],
-                }],
+                "address": cfg["host"],
+                "port": cfg["port"],
+                "users": [{
+                    "id": cfg["uuid"],
+                    "encryption": "none",
+                    "flow": cfg["flow"]
+                }]
             }]
         },
-        "streamSettings": stream,
+        "streamSettings": {
+            "network": "tcp",
+            "tcpSettings": {},
+            "security": cfg["security"],
+        }
     }
 
+    if cfg["security"] == "reality":
+        ob["streamSettings"]["realitySettings"] = {
+            "serverName": cfg["sni"],
+            "publicKey": cfg["pbk"],
+            "shortId": cfg["sid"],
+            "fingerprint": cfg["fp"]
+        }
+    elif cfg["security"] == "tls":
+        ob["streamSettings"]["tlsSettings"] = {
+            "serverName": cfg["sni"],
+            "fingerprint": cfg["fp"]
+        }
 
-# ──────────────────────────────────────────────
-# Сборка bb.json — один v2rayTun-конфиг с топ-10
-# ──────────────────────────────────────────────
+    return ob
 
-def build_bb_json(top10: list[dict], generated_at: str) -> dict:
-    """
-    Возвращает полноценный JSON-конфиг для v2rayTun:
-      - remarks / метаданные подписки
-      - dns
-      - observatory (автопинг)
-      - routing + балансировщик leastPing по топ-10
-      - inbounds (socks + http)
-      - outbounds: топ-10 LTE + direct + block
-    """
-    # Строим outbounds для топ-10
-    lte_outbounds = []
-    for n, cfg in enumerate(top10, 1):
-        ob = build_outbound(cfg, lte_internal(n))
-        # Человекочитаемое имя хранится в remarks тега через _name (v2rayTun читает tag)
-        # Переименовываем tag в красивый вид — v2rayTun показывает его как имя сервера
-        ob["tag"] = lte_tag(n)
-        lte_outbounds.append(ob)
 
-    # Селектор для балансировщика — ищем по началу строки тега
-    selector_prefix = "🇳🇴LTE"
+# ─── Сборка пака ──────────────────────────────────────────────────────────────
 
-    bb = {
-        # ── Метаданные подписки (v2rayTun читает эти поля) ──
-        "remarks": PROFILE_TITLE,
-        "_profile-update-interval": 1,
-        "_support-url": SUPPORT_URL,
-        "_announce": ANNOUNCE,
-        "_generated": generated_at,
+PACK_SIZE = 10   # серверов в одном паке
 
-        # ── DNS ──
+def make_pack(configs: list[dict], pack_num: int) -> dict:
+    outbounds = []
+    for i, cfg in enumerate(configs, 1):
+        outbounds.append(make_outbound(cfg, f"lte-{i}"))
+
+    outbounds += [
+        {"tag": "direct", "protocol": "freedom", "settings": {"domainStrategy": "UseIP"}},
+        {"tag": "block", "protocol": "blackhole"}
+    ]
+
+    return {
+        "remarks": f"🇳🇴LTE | 📶 — {pack_num} ⚡ | RU",
+        "log": {
+            "dnsLog": False,
+            "loglevel": "error"
+        },
         "dns": {
             "servers": ["1.1.1.1", "1.0.0.1", "8.8.8.8"],
-            "queryStrategy": "UseIPv4",
+            "queryStrategy": "UseIPv4"
         },
-
-        # ── Observatory — автопинг всех lte-серверов ──
-        "observatory": {
-            "enableConcurrency": True,
-            "probeInterval":     "15s",
-            "probeUrl":          "http://www.gstatic.com/generate_204",
-            "subjectSelector":   [selector_prefix],
-        },
-
-        # ── Routing + балансировщик leastPing ──
         "routing": {
-            "domainMatcher":  "hybrid",
+            "domainMatcher": "hybrid",
             "domainStrategy": "IPIfNonMatch",
             "rules": [
                 {
-                    "type":        "field",
-                    "protocol":    ["bittorrent"],
-                    "outboundTag": "direct",
+                    "ip": [
+                        "10.0.0.0/8", "100.64.0.0/10", "127.0.0.0/8",
+                        "172.16.0.0/12", "192.168.0.0/16",
+                        "169.254.0.0/16", "224.0.0.0/4", "255.255.255.255"
+                    ],
+                    "outboundTag": "direct"
                 },
                 {
-                    "type":        "field",
-                    "inboundTag":  ["socks", "http"],
-                    "balancerTag": "BALANCER",
+                    "type": "field",
+                    "protocol": ["bittorrent"],
+                    "outboundTag": "direct"
                 },
+                {
+                    "network": "tcp,udp",
+                    "balancerTag": "LTE-Balancer"
+                }
             ],
             "balancers": [{
-                "tag":      "BALANCER",
-                "selector": [selector_prefix],
-                "strategy": {"type": "leastPing"},
-            }],
+                "tag": "LTE-Balancer",
+                "selector": ["lte-"],
+                "strategy": {
+                    "type": "leastLoad",
+                    "settings": {
+                        "maxRTT": "3000ms",
+                        "expected": 2
+                    }
+                }
+            }]
         },
-
-        # ── Inbounds ──
         "inbounds": [
             {
-                "tag":      "socks",
-                "port":     10808,
-                "listen":   "127.0.0.1",
+                "tag": "socks",
+                "port": 10808,
+                "listen": "127.0.0.1",
                 "protocol": "socks",
                 "settings": {"udp": True, "auth": "noauth"},
                 "sniffing": {
-                    "enabled":     True,
-                    "routeOnly":   False,
-                    "destOverride": ["http", "tls", "quic"],
-                },
+                    "enabled": True,
+                    "routeOnly": False,
+                    "destOverride": ["tls", "http", "quic"],
+                    "metadataOnly": False
+                }
             },
             {
-                "tag":      "http",
-                "port":     10809,
-                "listen":   "127.0.0.1",
+                "tag": "http",
+                "port": 10809,
+                "listen": "127.0.0.1",
                 "protocol": "http",
-                "settings": {"allowTransparent": False},
                 "sniffing": {
-                    "enabled":     True,
-                    "routeOnly":   False,
-                    "destOverride": ["http", "tls", "quic"],
-                },
+                    "enabled": True,
+                    "routeOnly": False,
+                    "destOverride": ["tls", "http", "quic"],
+                    "metadataOnly": False
+                }
+            }
+        ],
+        "outbounds": outbounds,
+        "burstObservatory": {
+            "pingConfig": {
+                "timeout": "5s",
+                "interval": "36s",
+                "sampling": 5,
+                "httpMethod": "HEAD",
+                "destination": "http://connectivitycheck.gstatic.com/generate_204",
+                "connectivity": ""
             },
-        ],
-
-        # ── Outbounds: топ-10 LTE + служебные ──
-        "outbounds": lte_outbounds + [
-            {"tag": "direct", "protocol": "freedom"},
-            {"tag": "block",  "protocol": "blackhole"},
-        ],
+            "subjectSelector": ["lte-"]
+        }
     }
 
-    return bb
 
-
-# ──────────────────────────────────────────────
-# Main
-# ──────────────────────────────────────────────
+# ─── Главная функция ──────────────────────────────────────────────────────────
 
 def main():
-    now = datetime.now(timezone.utc)
-    print(f"\n{'='*55}")
-    print(f"  VLESS Collector  |  {now.strftime('%Y-%m-%d %H:%M UTC')}")
-    print(f"{'='*55}\n")
+    configs = collect_configs()
 
-    # ── Сбор ──
-    all_uris: set[str] = set()
-    for url in SOURCES:
-        print(f"📥 {url.split('/')[-1]}")
-        lines = fetch_lines(url)
-        before = len(all_uris)
-        all_uris.update(lines)
-        print(f"   +{len(all_uris) - before} уник.")
+    if not configs:
+        log.error("Нет конфигов! Выход.")
+        return
 
-    print(f"\n📊 Всего строк: {len(all_uris)}")
+    # Генерируем vlees.txt
+    with open("vlees.txt", "w", encoding="utf-8") as f:
+        f.write("#profile-title: HiBypass 🗽 | FREE LTE | ∞\n")
+        f.write("#subscription-userinfo: upload=0; download=0; total=999999999999999; expire=4102444800\n")
+        f.write("#profile-update-interval: 1\n")
+        f.write("#announce: Бесплатный обход белых списков 🏳🇷🇺 | Если перестало работать — обновите подписку 🔄\n")
+        f.write("#announce-url: https://t.me/HiBypass\n")
+        f.write("#update-always: true\n")
+        for i, cfg in enumerate(configs, 1):
+            uri = (
+                f"vless://{cfg['uuid']}@{cfg['host']}:{cfg['port']}"
+                f"?security={cfg['security']}&sni={cfg['sni']}"
+                f"&pbk={cfg['pbk']}&fp={cfg['fp']}&sid={cfg['sid']}"
+                f"&flow={cfg['flow']}&type={cfg['type']}"
+                f"#🇳🇴LTE | 📶 — {i} ⚡ | RU"
+            )
+            f.write(uri + "\n")
+    log.info(f"vlees.txt: {len(configs)} конфигов")
 
-    # ── Парсинг + IP-фильтр ──
-    configs, skip_ip, skip_parse = [], 0, 0
-    for uri in all_uris:
-        if not uri.startswith("vless://"):
-            continue
-        cfg = parse_vless(uri)
-        if cfg is None:
-            skip_parse += 1
-            continue
-        if not ip_allowed(cfg["address"]):
-            skip_ip += 1
-            continue
-        configs.append(cfg)
+    # Нарезаем на паки по PACK_SIZE
+    packs = []
+    for i in range(0, len(configs), PACK_SIZE):
+        chunk = configs[i:i + PACK_SIZE]
+        pack_num = (i // PACK_SIZE) + 1
+        packs.append(make_pack(chunk, pack_num))
 
-    print(f"✅ После фильтра: {len(configs)}  (−IP: {skip_ip}, −parse: {skip_parse})")
-
-    # ── Дедупликация (3 уровня) ──
-    # 1. по uuid            — один сервер из разных источников
-    # 2. по (address, port) — один хост:порт с разными uuid
-    # 3. по URI без #имени  — точные дубли с разными метками
-    seen_uuid:     set[str]   = set()
-    seen_hostport: set[tuple] = set()
-    seen_uri:      set[str]   = set()
-    unique: list[dict] = []
-    dup_uuid, dup_hp, dup_uri = 0, 0, 0
-
-    for cfg in configs:
-        norm_uri = cfg["_uri"].split("#")[0].strip()
-
-        if cfg["uuid"] in seen_uuid:
-            dup_uuid += 1
-            continue
-        if (cfg["address"], cfg["port"]) in seen_hostport:
-            dup_hp += 1
-            continue
-        if norm_uri in seen_uri:
-            dup_uri += 1
-            continue
-
-        seen_uuid.add(cfg["uuid"])
-        seen_hostport.add((cfg["address"], cfg["port"]))
-        seen_uri.add(norm_uri)
-        unique.append(cfg)
-
-    print(f"🔑 Уникальных: {len(unique)}  (дублей uuid:{dup_uuid} host:port:{dup_hp} uri:{dup_uri})")
-
-    # ── Ранжирование → топ-10 ──
-    top10 = sorted(unique, key=score, reverse=True)[:TOP_N]
-
-    # ── bb.json — один v2rayTun-конфиг ──
-    bb = build_bb_json(top10, now.isoformat())
-
+    # Сохраняем bb.json
     with open("bb.json", "w", encoding="utf-8") as f:
-        json.dump(bb, f, ensure_ascii=False, indent=2)
+        json.dump(packs, f, ensure_ascii=False, indent=2)
 
-    print(f"\n🎉 bb.json готов — {len(top10)} серверов в паке")
-    print(f"\n{'─'*40}")
-    print("🏆 ТОП-10 LTE:")
-    for n, cfg in enumerate(top10, 1):
-        print(f"  {lte_tag(n)}")
-        print(f"    {cfg['address']}:{cfg['port']} | {cfg['security']} | {cfg['network']} | score={score(cfg)}")
+    log.info(f"bb.json: {len(packs)} паков × до {PACK_SIZE} серверов = {len(configs)} всего")
 
 
 if __name__ == "__main__":
