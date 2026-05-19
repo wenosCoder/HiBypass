@@ -30,7 +30,6 @@ PACK_SIZE     = 10                   # серверов в одном паке
 CHECK_WORKERS = 30                   # параллельных xray-проверок
 XRAY_TIMEOUT  = 8                    # секунд на проверку одного сервера
 CHECK_URL     = "http://connectivitycheck.gstatic.com/generate_204"
-MAX_CONFIGS   = 3000                 # максимум конфигов до проверки
 
 IP_PREFIXES   = ("158.", "89.", "84.")
 
@@ -161,10 +160,6 @@ def collect_configs() -> list[dict]:
 
             seen.add(key)
             configs.append(cfg)
-
-            if len(configs) >= MAX_CONFIGS:
-                log.info(f"Достигнут лимит {MAX_CONFIGS} конфигов")
-                return configs
 
     log.info(f"Собрано уникальных конфигов: {len(configs)}")
     return configs
