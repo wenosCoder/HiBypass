@@ -77,7 +77,7 @@ def load_whitelists():
     """Загружает SNI/IP/CIDR whitelist РФ."""
     global SNI_WHITELIST, IP_WHITELIST, CIDR_WHITELIST
 
-    # SNI (домены)
+    # SNI (домены) из whitelist.txt
     text = fetch_text(SNI_WHITELIST_URL)
     for line in text.splitlines():
         line = line.strip().lower()
@@ -124,29 +124,33 @@ def ip_in_whitelist(host: str) -> bool:
 def is_allowed(cfg: dict) -> bool:
     """
     Сервер проходит если выполняется хотя бы одно:
-    1. SNI в РФ whitelist
-    2. Хост — домен (не IP)
+    1. SNI в РФ whitelist (whitelist.txt) — для любого хоста (IP или домен)
+    2. Хост — домен (не IP) — всегда разрешён
     3. Хост — IP с префиксом 158./89./84.
     4. Хост — IP из IP/CIDR whitelist РФ
     """
     host = cfg["host"]
-    sni  = cfg.get("sni", "").lower()
+    sni  = cfg.get("sni", "").lower().strip()
 
-    # SNI в whitelist
+    # 1. SNI в whitelist — проходит для любого типа хоста
     if sni and sni in SNI_WHITELIST:
         return True
 
-    if is_ip(host):
-        # IP префикс
-        if any(host.startswith(p) for p in IP_PREFIXES):
-            return True
-        # IP/CIDR whitelist
-        if ip_in_whitelist(host):
-            return True
-        return False
+    # 2. Хост — домен (не IP) — разрешаем всегда
+    if not is_ip(host):
+        return True
 
-    # Домен — всегда разрешён
-    return True
+    # Дальше только IP-адреса:
+
+    # 3. IP с нужным префиксом 158./89./84.
+    if any(host.startswith(p) for p in IP_PREFIXES):
+        return True
+
+    # 4. IP/CIDR whitelist РФ
+    if ip_in_whitelist(host):
+        return True
+
+    return False
 
 # ─── Загрузка и парсинг ───────────────────────────────────────────────────────
 
@@ -239,65 +243,7 @@ def collect_configs() -> list[dict]:
     log.info(f"Собрано уникальных конфигов: {len(configs)}")
     return configs
 
-# ─── Проверка через xray ──────────────────────────────────────────────────────
-
-def find_free_port() -> int:
-    with socket.socket() as s:
-        s.bind(("127.0.0.1", 0))
-        return s.getsockname()[1]
-
-
-def make_xray_config(cfg: dict, socks_port: int) -> dict:
-    """Генерирует минимальный xray JSON для проверки одного сервера."""
-    outbound = {
-        "tag": "proxy",
-        "protocol": "vless",
-        "settings": {
-            "vnext": [{
-                "address": cfg["host"],
-                "port":    cfg["port"],
-                "users":  [{
-                    "id":         cfg["uuid"],
-                    "encryption": "none",
-                    "flow":       cfg["flow"]
-                }]
-            }]
-        },
-        "streamSettings": {
-            "network":  "tcp",
-            "security": cfg["security"],
-        }
-    }
-
-    if cfg["security"] == "reality":
-        outbound["streamSettings"]["realitySettings"] = {
-            "serverName":  cfg["sni"],
-            "publicKey":   cfg["pbk"],
-            "shortId":     cfg["sid"],
-            "fingerprint": cfg["fp"]
-        }
-    elif cfg["security"] == "tls":
-        outbound["streamSettings"]["tlsSettings"] = {
-            "serverName":  cfg["sni"],
-            "fingerprint": cfg["fp"]
-        }
-
-    return {
-        "log": {"loglevel": "none"},
-        "inbounds": [{
-            "tag":      "socks-in",
-            "port":     socks_port,
-            "listen":   "127.0.0.1",
-            "protocol": "socks",
-            "settings": {"udp": False, "auth": "noauth"}
-        }],
-        "outbounds": [
-            outbound,
-            {"tag": "direct",   "protocol": "freedom"},
-            {"tag": "block",    "protocol": "blackhole"}
-        ]
-    }
-
+# ─── Проверка TCP ─────────────────────────────────────────────────────────────
 
 def check_server(cfg: dict) -> tuple[dict, float] | None:
     """TCP connect проверка — открыт ли порт."""
