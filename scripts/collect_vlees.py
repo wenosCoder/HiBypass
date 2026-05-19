@@ -1,20 +1,41 @@
 #!/usr/bin/env python3
 """
 Сборщик VLESS-конфигов для v2rayTun
-Генерирует bb.json (паки по 10 серверов) и vlees.txt
+- Собирает конфиги из источников
+- Фильтрует по IP (158.x / 89.x / 84.x) + все домены
+- Проверяет каждый сервер через xray (реальное подключение)
+- Генерирует bb.json (паки по 10 живых серверов) и vlees.txt
 """
 
 import re
+import os
 import json
+import time
 import base64
+import socket
 import logging
+import tempfile
+import subprocess
 import requests
-from urllib.parse import urlparse, parse_qs, unquote
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from urllib.parse import unquote
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger(__name__)
 
+# ─── Настройки ────────────────────────────────────────────────────────────────
+
+XRAY_BIN      = "scripts/xray"       # путь к xray бинарнику
+PACK_SIZE     = 10                   # серверов в одном паке
+CHECK_WORKERS = 30                   # параллельных xray-проверок
+XRAY_TIMEOUT  = 8                    # секунд на проверку одного сервера
+CHECK_URL     = "http://connectivitycheck.gstatic.com/generate_204"
+MAX_CONFIGS   = 3000                 # максимум конфигов до проверки
+
+IP_PREFIXES   = ("158.", "89.", "84.")
+
 # ─── Источники ────────────────────────────────────────────────────────────────
+
 SOURCES = [
     "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/main/BLACK_VLESS_RUS.txt",
     "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/main/BLACK_VLESS_RUS_mobile.txt",
@@ -46,20 +67,12 @@ SOURCES = [
 ]
 
 # ─── IP-фильтр ────────────────────────────────────────────────────────────────
-# Пропускаем только IP из диапазонов 158.x / 89.x / 84.x
-# Домены (не IP) — пропускаем всегда
-
-IP_PREFIXES = ("158.", "89.", "84.")
 
 def is_allowed_host(host: str) -> bool:
-    """True → конфиг допустим (домен или нужный IP-префикс)."""
-    # Проверяем, IP ли это вообще
     ip_pattern = re.compile(r"^\d{1,3}(\.\d{1,3}){3}$")
     if ip_pattern.match(host):
         return any(host.startswith(p) for p in IP_PREFIXES)
-    # Домен — всегда разрешён
-    return True
-
+    return True  # домен — всегда разрешён
 
 # ─── Загрузка и парсинг ───────────────────────────────────────────────────────
 
@@ -74,7 +87,6 @@ def fetch_text(url: str) -> str:
 
 
 def try_base64_decode(text: str) -> str:
-    """Пытаемся раскодировать base64 (до 5 раз рекурсивно)."""
     for _ in range(5):
         if "vless://" in text:
             return text
@@ -88,29 +100,14 @@ def try_base64_decode(text: str) -> str:
     return text
 
 
-def extract_vless(text: str) -> list[str]:
-    """Извлекает строки vless:// из текста (без #-комментария)."""
-    lines = []
-    for line in text.splitlines():
-        line = line.strip()
-        if line.startswith("vless://"):
-            # Обрезаем имя (#...) в конце
-            base = re.sub(r"#.*$", "", line).strip()
-            lines.append(base)
-    return lines
-
-
 def parse_vless(uri: str) -> dict | None:
-    """Парсит vless:// URI в словарь параметров."""
     try:
-        # vless://UUID@HOST:PORT?params
         m = re.match(r"vless://([^@]+)@([^:/?#]+):(\d+)([/?].*)?", uri)
         if not m:
             return None
         uuid, host, port_str, rest = m.group(1), m.group(2), m.group(3), m.group(4) or ""
         port = int(port_str)
 
-        # Парсим query-параметры
         qs = {}
         if "?" in rest:
             query = rest.split("?", 1)[1].split("#")[0]
@@ -123,19 +120,17 @@ def parse_vless(uri: str) -> dict | None:
             "uuid": uuid,
             "host": host,
             "port": port,
-            "flow": qs.get("flow", "xtls-rprx-vision"),
+            "flow":     qs.get("flow",     "xtls-rprx-vision"),
             "security": qs.get("security", "reality"),
-            "sni": qs.get("sni", ""),
-            "pbk": qs.get("pbk", ""),
-            "fp": qs.get("fp", "chrome"),
-            "sid": qs.get("sid", ""),
-            "type": qs.get("type", "tcp"),
+            "sni":      qs.get("sni",      ""),
+            "pbk":      qs.get("pbk",      ""),
+            "fp":       qs.get("fp",       "chrome"),
+            "sid":      qs.get("sid",      ""),
+            "type":     qs.get("type",     "tcp"),
         }
     except Exception:
         return None
 
-
-# ─── Сборка ───────────────────────────────────────────────────────────────────
 
 def collect_configs() -> list[dict]:
     seen: set[str] = set()
@@ -148,97 +143,234 @@ def collect_configs() -> list[dict]:
             continue
 
         text = try_base64_decode(raw)
-        uris = extract_vless(text)
 
-        for uri in uris:
-            cfg = parse_vless(uri)
+        for line in text.splitlines():
+            line = line.strip()
+            if not line.startswith("vless://"):
+                continue
+            base = re.sub(r"#.*$", "", line).strip()
+            cfg = parse_vless(base)
             if cfg is None:
                 continue
 
-            host = cfg["host"]
-            port = cfg["port"]
-            key = f"{host}:{port}"
-
+            key = f"{cfg['host']}:{cfg['port']}"
             if key in seen:
                 continue
-
-            if not is_allowed_host(host):
-                log.debug(f"Пропуск по IP-фильтру: {host}")
+            if not is_allowed_host(cfg["host"]):
                 continue
 
             seen.add(key)
             configs.append(cfg)
 
-    log.info(f"Уникальных конфигов после фильтра: {len(configs)}")
+            if len(configs) >= MAX_CONFIGS:
+                log.info(f"Достигнут лимит {MAX_CONFIGS} конфигов")
+                return configs
+
+    log.info(f"Собрано уникальных конфигов: {len(configs)}")
     return configs
 
+# ─── Проверка через xray ──────────────────────────────────────────────────────
 
-# ─── Генерация outbound ───────────────────────────────────────────────────────
+def find_free_port() -> int:
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
 
-def make_outbound(cfg: dict, tag: str) -> dict:
-    ob = {
-        "tag": tag,
+
+def make_xray_config(cfg: dict, socks_port: int) -> dict:
+    """Генерирует минимальный xray JSON для проверки одного сервера."""
+    outbound = {
+        "tag": "proxy",
         "protocol": "vless",
         "settings": {
             "vnext": [{
                 "address": cfg["host"],
-                "port": cfg["port"],
-                "users": [{
-                    "id": cfg["uuid"],
+                "port":    cfg["port"],
+                "users":  [{
+                    "id":         cfg["uuid"],
                     "encryption": "none",
-                    "flow": cfg["flow"]
+                    "flow":       cfg["flow"]
                 }]
             }]
         },
         "streamSettings": {
-            "network": "tcp",
-            "tcpSettings": {},
+            "network":  "tcp",
             "security": cfg["security"],
         }
     }
 
     if cfg["security"] == "reality":
+        outbound["streamSettings"]["realitySettings"] = {
+            "serverName":  cfg["sni"],
+            "publicKey":   cfg["pbk"],
+            "shortId":     cfg["sid"],
+            "fingerprint": cfg["fp"]
+        }
+    elif cfg["security"] == "tls":
+        outbound["streamSettings"]["tlsSettings"] = {
+            "serverName":  cfg["sni"],
+            "fingerprint": cfg["fp"]
+        }
+
+    return {
+        "log": {"loglevel": "none"},
+        "inbounds": [{
+            "tag":      "socks-in",
+            "port":     socks_port,
+            "listen":   "127.0.0.1",
+            "protocol": "socks",
+            "settings": {"udp": False, "auth": "noauth"}
+        }],
+        "outbounds": [
+            outbound,
+            {"tag": "direct",   "protocol": "freedom"},
+            {"tag": "block",    "protocol": "blackhole"}
+        ]
+    }
+
+
+def check_server(cfg: dict) -> tuple[dict, float] | None:
+    """
+    Запускает xray с одним сервером, делает HTTP запрос через SOCKS5.
+    Возвращает (cfg, rtt_ms) если живой, иначе None.
+    """
+    socks_port = find_free_port()
+    xray_cfg   = make_xray_config(cfg, socks_port)
+
+    with tempfile.NamedTemporaryFile(
+        mode="w", suffix=".json", delete=False
+    ) as f:
+        json.dump(xray_cfg, f)
+        tmp_path = f.name
+
+    proc = None
+    try:
+        proc = subprocess.Popen(
+            [XRAY_BIN, "run", "-config", tmp_path],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL
+        )
+
+        # Ждём пока xray поднимет SOCKS
+        time.sleep(1.5)
+
+        proxies = {
+            "http":  f"socks5h://127.0.0.1:{socks_port}",
+            "https": f"socks5h://127.0.0.1:{socks_port}",
+        }
+
+        t0 = time.monotonic()
+        resp = requests.get(
+            CHECK_URL,
+            proxies=proxies,
+            timeout=XRAY_TIMEOUT - 1.5,
+            allow_redirects=False
+        )
+        rtt = (time.monotonic() - t0) * 1000  # ms
+
+        if resp.status_code in (200, 204):
+            log.info(f"✅ {cfg['host']}:{cfg['port']} — {rtt:.0f}ms")
+            return (cfg, rtt)
+        else:
+            log.debug(f"❌ {cfg['host']}:{cfg['port']} — HTTP {resp.status_code}")
+            return None
+
+    except Exception as e:
+        log.debug(f"❌ {cfg['host']}:{cfg['port']} — {e}")
+        return None
+    finally:
+        if proc:
+            proc.terminate()
+            try:
+                proc.wait(timeout=2)
+            except Exception:
+                proc.kill()
+        os.unlink(tmp_path)
+
+
+def check_all(configs: list[dict]) -> list[tuple[dict, float]]:
+    """Параллельная проверка всех конфигов через xray."""
+    log.info(f"Проверяем {len(configs)} серверов через xray ({CHECK_WORKERS} потоков)...")
+    results = []
+
+    with ThreadPoolExecutor(max_workers=CHECK_WORKERS) as ex:
+        futures = {ex.submit(check_server, cfg): cfg for cfg in configs}
+        done = 0
+        for fut in as_completed(futures):
+            done += 1
+            if done % 50 == 0:
+                log.info(f"Проверено: {done}/{len(configs)} | живых: {len(results)}")
+            res = fut.result()
+            if res is not None:
+                results.append(res)
+
+    # Сортируем по RTT (быстрые первые)
+    results.sort(key=lambda x: x[1])
+    log.info(f"Живых серверов: {len(results)} из {len(configs)}")
+    return results
+
+# ─── Генерация outbound ───────────────────────────────────────────────────────
+
+def make_outbound(cfg: dict, tag: str) -> dict:
+    ob = {
+        "tag":      tag,
+        "protocol": "vless",
+        "settings": {
+            "vnext": [{
+                "address": cfg["host"],
+                "port":    cfg["port"],
+                "users":  [{
+                    "id":         cfg["uuid"],
+                    "encryption": "none",
+                    "flow":       cfg["flow"]
+                }]
+            }]
+        },
+        "streamSettings": {
+            "network":     "tcp",
+            "tcpSettings": {},
+            "security":    cfg["security"],
+        }
+    }
+
+    if cfg["security"] == "reality":
         ob["streamSettings"]["realitySettings"] = {
-            "serverName": cfg["sni"],
-            "publicKey": cfg["pbk"],
-            "shortId": cfg["sid"],
+            "serverName":  cfg["sni"],
+            "publicKey":   cfg["pbk"],
+            "shortId":     cfg["sid"],
             "fingerprint": cfg["fp"]
         }
     elif cfg["security"] == "tls":
         ob["streamSettings"]["tlsSettings"] = {
-            "serverName": cfg["sni"],
+            "serverName":  cfg["sni"],
             "fingerprint": cfg["fp"]
         }
 
     return ob
 
-
 # ─── Сборка пака ──────────────────────────────────────────────────────────────
 
-PACK_SIZE = 10   # серверов в одном паке
-
-def make_pack(configs: list[dict], pack_num: int) -> dict:
+def make_pack(configs: list[dict], rtts: list[float], pack_num: int) -> dict:
     outbounds = []
     for i, cfg in enumerate(configs, 1):
         outbounds.append(make_outbound(cfg, f"lte-{i}"))
 
     outbounds += [
-        {"tag": "direct", "protocol": "freedom", "settings": {"domainStrategy": "UseIP"}},
-        {"tag": "block", "protocol": "blackhole"}
+        {"tag": "direct", "protocol": "freedom",   "settings": {"domainStrategy": "UseIP"}},
+        {"tag": "block",  "protocol": "blackhole"}
     ]
+
+    avg_rtt = sum(rtts) / len(rtts) if rtts else 0
 
     return {
         "remarks": f"🇳🇴LTE | 📶 — {pack_num} ⚡ | RU",
-        "log": {
-            "dnsLog": False,
-            "loglevel": "error"
-        },
+        "log": {"dnsLog": False, "loglevel": "error"},
         "dns": {
-            "servers": ["1.1.1.1", "1.0.0.1", "8.8.8.8"],
+            "servers":       ["1.1.1.1", "1.0.0.1", "8.8.8.8"],
             "queryStrategy": "UseIPv4"
         },
         "routing": {
-            "domainMatcher": "hybrid",
+            "domainMatcher":  "hybrid",
             "domainStrategy": "IPIfNonMatch",
             "rules": [
                 {
@@ -250,49 +382,46 @@ def make_pack(configs: list[dict], pack_num: int) -> dict:
                     "outboundTag": "direct"
                 },
                 {
-                    "type": "field",
-                    "protocol": ["bittorrent"],
+                    "type":        "field",
+                    "protocol":    ["bittorrent"],
                     "outboundTag": "direct"
                 },
                 {
-                    "network": "tcp,udp",
+                    "network":     "tcp,udp",
                     "balancerTag": "LTE-Balancer"
                 }
             ],
             "balancers": [{
-                "tag": "LTE-Balancer",
+                "tag":      "LTE-Balancer",
                 "selector": ["lte-"],
                 "strategy": {
                     "type": "leastLoad",
-                    "settings": {
-                        "maxRTT": "3000ms",
-                        "expected": 2
-                    }
+                    "settings": {"maxRTT": "3000ms", "expected": 2}
                 }
             }]
         },
         "inbounds": [
             {
-                "tag": "socks",
-                "port": 10808,
-                "listen": "127.0.0.1",
+                "tag":      "socks",
+                "port":     10808,
+                "listen":   "127.0.0.1",
                 "protocol": "socks",
                 "settings": {"udp": True, "auth": "noauth"},
                 "sniffing": {
-                    "enabled": True,
-                    "routeOnly": False,
+                    "enabled":     True,
+                    "routeOnly":   False,
                     "destOverride": ["tls", "http", "quic"],
                     "metadataOnly": False
                 }
             },
             {
-                "tag": "http",
-                "port": 10809,
-                "listen": "127.0.0.1",
+                "tag":      "http",
+                "port":     10809,
+                "listen":   "127.0.0.1",
                 "protocol": "http",
                 "sniffing": {
-                    "enabled": True,
-                    "routeOnly": False,
+                    "enabled":     True,
+                    "routeOnly":   False,
                     "destOverride": ["tls", "http", "quic"],
                     "metadataOnly": False
                 }
@@ -301,10 +430,10 @@ def make_pack(configs: list[dict], pack_num: int) -> dict:
         "outbounds": outbounds,
         "burstObservatory": {
             "pingConfig": {
-                "timeout": "5s",
-                "interval": "36s",
-                "sampling": 5,
-                "httpMethod": "HEAD",
+                "timeout":     "5s",
+                "interval":    "36s",
+                "sampling":    5,
+                "httpMethod":  "HEAD",
                 "destination": "http://connectivitycheck.gstatic.com/generate_204",
                 "connectivity": ""
             },
@@ -312,17 +441,31 @@ def make_pack(configs: list[dict], pack_num: int) -> dict:
         }
     }
 
-
 # ─── Главная функция ──────────────────────────────────────────────────────────
 
 def main():
-    configs = collect_configs()
+    # 1. Проверяем xray
+    if not os.path.isfile(XRAY_BIN):
+        log.error(f"xray не найден: {XRAY_BIN}")
+        return
+    os.chmod(XRAY_BIN, 0o755)
 
+    # 2. Собираем конфиги
+    configs = collect_configs()
     if not configs:
-        log.error("Нет конфигов! Выход.")
+        log.error("Нет конфигов!")
         return
 
-    # Генерируем vlees.txt
+    # 3. Проверяем через xray
+    alive = check_all(configs)
+    if not alive:
+        log.error("Нет живых серверов!")
+        return
+
+    alive_cfgs = [c for c, _ in alive]
+    alive_rtts = [r for _, r in alive]
+
+    # 4. Генерируем vlees.txt (только живые)
     with open("vlees.txt", "w", encoding="utf-8") as f:
         f.write("#profile-title: HiBypass 🗽 | FREE LTE | ∞\n")
         f.write("#subscription-userinfo: upload=0; download=0; total=999999999999999; expire=4102444800\n")
@@ -330,29 +473,30 @@ def main():
         f.write("#announce: Бесплатный обход белых списков 🏳🇷🇺 | Если перестало работать — обновите подписку 🔄\n")
         f.write("#announce-url: https://t.me/HiBypass\n")
         f.write("#update-always: true\n")
-        for i, cfg in enumerate(configs, 1):
+        for i, (cfg, rtt) in enumerate(alive, 1):
             uri = (
                 f"vless://{cfg['uuid']}@{cfg['host']}:{cfg['port']}"
                 f"?security={cfg['security']}&sni={cfg['sni']}"
                 f"&pbk={cfg['pbk']}&fp={cfg['fp']}&sid={cfg['sid']}"
                 f"&flow={cfg['flow']}&type={cfg['type']}"
-                f"#🇳🇴LTE | 📶 — {i} ⚡ | RU"
+                f"#🇳🇴LTE | 📶 — {i} ⚡ | RU | {rtt:.0f}ms"
             )
             f.write(uri + "\n")
-    log.info(f"vlees.txt: {len(configs)} конфигов")
+    log.info(f"vlees.txt: {len(alive)} живых конфигов")
 
-    # Нарезаем на паки по PACK_SIZE
+    # 5. Нарезаем на паки по PACK_SIZE
     packs = []
-    for i in range(0, len(configs), PACK_SIZE):
-        chunk = configs[i:i + PACK_SIZE]
-        pack_num = (i // PACK_SIZE) + 1
-        packs.append(make_pack(chunk, pack_num))
+    for i in range(0, len(alive_cfgs), PACK_SIZE):
+        chunk_cfgs = alive_cfgs[i:i + PACK_SIZE]
+        chunk_rtts = alive_rtts[i:i + PACK_SIZE]
+        pack_num   = (i // PACK_SIZE) + 1
+        packs.append(make_pack(chunk_cfgs, chunk_rtts, pack_num))
 
-    # Сохраняем bb.json
+    # 6. Сохраняем bb.json
     with open("bb.json", "w", encoding="utf-8") as f:
         json.dump(packs, f, ensure_ascii=False, indent=2)
 
-    log.info(f"bb.json: {len(packs)} паков × до {PACK_SIZE} серверов = {len(configs)} всего")
+    log.info(f"bb.json: {len(packs)} паков × до {PACK_SIZE} серверов = {len(alive_cfgs)} живых")
 
 
 if __name__ == "__main__":
