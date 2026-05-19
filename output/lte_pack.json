@@ -1,0 +1,349 @@
+[
+  {
+    "tag": "🇷🇺LTE | 📶 — 1 ⚡ | RU",
+    "protocol": "vless",
+    "settings": {
+      "vnext": [
+        {
+          "address": "mws.cdns.su",
+          "port": 443,
+          "users": [
+            {
+              "id": "fbc9d7c1-2518-4dd8-a50a-d1d7fa1ec84d",
+              "encryption": "none",
+              "flow": "xtls-rprx-vision"
+            }
+          ]
+        }
+      ]
+    },
+    "streamSettings": {
+      "network": "ws",
+      "security": "reality",
+      "realitySettings": {
+        "serverName": "vecherka.su",
+        "fingerprint": "qq",
+        "publicKey": "1vSZjvhZO01oAEH3b7eebR1qF5dLU1Dq2E7xu8pwGSs",
+        "shortId": "428ef87fd47a3a32"
+      },
+      "wsSettings": {
+        "path": "/",
+        "headers": {
+          "Host": "vecherka.su"
+        }
+      }
+    },
+    "_score": 70,
+    "_original_name": "🇨🇭 Швейцария 29 | WS"
+  },
+  {
+    "tag": "🇷🇺LTE | 📶 — 2 ⚡ | RU",
+    "protocol": "vless",
+    "settings": {
+      "vnext": [
+        {
+          "address": "est-0001-xr.packet-drop-society.net",
+          "port": 443,
+          "users": [
+            {
+              "id": "a1ac8a09-98fd-4c11-acc4-3ab272bd220b",
+              "encryption": "none",
+              "flow": "xtls-rprx-vision"
+            }
+          ]
+        }
+      ]
+    },
+    "streamSettings": {
+      "network": "ws",
+      "security": "reality",
+      "realitySettings": {
+        "serverName": "hls-svod.itunes.apple.com",
+        "fingerprint": "chrome",
+        "publicKey": "llaiqC-oIhL_bjc236FPq26LSn7IVhIa4cIC6OVytws",
+        "shortId": "86e999a2cdc2"
+      },
+      "wsSettings": {
+        "path": "/",
+        "headers": {
+          "Host": "hls-svod.itunes.apple.com"
+        }
+      }
+    },
+    "_score": 70,
+    "_original_name": "🇪🇪 Эстония 3 | Fast, Torrents | 🚀 862 Mbps"
+  },
+  {
+    "tag": "🇷🇺LTE | 📶 — 3 ⚡ | RU",
+    "protocol": "vless",
+    "settings": {
+      "vnext": [
+        {
+          "address": "usa-0001-gmn01.packet-drop-society.net",
+          "port": 443,
+          "users": [
+            {
+              "id": "a1ac8a09-98fd-4c11-acc4-3ab272bd220b",
+              "encryption": "none",
+              "flow": "xtls-rprx-vision"
+            }
+          ]
+        }
+      ]
+    },
+    "streamSettings": {
+      "network": "ws",
+      "security": "reality",
+      "realitySettings": {
+        "serverName": "hls-svod.itunes.apple.com",
+        "fingerprint": "chrome",
+        "publicKey": "llaiqC-oIhL_bjc236FPq26LSn7IVhIa4cIC6OVytws",
+        "shortId": "31"
+      },
+      "wsSettings": {
+        "path": "/",
+        "headers": {
+          "Host": "hls-svod.itunes.apple.com"
+        }
+      }
+    },
+    "_score": 70,
+    "_original_name": "🇺🇸 США 180 | AI | 🚀 618 Mbps"
+  },
+  {
+    "tag": "🇷🇺LTE | 📶 — 4 ⚡ | RU",
+    "protocol": "vless",
+    "settings": {
+      "vnext": [
+        {
+          "address": "fin-0001-xr.packet-drop-society.net",
+          "port": 443,
+          "users": [
+            {
+              "id": "a1ac8a09-98fd-4c11-acc4-3ab272bd220b",
+              "encryption": "none",
+              "flow": "xtls-rprx-vision"
+            }
+          ]
+        }
+      ]
+    },
+    "streamSettings": {
+      "network": "ws",
+      "security": "reality",
+      "realitySettings": {
+        "serverName": "hls-svod.itunes.apple.com",
+        "fingerprint": "chrome",
+        "publicKey": "llaiqC-oIhL_bjc236FPq26LSn7IVhIa4cIC6OVytws",
+        "shortId": "48720c"
+      },
+      "wsSettings": {
+        "path": "/",
+        "headers": {
+          "Host": "hls-svod.itunes.apple.com"
+        }
+      }
+    },
+    "_score": 70,
+    "_original_name": "🇫🇮 Финляндия 84 | Fast, Torrents | 🚀 755 Mbps"
+  },
+  {
+    "tag": "🇷🇺LTE | 📶 — 5 ⚡ | RU",
+    "protocol": "vless",
+    "settings": {
+      "vnext": [
+        {
+          "address": "vpn-free-2.baikal.dev",
+          "port": 443,
+          "users": [
+            {
+              "id": "12c04e26-9bbd-46e0-9972-c131294e4f6e",
+              "encryption": "none",
+              "flow": "xtls-rprx-vision"
+            }
+          ]
+        }
+      ]
+    },
+    "streamSettings": {
+      "network": "xhttp",
+      "security": "reality",
+      "realitySettings": {
+        "serverName": "nod-f2.irkutsk.online",
+        "fingerprint": "chrome",
+        "publicKey": "nDudcq4Mop7eRwoa-Q-FxwzNiYjiNu5lNpOUg17jeFY",
+        "shortId": "8a6a"
+      },
+      "xhttpSettings": {
+        "path": "/",
+        "mode": "auto"
+      }
+    },
+    "_score": 70,
+    "_original_name": "分享日记 t.me/rjsxrd"
+  },
+  {
+    "tag": "🇷🇺LTE | 📶 — 6 ⚡ | RU",
+    "protocol": "vless",
+    "settings": {
+      "vnext": [
+        {
+          "address": "whtk.mooo.com",
+          "port": 20598,
+          "users": [
+            {
+              "id": "cdcd0159-bb13-4994-bdbb-982d854a72a6",
+              "encryption": "none",
+              "flow": "xtls-rprx-vision"
+            }
+          ]
+        }
+      ]
+    },
+    "streamSettings": {
+      "network": "grpc",
+      "security": "reality",
+      "realitySettings": {
+        "serverName": "google.com",
+        "fingerprint": "firefox",
+        "publicKey": "dCl0YRzYNNmKsJp606YcCx5gxN1KyO31_wbButunoEA",
+        "shortId": "aaf40a"
+      },
+      "grpcSettings": {
+        "serviceName": "/"
+      }
+    },
+    "_score": 65,
+    "_original_name": "TORU-TLS"
+  },
+  {
+    "tag": "🇷🇺LTE | 📶 — 7 ⚡ | RU",
+    "protocol": "vless",
+    "settings": {
+      "vnext": [
+        {
+          "address": "b.confignor.site",
+          "port": 35493,
+          "users": [
+            {
+              "id": "6f42a7a1-33b8-4fac-a4c8-87aaf7717777",
+              "encryption": "none",
+              "flow": "xtls-rprx-vision"
+            }
+          ]
+        }
+      ]
+    },
+    "streamSettings": {
+      "network": "grpc",
+      "security": "reality",
+      "realitySettings": {
+        "serverName": "www.cdn77.com",
+        "fingerprint": "qq",
+        "publicKey": "qeWt8jJZTwf6vmiTvDfaalPaSZDkX7a3XkKrBxf2YVA",
+        "shortId": "9c24"
+      },
+      "grpcSettings": {
+        "serviceName": "/"
+      }
+    },
+    "_score": 65,
+    "_original_name": "分享日记 t.me/rjsxrd"
+  },
+  {
+    "tag": "🇷🇺LTE | 📶 — 8 ⚡ | RU",
+    "protocol": "vless",
+    "settings": {
+      "vnext": [
+        {
+          "address": "a.confignor.site",
+          "port": 35493,
+          "users": [
+            {
+              "id": "749e491b-2aa8-41fc-bca6-7234341ec98f",
+              "encryption": "none",
+              "flow": "xtls-rprx-vision"
+            }
+          ]
+        }
+      ]
+    },
+    "streamSettings": {
+      "network": "grpc",
+      "security": "reality",
+      "realitySettings": {
+        "serverName": "www.cdn77.com",
+        "fingerprint": "qq",
+        "publicKey": "qeWt8jJZTwf6vmiTvDfaalPaSZDkX7a3XkKrBxf2YVA",
+        "shortId": "9c24"
+      },
+      "grpcSettings": {
+        "serviceName": "/"
+      }
+    },
+    "_score": 65,
+    "_original_name": "分享日记 t.me/rjsxrd"
+  },
+  {
+    "tag": "🇷🇺LTE | 📶 — 9 ⚡ | RU",
+    "protocol": "vless",
+    "settings": {
+      "vnext": [
+        {
+          "address": "ss.sps1.sbs",
+          "port": 8443,
+          "users": [
+            {
+              "id": "f47ed595-7773-47f3-a6eb-8fb968f05b3c",
+              "encryption": "none",
+              "flow": "xtls-rprx-vision"
+            }
+          ]
+        }
+      ]
+    },
+    "streamSettings": {
+      "network": "tcp",
+      "security": "reality",
+      "realitySettings": {
+        "serverName": "dropbox.com",
+        "fingerprint": "safari",
+        "publicKey": "SbVKOEMjK0sIlbwg4akyBg5mL5KZwwB-ed4eEE7YnRc",
+        "shortId": ""
+      }
+    },
+    "_score": 60,
+    "_original_name": "🇫🇷 Франция 374 | Fast, SS, YouTube | 🚀 417 Mbps"
+  },
+  {
+    "tag": "🇷🇺LTE | 📶 — 10 ⚡ | RU",
+    "protocol": "vless",
+    "settings": {
+      "vnext": [
+        {
+          "address": "balanced-tun-mts-2.vkproxy.com",
+          "port": 8443,
+          "users": [
+            {
+              "id": "63bfea3c-add1-4909-b437-34401f6f6580",
+              "encryption": "none",
+              "flow": "xtls-rprx-vision"
+            }
+          ]
+        }
+      ]
+    },
+    "streamSettings": {
+      "network": "tcp",
+      "security": "reality",
+      "realitySettings": {
+        "serverName": "sun6-21.userapi.com",
+        "fingerprint": "qq",
+        "publicKey": "ZSzB9TQPGNcCiC0WLmciF5Jc8doJDvdRgbqTi8SCoEM",
+        "shortId": "a1b2c3d4e5f6789a"
+      }
+    },
+    "_score": 60,
+    "_original_name": "📱 Антиблок 52 | Beeline, MTS, Social, T2, Yota t.me/rjsxrd"
+  }
+]
