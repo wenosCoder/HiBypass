@@ -2,7 +2,7 @@ name: Collect VLESS Configs
 
 on:
   schedule:
-    - cron: '0 */6 * * *'   # каждые 6 часов
+    - cron: '0 */1 * * *'   # каждые 6 часов
   workflow_dispatch:          # ручной запуск
 
 permissions:
@@ -24,12 +24,12 @@ jobs:
         run: pip install requests
 
       - name: Run collector
-        run: python scripts/collect_vless.py
+        run: python .github/workflows/collect_vless.py
 
       - name: Commit & push bb.json
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add bb.json output/
+          git add bb.json
           git diff --cached --quiet || git commit -m "🔄 Auto-update bb.json [$(date -u '+%Y-%m-%d %H:%M UTC')]"
           git push
