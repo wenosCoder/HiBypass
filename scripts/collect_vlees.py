@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """
 Сборщик VLESS-конфигов для v2rayTun
-- Собирает конфиги из источников
-- Фильтрует: SNI из РФ whitelist ИЛИ хост-домен ИЛИ IP 158./89./84.
-- TCP-проверка живых серверов
-- Генерирует bb.json (паки по 10) и vlees.txt
+Фильтр (достаточно одного условия):
+  1. SNI входит в whitelist.txt (РФ mobile whitelist)
+  2. host — домен (не IP) → разрешаем всегда
+  3. host — IP начинается на 158. / 89. / 84.
+  4. host — IP из IP/CIDR whitelist РФ
 """
 
 import re
@@ -18,7 +19,10 @@ import requests
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from urllib.parse import unquote
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(message)s"
+)
 log = logging.getLogger(__name__)
 
 # ─── Настройки ────────────────────────────────────────────────────────────────
@@ -26,7 +30,6 @@ log = logging.getLogger(__name__)
 PACK_SIZE     = 10
 CHECK_WORKERS = 100
 TCP_TIMEOUT   = 2
-
 IP_PREFIXES   = ("158.", "89.", "84.")
 
 # ─── Источники VLESS ──────────────────────────────────────────────────────────
@@ -67,94 +70,13 @@ SNI_WHITELIST_URL  = "https://raw.githubusercontent.com/hxehex/russia-mobile-int
 CIDR_WHITELIST_URL = "https://raw.githubusercontent.com/hxehex/russia-mobile-internet-whitelist/refs/heads/main/cidrwhitelist.txt"
 IP_WHITELIST_URL   = "https://raw.githubusercontent.com/hxehex/russia-mobile-internet-whitelist/refs/heads/main/ip%20whitelist.txt"
 
-# Глобальные наборы — заполняются в load_whitelists()
-SNI_WHITELIST:  set[str] = set()
-IP_WHITELIST:   set[str] = set()
-CIDR_WHITELIST: list     = []
+SNI_WHITELIST: set[str] = set()
+IP_WHITELIST:  set[str] = set()
+CIDR_WHITELIST: list    = []
 
-
-def load_whitelists():
-    """Загружает SNI/IP/CIDR whitelist РФ."""
-    global SNI_WHITELIST, IP_WHITELIST, CIDR_WHITELIST
-
-    # SNI (домены) из whitelist.txt
-    text = fetch_text(SNI_WHITELIST_URL)
-    for line in text.splitlines():
-        line = line.strip().lower()
-        if line and not line.startswith("#"):
-            SNI_WHITELIST.add(line)
-    log.info(f"SNI whitelist: {len(SNI_WHITELIST)} доменов")
-
-    # IP whitelist
-    text = fetch_text(IP_WHITELIST_URL)
-    for line in text.splitlines():
-        line = line.strip()
-        if line and not line.startswith("#"):
-            IP_WHITELIST.add(line)
-    log.info(f"IP whitelist: {len(IP_WHITELIST)} адресов")
-
-    # CIDR whitelist
-    text = fetch_text(CIDR_WHITELIST_URL)
-    for line in text.splitlines():
-        line = line.strip()
-        if line and not line.startswith("#"):
-            try:
-                CIDR_WHITELIST.append(ipaddress.ip_network(line, strict=False))
-            except ValueError:
-                pass
-    log.info(f"CIDR whitelist: {len(CIDR_WHITELIST)} подсетей")
-
-
-# ─── Фильтр ───────────────────────────────────────────────────────────────────
-
-IP_RE = re.compile(r"^\d{1,3}(\.\d{1,3}){3}$")
-
-def is_ip(host: str) -> bool:
-    return bool(IP_RE.match(host))
-
-def ip_in_whitelist(host: str) -> bool:
-    if host in IP_WHITELIST:
-        return True
-    try:
-        addr = ipaddress.ip_address(host)
-        return any(addr in net for net in CIDR_WHITELIST)
-    except ValueError:
-        return False
-
-def is_allowed(cfg: dict) -> bool:
-    """
-    Сервер проходит если выполняется хотя бы одно:
-    1. SNI в РФ whitelist (whitelist.txt) — для любого хоста (IP или домен)
-    2. Хост — домен (не IP) — всегда разрешён
-    3. Хост — IP с префиксом 158./89./84.
-    4. Хост — IP из IP/CIDR whitelist РФ
-    """
-    host = cfg["host"]
-    sni  = cfg.get("sni", "").lower().strip()
-
-    # 1. SNI в whitelist — проходит для любого типа хоста
-    if sni and sni in SNI_WHITELIST:
-        return True
-
-    # 2. Хост — домен (не IP) — разрешаем всегда
-    if not is_ip(host):
-        return True
-
-    # Дальше только IP-адреса:
-
-    # 3. IP с нужным префиксом 158./89./84.
-    if any(host.startswith(p) for p in IP_PREFIXES):
-        return True
-
-    # 4. IP/CIDR whitelist РФ
-    if ip_in_whitelist(host):
-        return True
-
-    return False
-
-# ─── Загрузка и парсинг ───────────────────────────────────────────────────────
 
 def fetch_text(url: str) -> str:
+    """Загружает текст по URL, возвращает пустую строку при ошибке."""
     try:
         r = requests.get(url, timeout=15)
         r.raise_for_status()
@@ -164,7 +86,134 @@ def fetch_text(url: str) -> str:
         return ""
 
 
+def load_whitelists() -> None:
+    """Загружает SNI / IP / CIDR whitelist РФ в глобальные наборы."""
+    global SNI_WHITELIST, IP_WHITELIST, CIDR_WHITELIST
+
+    # SNI whitelist (whitelist.txt)
+    # Каждая строка — домен или паттерн вида «*.example.ru»
+    # Нормализуем: strip, lower, убираем ведущую точку и «*.»
+    raw_sni = fetch_text(SNI_WHITELIST_URL)
+    for line in raw_sni.splitlines():
+        entry = line.strip().lower()
+        if not entry or entry.startswith("#"):
+            continue
+        # убираем wildcard-префикс «*.» или просто «.»
+        entry = entry.lstrip("*").lstrip(".")
+        if entry:
+            SNI_WHITELIST.add(entry)
+    log.info(f"SNI whitelist: {len(SNI_WHITELIST)} доменов")
+
+    # IP whitelist
+    raw_ip = fetch_text(IP_WHITELIST_URL)
+    for line in raw_ip.splitlines():
+        entry = line.strip()
+        if entry and not entry.startswith("#"):
+            IP_WHITELIST.add(entry)
+    log.info(f"IP whitelist: {len(IP_WHITELIST)} адресов")
+
+    # CIDR whitelist
+    raw_cidr = fetch_text(CIDR_WHITELIST_URL)
+    for line in raw_cidr.splitlines():
+        entry = line.strip()
+        if not entry or entry.startswith("#"):
+            continue
+        try:
+            CIDR_WHITELIST.append(ipaddress.ip_network(entry, strict=False))
+        except ValueError:
+            pass
+    log.info(f"CIDR whitelist: {len(CIDR_WHITELIST)} подсетей")
+
+
+# ─── Фильтр ───────────────────────────────────────────────────────────────────
+
+IP_RE = re.compile(r"^\d{1,3}(\.\d{1,3}){3}$")
+
+
+def is_ip(host: str) -> bool:
+    return bool(IP_RE.match(host))
+
+
+def sni_in_whitelist(sni: str) -> bool:
+    """
+    Проверяет SNI против whitelist с учётом wildcard.
+    «api.vk.com» → проверяем «api.vk.com», «vk.com»
+    """
+    if not sni:
+        return False
+    sni = sni.lower().strip()
+    if sni in SNI_WHITELIST:
+        return True
+    # Проверяем родительские домены (для wildcard *.example.ru)
+    parts = sni.split(".")
+    for i in range(1, len(parts)):
+        parent = ".".join(parts[i:])
+        if parent in SNI_WHITELIST:
+            return True
+    return False
+
+
+def ip_in_whitelist(host: str) -> bool:
+    """Проверяет IP против IP-списка и CIDR-подсетей РФ."""
+    if host in IP_WHITELIST:
+        return True
+    try:
+        addr = ipaddress.ip_address(host)
+        return any(addr in net for net in CIDR_WHITELIST)
+    except ValueError:
+        return False
+
+
+def is_allowed(cfg: dict) -> bool:
+    """
+    Конфиг допускается если выполняется ХОТЯ БЫ ОДНО:
+
+    1. SNI входит в whitelist.txt РФ
+       (работает для любого типа host — IP или домен)
+
+    2. host — домен (не IP-адрес)
+       → разрешаем всегда, без дополнительных проверок
+
+    3. host — IP с префиксом 158.* / 89.* / 84.*
+
+    4. host — IP из IP/CIDR whitelist РФ
+
+    Все остальные IP-адреса — отклоняем.
+    """
+    host = cfg["host"].strip()
+    sni  = cfg.get("sni", "").strip()
+
+    # ── Условие 1: SNI в whitelist РФ ──────────────────────────────────────
+    # Это самый приоритетный критерий — не зависит от типа host.
+    if sni_in_whitelist(sni):
+        log.debug(f"PASS sni_whitelist  {host}:{cfg['port']}  sni={sni}")
+        return True
+
+    # ── Условие 2: host — домен (не IP) ────────────────────────────────────
+    if not is_ip(host):
+        log.debug(f"PASS domain         {host}:{cfg['port']}")
+        return True
+
+    # Дальше — только IP-адреса:
+
+    # ── Условие 3: IP с нужным префиксом ───────────────────────────────────
+    if any(host.startswith(p) for p in IP_PREFIXES):
+        log.debug(f"PASS ip_prefix      {host}:{cfg['port']}")
+        return True
+
+    # ── Условие 4: IP в whitelist РФ ───────────────────────────────────────
+    if ip_in_whitelist(host):
+        log.debug(f"PASS ip_whitelist   {host}:{cfg['port']}")
+        return True
+
+    log.debug(f"DENY                {host}:{cfg['port']}  sni={sni}")
+    return False
+
+
+# ─── Загрузка и парсинг ───────────────────────────────────────────────────────
+
 def try_base64_decode(text: str) -> str:
+    """Пытается раскодировать base64 (до 5 слоёв), пока не найдёт vless://."""
     for _ in range(5):
         if "vless://" in text:
             return text
@@ -179,40 +228,64 @@ def try_base64_decode(text: str) -> str:
 
 
 def parse_vless(uri: str) -> dict | None:
+    """
+    Парсит vless://UUID@host:port?params URI.
+    Возвращает dict или None если URI невалидный.
+    """
     try:
-        m = re.match(r"vless://([^@]+)@([^:/?#]+):(\d+)([/?].*)?", uri)
+        # Убираем фрагмент (#...) до парсинга
+        uri_clean = uri.split("#")[0].strip()
+        m = re.match(r"vless://([^@]+)@([^:/?#]+):(\d+)([/?].*)?", uri_clean)
         if not m:
             return None
-        uuid, host, port_str, rest = m.group(1), m.group(2), m.group(3), m.group(4) or ""
-        port = int(port_str)
 
-        qs = {}
+        uuid     = m.group(1).strip()
+        host     = m.group(2).strip()
+        port_str = m.group(3).strip()
+        rest     = m.group(4) or ""
+        port     = int(port_str)
+
+        # Парсим query string
+        qs: dict[str, str] = {}
         if "?" in rest:
-            query = rest.split("?", 1)[1].split("#")[0]
+            query = rest.split("?", 1)[1]
             for pair in query.split("&"):
                 if "=" in pair:
                     k, v = pair.split("=", 1)
-                    qs[k] = unquote(v)
+                    qs[k.strip()] = unquote(v.strip())
+
+        # Нормализуем SNI: lower + strip
+        sni = qs.get("sni", "").lower().strip()
 
         return {
-            "uuid": uuid,
-            "host": host,
-            "port": port,
+            "uuid":     uuid,
+            "host":     host,
+            "port":     port,
             "flow":     qs.get("flow",     "xtls-rprx-vision"),
             "security": qs.get("security", "reality"),
-            "sni":      qs.get("sni",      ""),
-            "pbk":      qs.get("pbk",      ""),
-            "fp":       qs.get("fp",       "chrome"),
-            "sid":      qs.get("sid",      ""),
-            "type":     qs.get("type",     "tcp"),
+            "sni":      sni,
+            "pbk":      qs.get("pbk",  ""),
+            "fp":       qs.get("fp",   "chrome"),
+            "sid":      qs.get("sid",  ""),
+            "type":     qs.get("type", "tcp"),
         }
     except Exception:
         return None
 
 
 def collect_configs() -> list[dict]:
-    seen: set[str] = set()
+    """
+    Загружает все источники, парсит VLESS URIs, применяет фильтр.
+    Dedupe по host:port:sni (а не просто host:port).
+    """
+    seen: set[str]    = set()
     configs: list[dict] = []
+
+    pass_sni    = 0
+    pass_domain = 0
+    pass_prefix = 0
+    pass_cidr   = 0
+    rejected    = 0
 
     for url in SOURCES:
         log.info(f"Загружаем: {url}")
@@ -226,27 +299,60 @@ def collect_configs() -> list[dict]:
             line = line.strip()
             if not line.startswith("vless://"):
                 continue
-            base = re.sub(r"#.*$", "", line).strip()
-            cfg = parse_vless(base)
+
+            cfg = parse_vless(line)
             if cfg is None:
                 continue
 
-            key = f"{cfg['host']}:{cfg['port']}"
+            # ── Dedupe по host:port:sni ──────────────────────────────────
+            key = f"{cfg['host']}:{cfg['port']}:{cfg['sni']}"
             if key in seen:
                 continue
-            if not is_allowed(cfg):
+
+            # ── Фильтр ──────────────────────────────────────────────────
+            host = cfg["host"].strip()
+            sni  = cfg["sni"]
+
+            allowed        = False
+            allow_reason   = "reject"
+
+            if sni_in_whitelist(sni):
+                allowed = True
+                allow_reason = "sni_whitelist"
+                pass_sni += 1
+            elif not is_ip(host):
+                allowed = True
+                allow_reason = "domain"
+                pass_domain += 1
+            elif any(host.startswith(p) for p in IP_PREFIXES):
+                allowed = True
+                allow_reason = "ip_prefix"
+                pass_prefix += 1
+            elif ip_in_whitelist(host):
+                allowed = True
+                allow_reason = "ip_whitelist"
+                pass_cidr += 1
+            else:
+                rejected += 1
+
+            if not allowed:
                 continue
 
+            cfg["_reason"] = allow_reason
             seen.add(key)
             configs.append(cfg)
 
-    log.info(f"Собрано уникальных конфигов: {len(configs)}")
+    log.info(
+        f"Собрано конфигов: {len(configs)} "
+        f"[sni={pass_sni} domain={pass_domain} prefix={pass_prefix} cidr={pass_cidr} reject={rejected}]"
+    )
     return configs
+
 
 # ─── Проверка TCP ─────────────────────────────────────────────────────────────
 
 def check_server(cfg: dict) -> tuple[dict, float] | None:
-    """TCP connect проверка — открыт ли порт."""
+    """TCP connect — проверяет доступность порта."""
     try:
         t0 = time.monotonic()
         with socket.create_connection((cfg["host"], cfg["port"]), timeout=TCP_TIMEOUT):
@@ -259,9 +365,9 @@ def check_server(cfg: dict) -> tuple[dict, float] | None:
 
 
 def check_all(configs: list[dict]) -> list[tuple[dict, float]]:
-    """Параллельная проверка всех конфигов через TCP."""
+    """Параллельная TCP-проверка всех конфигов."""
     log.info(f"Проверяем {len(configs)} серверов ({CHECK_WORKERS} потоков)...")
-    results = []
+    results: list[tuple[dict, float]] = []
 
     with ThreadPoolExecutor(max_workers=CHECK_WORKERS) as ex:
         futures = {ex.submit(check_server, cfg): cfg for cfg in configs}
@@ -284,17 +390,18 @@ def check_all(configs: list[dict]) -> list[tuple[dict, float]]:
     log.info(f"Живых серверов: {len(results)} из {len(configs)}")
     return results
 
+
 # ─── Генерация outbound ───────────────────────────────────────────────────────
 
 def make_outbound(cfg: dict, tag: str) -> dict:
-    ob = {
+    ob: dict = {
         "tag":      tag,
         "protocol": "vless",
         "settings": {
             "vnext": [{
                 "address": cfg["host"],
                 "port":    cfg["port"],
-                "users":  [{
+                "users": [{
                     "id":         cfg["uuid"],
                     "encryption": "none",
                     "flow":       cfg["flow"]
@@ -323,6 +430,7 @@ def make_outbound(cfg: dict, tag: str) -> dict:
 
     return ob
 
+
 # ─── Сборка пака ──────────────────────────────────────────────────────────────
 
 def make_pack(configs: list[dict], rtts: list[float], pack_num: int) -> dict:
@@ -335,10 +443,8 @@ def make_pack(configs: list[dict], rtts: list[float], pack_num: int) -> dict:
         {"tag": "block",  "protocol": "blackhole"}
     ]
 
-    avg_rtt = sum(rtts) / len(rtts) if rtts else 0
-
     return {
-        "remarks": f"🇳🇴LTE | 📶 — {pack_num} ⚡ | RU",
+        "remarks": f"🇷🇺LTE | 📶 — {pack_num} ⚡ | RU",
         "log": {"dnsLog": False, "loglevel": "error"},
         "dns": {
             "servers":       ["1.1.1.1", "1.0.0.1", "8.8.8.8"],
@@ -383,8 +489,8 @@ def make_pack(configs: list[dict], rtts: list[float], pack_num: int) -> dict:
                 "protocol": "socks",
                 "settings": {"udp": True, "auth": "noauth"},
                 "sniffing": {
-                    "enabled":     True,
-                    "routeOnly":   False,
+                    "enabled":      True,
+                    "routeOnly":    False,
                     "destOverride": ["tls", "http", "quic"],
                     "metadataOnly": False
                 }
@@ -395,8 +501,8 @@ def make_pack(configs: list[dict], rtts: list[float], pack_num: int) -> dict:
                 "listen":   "127.0.0.1",
                 "protocol": "http",
                 "sniffing": {
-                    "enabled":     True,
-                    "routeOnly":   False,
+                    "enabled":      True,
+                    "routeOnly":    False,
                     "destOverride": ["tls", "http", "quic"],
                     "metadataOnly": False
                 }
@@ -405,30 +511,31 @@ def make_pack(configs: list[dict], rtts: list[float], pack_num: int) -> dict:
         "outbounds": outbounds,
         "burstObservatory": {
             "pingConfig": {
-                "timeout":     "5s",
-                "interval":    "36s",
-                "sampling":    5,
-                "httpMethod":  "HEAD",
-                "destination": "http://connectivitycheck.gstatic.com/generate_204",
+                "timeout":      "5s",
+                "interval":     "36s",
+                "sampling":     5,
+                "httpMethod":   "HEAD",
+                "destination":  "http://connectivitycheck.gstatic.com/generate_204",
                 "connectivity": ""
             },
             "subjectSelector": ["lte-"]
         }
     }
 
+
 # ─── Главная функция ──────────────────────────────────────────────────────────
 
-def main():
+def main() -> None:
     # 1. Загружаем whitelist РФ
     load_whitelists()
 
-    # 2. Собираем конфиги
+    # 2. Собираем и фильтруем конфиги
     configs = collect_configs()
     if not configs:
-        log.error("Нет конфигов!")
+        log.error("Нет конфигов после фильтрации!")
         return
 
-    # 3. Проверяем через TCP
+    # 3. TCP-проверка живых серверов
     alive = check_all(configs)
     if not alive:
         log.error("Нет живых серверов!")
@@ -446,17 +553,23 @@ def main():
         f.write("#announce-url: https://t.me/HiBypass\n")
         f.write("#update-always: true\n")
         for i, (cfg, rtt) in enumerate(alive, 1):
+            reason_emoji = {
+                "sni_whitelist": "🇷🇺",
+                "domain":        "🌐",
+                "ip_prefix":     "📡",
+                "ip_whitelist":  "✅",
+            }.get(cfg.get("_reason", ""), "❓")
             uri = (
                 f"vless://{cfg['uuid']}@{cfg['host']}:{cfg['port']}"
                 f"?security={cfg['security']}&sni={cfg['sni']}"
                 f"&pbk={cfg['pbk']}&fp={cfg['fp']}&sid={cfg['sid']}"
                 f"&flow={cfg['flow']}&type={cfg['type']}"
-                f"#🇳🇴LTE | 📶 — {i} ⚡ | RU | {rtt:.0f}ms"
+                f"#{reason_emoji}LTE | 📶 — {i} ⚡ | RU | {rtt:.0f}ms"
             )
             f.write(uri + "\n")
     log.info(f"vlees.txt: {len(alive)} живых конфигов")
 
-    # 5. Нарезаем на паки
+    # 5. Нарезаем на паки и сохраняем bb.json
     packs = []
     for i in range(0, len(alive_cfgs), PACK_SIZE):
         chunk_cfgs = alive_cfgs[i:i + PACK_SIZE]
@@ -464,7 +577,6 @@ def main():
         pack_num   = (i // PACK_SIZE) + 1
         packs.append(make_pack(chunk_cfgs, chunk_rtts, pack_num))
 
-    # 6. Сохраняем bb.json
     with open("bb.json", "w", encoding="utf-8") as f:
         json.dump(packs, f, ensure_ascii=False, indent=2)
 
