@@ -14,8 +14,6 @@ import time
 import base64
 import socket
 import logging
-import tempfile
-import subprocess
 import requests
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from urllib.parse import unquote
@@ -25,10 +23,10 @@ log = logging.getLogger(__name__)
 
 # ─── Настройки ────────────────────────────────────────────────────────────────
 
-XRAY_BIN      = "scripts/xray"       # путь к xray бинарнику
-PACK_SIZE     = 10                   # серверов в одном паке
-CHECK_WORKERS = 30                   # параллельных xray-проверок
-XRAY_TIMEOUT  = 8                    # секунд на проверку одного сервера
+XRAY_BIN      = "scripts/xray"       # больше не используется
+PACK_SIZE     = 10
+CHECK_WORKERS = 100                  # параллельных TCP проверок
+TCP_TIMEOUT   = 3                    # секунд на TCP connect
 CHECK_URL     = "http://connectivitycheck.gstatic.com/generate_204"
 
 IP_PREFIXES   = ("158.", "89.", "84.")
@@ -225,62 +223,16 @@ def make_xray_config(cfg: dict, socks_port: int) -> dict:
 
 
 def check_server(cfg: dict) -> tuple[dict, float] | None:
-    """
-    Запускает xray с одним сервером, делает HTTP запрос через SOCKS5.
-    Возвращает (cfg, rtt_ms) если живой, иначе None.
-    """
-    socks_port = find_free_port()
-    xray_cfg   = make_xray_config(cfg, socks_port)
-
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".json", delete=False
-    ) as f:
-        json.dump(xray_cfg, f)
-        tmp_path = f.name
-
-    proc = None
+    """TCP connect проверка — открыт ли порт."""
     try:
-        proc = subprocess.Popen(
-            [XRAY_BIN, "run", "-config", tmp_path],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL
-        )
-
-        # Ждём пока xray поднимет SOCKS
-        time.sleep(1.5)
-
-        proxies = {
-            "http":  f"socks5h://127.0.0.1:{socks_port}",
-            "https": f"socks5h://127.0.0.1:{socks_port}",
-        }
-
         t0 = time.monotonic()
-        resp = requests.get(
-            CHECK_URL,
-            proxies=proxies,
-            timeout=XRAY_TIMEOUT - 1.5,
-            allow_redirects=False
-        )
-        rtt = (time.monotonic() - t0) * 1000  # ms
-
-        if resp.status_code in (200, 204):
-            log.info(f"✅ {cfg['host']}:{cfg['port']} — {rtt:.0f}ms")
-            return (cfg, rtt)
-        else:
-            log.debug(f"❌ {cfg['host']}:{cfg['port']} — HTTP {resp.status_code}")
-            return None
-
-    except Exception as e:
-        log.debug(f"❌ {cfg['host']}:{cfg['port']} — {e}")
+        with socket.create_connection((cfg["host"], cfg["port"]), timeout=TCP_TIMEOUT):
+            rtt = (time.monotonic() - t0) * 1000
+        log.debug(f"✅ {cfg['host']}:{cfg['port']} — {rtt:.0f}ms")
+        return (cfg, rtt)
+    except Exception:
+        log.debug(f"❌ {cfg['host']}:{cfg['port']}")
         return None
-    finally:
-        if proc:
-            proc.terminate()
-            try:
-                proc.wait(timeout=2)
-            except Exception:
-                proc.kill()
-        os.unlink(tmp_path)
 
 
 def check_all(configs: list[dict]) -> list[tuple[dict, float]]:
@@ -439,19 +391,13 @@ def make_pack(configs: list[dict], rtts: list[float], pack_num: int) -> dict:
 # ─── Главная функция ──────────────────────────────────────────────────────────
 
 def main():
-    # 1. Проверяем xray
-    if not os.path.isfile(XRAY_BIN):
-        log.error(f"xray не найден: {XRAY_BIN}")
-        return
-    os.chmod(XRAY_BIN, 0o755)
-
-    # 2. Собираем конфиги
+    # 1. Собираем конфиги
     configs = collect_configs()
     if not configs:
         log.error("Нет конфигов!")
         return
 
-    # 3. Проверяем через xray
+    # 2. Проверяем через TCP
     alive = check_all(configs)
     if not alive:
         log.error("Нет живых серверов!")
@@ -460,7 +406,7 @@ def main():
     alive_cfgs = [c for c, _ in alive]
     alive_rtts = [r for _, r in alive]
 
-    # 4. Генерируем vlees.txt (только живые)
+    # 3. Генерируем vlees.txt (только живые)
     with open("vlees.txt", "w", encoding="utf-8") as f:
         f.write("#profile-title: HiBypass 🗽 | FREE LTE | ∞\n")
         f.write("#subscription-userinfo: upload=0; download=0; total=999999999999999; expire=4102444800\n")
@@ -479,7 +425,7 @@ def main():
             f.write(uri + "\n")
     log.info(f"vlees.txt: {len(alive)} живых конфигов")
 
-    # 5. Нарезаем на паки по PACK_SIZE
+    # 4. Нарезаем на паки
     packs = []
     for i in range(0, len(alive_cfgs), PACK_SIZE):
         chunk_cfgs = alive_cfgs[i:i + PACK_SIZE]
@@ -487,7 +433,7 @@ def main():
         pack_num   = (i // PACK_SIZE) + 1
         packs.append(make_pack(chunk_cfgs, chunk_rtts, pack_num))
 
-    # 6. Сохраняем bb.json
+    # 5. Сохраняем bb.json
     with open("bb.json", "w", encoding="utf-8") as f:
         json.dump(packs, f, ensure_ascii=False, indent=2)
 
