@@ -1,17 +1,19 @@
 #!/usr/bin/env python3
 """
-VLESS fetcher, deduplicator & packer.
+VLESS fetcher, deduplicator, packer + TCP/TLS health-check.
 Фильтр по белому списку SNI (scripts/sni.txt).
 Split-tunneling для российских сервисов + RFC1918 в direct.
+Мёртвые серверы отсеиваются через TCP+TLS probe.
 """
 import argparse
 import base64
 import json
 import os
 import re
+import socket
+import ssl
 import sys
 import urllib.request
-import urllib.error
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # =============================================================================
@@ -226,6 +228,66 @@ def process_source(url: str, prefix: str, white_sni: set):
 
 
 # =============================================================================
+# TCP + TLS PROBE (health-check)
+# =============================================================================
+def tcp_tls_probe(host: str, port: int, sni: str, timeout: float = 5.0) -> bool:
+    """
+    Проверяет:
+      1. TCP connect на host:port
+      2. TLS handshake с указанным SNI (если SNI не пустой)
+    Возвращает True только если оба этапа прошли.
+    """
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            pass  # TCP OK
+    except Exception:
+        return False
+
+    if not sni:
+        # Без SNI можем проверить только TCP; для Reality SNI обычно обязателен,
+        # но оставляем такие конфиги на усмотрение пользователя (TCP открылся — уже хорошо)
+        return True
+
+    try:
+        ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+        with socket.create_connection((host, port), timeout=timeout) as sock:
+            with ctx.wrap_socket(sock, server_hostname=sni):
+                return True
+    except Exception:
+        return False
+
+
+def filter_alive(configs, max_workers: int = 100, timeout: float = 5.0):
+    alive = []
+    dead = 0
+    with ThreadPoolExecutor(max_workers=max_workers) as ex:
+        future_to_cfg = {
+            ex.submit(
+                tcp_tls_probe,
+                c["host"],
+                c["port"],
+                c.get("sni") or ("" if is_ip(c["host"]) else c["host"]),
+                timeout,
+            ): c
+            for c in configs
+        }
+        for future in as_completed(future_to_cfg):
+            cfg = future_to_cfg[future]
+            try:
+                if future.result():
+                    alive.append(cfg)
+                else:
+                    dead += 1
+            except Exception:
+                dead += 1
+
+    print(f"  ❌ Отсеяно мёртвых: {dead}")
+    return alive
+
+
+# =============================================================================
 # Генерация vlees.txt
 # =============================================================================
 def generate_vlees(configs, filepath: str):
@@ -396,12 +458,18 @@ def generate_packs(configs, filepath: str, pack_size: int = 50):
 # CLI
 # =============================================================================
 def main():
-    parser = argparse.ArgumentParser(description="VLESS fetcher & packer")
+    parser = argparse.ArgumentParser(description="VLESS fetcher & packer + health-check")
     parser.add_argument("--batch", type=int, default=None, help="Только один батч (1–6)")
     parser.add_argument("--white-sni", type=str, default="scripts/sni.txt")
     parser.add_argument("--vlees", type=str, default="vlees.txt")
     parser.add_argument("--packs", type=str, default="packs.json")
+    parser.add_argument("--probe", action="store_true", default=True, help="TCP/TLS health-check (def: True)")
+    parser.add_argument("--no-probe", action="store_true", help="Отключить health-check")
+    parser.add_argument("--probe-timeout", type=float, default=5.0, help="Таймаут probe, сек")
+    parser.add_argument("--probe-workers", type=int, default=100, help="Потоков для probe")
     args = parser.parse_args()
+
+    do_probe = args.probe and not args.no_probe
 
     white_sni = load_white_sni(args.white_sni)
     print(f"Загружено разрешённых SNI/доменов: {len(white_sni)}")
@@ -416,7 +484,10 @@ def main():
             tasks.append((url, prefix))
 
     with ThreadPoolExecutor(max_workers=16) as ex:
-        future_to_src = {ex.submit(process_source, url, pfx, white_sni): (url, pfx) for url, pfx in tasks}
+        future_to_src = {
+            ex.submit(process_source, url, pfx, white_sni): (url, pfx)
+            for url, pfx in tasks
+        }
         for future in as_completed(future_to_src):
             url, prefix = future_to_src[future]
             try:
@@ -440,6 +511,12 @@ def main():
             unique.append(cfg)
 
     print(f"Всего уникальных: {len(unique)}")
+
+    # Health-check
+    if do_probe:
+        print(f"\n🔍 TCP/TLS health-check {len(unique)} серверов (workers={args.probe_workers}, timeout={args.probe_timeout}s)...")
+        unique = filter_alive(unique, max_workers=args.probe_workers, timeout=args.probe_timeout)
+        print(f"✅ Живых после probe: {len(unique)}")
 
     generate_vlees(unique, args.vlees)
     generate_packs(unique, args.packs)
