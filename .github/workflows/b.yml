@@ -4,6 +4,15 @@ on:
   schedule:
     - cron: '*/30 * * * *'
   workflow_dispatch:
+    inputs:
+      probe:
+        description: 'TCP/TLS health-check'
+        required: true
+        default: 'true'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
 
 jobs:
   build:
@@ -23,7 +32,12 @@ jobs:
 
       - name: Run vlees.py
         timeout-minutes: 20
-        run: python scripts/vlees.py
+        run: |
+          if [ "${{ github.event.inputs.probe }}" = "false" ]; then
+            python scripts/vlees.py --no-probe
+          else
+            python scripts/vlees.py
+          fi
 
       - name: Validate JSON
         run: |
@@ -39,7 +53,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add vlees.txt packs.json
+          git add vlees.txt packs.json .source_stats.json
           STATS=$(python -c "
           import json
           with open('packs.json') as f:
