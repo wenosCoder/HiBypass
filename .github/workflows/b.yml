@@ -1,0 +1,51 @@
+name: Merge VLESS Configs
+
+on:
+  schedule:
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Run vlees.py
+        timeout-minutes: 20
+        run: python scripts/vlees.py
+
+      - name: Validate JSON
+        run: |
+          python -c "
+          import json
+          with open('packs.json') as f:
+              packs = json.load(f)
+          servers = sum(1 for p in packs for o in p['outbounds'] if o.get('tag','').startswith('lte-'))
+          print(f'✅ packs.json валидный | {len(packs)} паков | {servers} серверов')
+          "
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add vlees.txt packs.json
+          STATS=$(python -c "
+          import json
+          with open('packs.json') as f:
+              packs = json.load(f)
+          servers = sum(1 for p in packs for o in p['outbounds'] if o.get('tag','').startswith('lte-'))
+          print(f'{servers} серверов | {len(packs)} паков')
+          ")
+          git diff --staged --quiet || git commit -m "Auto: $(date -u '+%Y-%m-%d %H:%M UTC') | $STATS"
+          git push
