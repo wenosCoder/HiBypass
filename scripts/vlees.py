@@ -2,12 +2,8 @@
 """
 VLESS fetcher, deduplicator, packer + TCP/TLS health-check.
 Фильтр по белому списку SNI (scripts/sni.txt).
-Split-tunneling + geoip:private в direct.
-Валидация: UUID, port, pbk, fp, flow, sid.
-Fallback SNI: если sni пуст, а host — домен → host становится SNI.
-Двухэтапный probe: TCP 2с → TLS 3с.
-Dead-source tracking: источник 3 раза подряд 0 конфигов = пропускаем.
-Fetch fallback: raw.gitmirror.com / ghproxy.com.
+Split-tunneling для российских сервисов + RFC1918 в direct.
+Мёртвые серверы отсеиваются через TCP+TLS probe.
 """
 import argparse
 import base64
@@ -99,13 +95,6 @@ SOURCES = {
     ],
 }
 
-VALID_FPS = {
-    "chrome", "firefox", "safari", "edge", "ios", "android", "qq",
-    "random", "randomized", "360",
-}
-VALID_FLOWS = {"", "xtls-rprx-vision", "xtls-rprx-vision-udp443"}
-SOURCE_STATS_FILE = ".source_stats.json"
-
 # =============================================================================
 # Белый список SNI
 # =============================================================================
@@ -139,59 +128,12 @@ def is_ip(addr: str) -> bool:
 
 
 # =============================================================================
-# Source stats (dead source tracking)
-# =============================================================================
-def load_source_stats() -> dict:
-    if os.path.exists(SOURCE_STATS_FILE):
-        with open(SOURCE_STATS_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    return {}
-
-
-def save_source_stats(stats: dict):
-    with open(SOURCE_STATS_FILE, "w", encoding="utf-8") as f:
-        json.dump(stats, f, indent=2)
-
-
-def is_source_dead(url: str, stats: dict, threshold: int = 3) -> bool:
-    return stats.get(url, 0) >= threshold
-
-
-def update_source_stat(url: str, found: int, stats: dict):
-    if found == 0:
-        stats[url] = stats.get(url, 0) + 1
-    else:
-        stats[url] = 0
-
-
-# =============================================================================
-# Сеть + fallback mirrors
+# Сеть
 # =============================================================================
 def fetch(url: str, timeout: int = 15) -> bytes:
     req = urllib.request.Request(url, headers={"User-Agent": "curl/7.68.0"})
     with urllib.request.urlopen(req, timeout=timeout) as resp:
         return resp.read()
-
-
-def fetch_with_fallback(url: str, timeout: int = 15) -> bytes:
-    mirrors = [url]
-    if "raw.githubusercontent.com" in url:
-        mirrors.append(url.replace("raw.githubusercontent.com", "raw.gitmirror.com"))
-        mirrors.append("https://ghproxy.com/" + url)
-    elif "gist.githubusercontent.com" in url:
-        mirrors.append(url.replace("gist.githubusercontent.com", "gist.gitmirror.com"))
-        mirrors.append("https://ghproxy.com/" + url)
-    elif "github.com" in url and "/raw/" in url:
-        mirrors.append(url.replace("github.com", "raw.gitmirror.com"))
-
-    last_err = None
-    for u in mirrors:
-        try:
-            return fetch(u, timeout=timeout)
-        except Exception as e:
-            last_err = e
-            continue
-    raise last_err or Exception(f"All mirrors failed: {url}")
 
 
 def decode_until_vless(data: bytes, depth: int = 0, max_depth: int = 7) -> str:
@@ -213,7 +155,7 @@ def decode_until_vless(data: bytes, depth: int = 0, max_depth: int = 7) -> str:
 
 
 # =============================================================================
-# Парсинг VLESS + валидация полей
+# Парсинг VLESS
 # =============================================================================
 VLESS_RE = re.compile(
     r"^vless://([^@]+)@([^:]+):(\d+)(?:\?([^#]*))?(?:#.*)?$", re.IGNORECASE
@@ -230,60 +172,10 @@ def parse_query(query: str) -> dict:
     return params
 
 
-def validate_fields(cfg) -> bool:
-    """Отсеивает кривые конфиги: UUID, port, pbk, fp, flow, sid."""
-    params = parse_query(cfg["query"])
-
-    # UUID v4
-    if not re.match(
-        r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
-        cfg["uuid"],
-        re.I,
-    ):
-        return False
-
-    # Port
-    if not (1 <= cfg["port"] <= 65535):
-        return False
-
-    # Security
-    sec = params.get("security", "reality")
-    pbk = params.get("pbk", "")
-
-    if sec == "reality":
-        if not pbk:
-            return False
-        try:
-            decoded = base64.b64decode(pbk + "=" * (-len(pbk) % 4))
-            if len(decoded) != 32:
-                return False
-        except Exception:
-            return False
-    elif sec not in ("tls", "none"):
-        return False
-
-    # Fingerprint
-    fp = params.get("fp", "chrome")
-    if fp and fp not in VALID_FPS:
-        return False
-
-    # Flow
-    flow = params.get("flow", "")
-    if flow and flow not in VALID_FLOWS:
-        return False
-
-    # ShortId hex
-    sid = params.get("sid", "")
-    if sid and not re.match(r"^[0-9a-f]+$", sid, re.I):
-        return False
-
-    return True
-
-
 def process_source(url: str, prefix: str, white_sni: set):
     configs = []
     try:
-        raw = fetch_with_fallback(url)
+        raw = fetch(url)
     except Exception as e:
         print(f"[{prefix}] Ошибка загрузки {url}: {e}", file=sys.stderr)
         return configs
@@ -322,7 +214,7 @@ def process_source(url: str, prefix: str, white_sni: set):
         else:
             continue
 
-        cfg = {
+        configs.append({
             "base": base,
             "host": host,
             "port": port,
@@ -330,30 +222,32 @@ def process_source(url: str, prefix: str, white_sni: set):
             "uuid": uuid_str,
             "query": query,
             "sni": sni,
-        }
-
-        if not validate_fields(cfg):
-            continue
-
-        configs.append(cfg)
+        })
 
     return configs
 
 
 # =============================================================================
-# TCP + TLS PROBE (двухэтапный)
+# TCP + TLS PROBE (health-check)
 # =============================================================================
-def tcp_probe_fast(host: str, port: int, timeout: float = 2.0) -> bool:
+def tcp_tls_probe(host: str, port: int, sni: str, timeout: float = 5.0) -> bool:
+    """
+    Проверяет:
+      1. TCP connect на host:port
+      2. TLS handshake с указанным SNI (если SNI не пустой)
+    Возвращает True только если оба этапа прошли.
+    """
     try:
         with socket.create_connection((host, port), timeout=timeout):
-            return True
+            pass  # TCP OK
     except Exception:
         return False
 
-
-def tls_probe(host: str, port: int, sni: str, timeout: float = 3.0) -> bool:
     if not sni:
+        # Без SNI можем проверить только TCP; для Reality SNI обычно обязателен,
+        # но оставляем такие конфиги на усмотрение пользователя (TCP открылся — уже хорошо)
         return True
+
     try:
         ctx = ssl.create_default_context()
         ctx.check_hostname = False
@@ -365,36 +259,19 @@ def tls_probe(host: str, port: int, sni: str, timeout: float = 3.0) -> bool:
         return False
 
 
-def filter_alive(configs, max_workers: int = 100):
+def filter_alive(configs, max_workers: int = 100, timeout: float = 5.0):
     alive = []
     dead = 0
-
-    # Stage 1: TCP fast
-    tcp_ok = []
-    with ThreadPoolExecutor(max_workers=max_workers) as ex:
-        future_to_cfg = {
-            ex.submit(tcp_probe_fast, c["host"], c["port"]): c for c in configs
-        }
-        for future in as_completed(future_to_cfg):
-            cfg = future_to_cfg[future]
-            try:
-                if future.result():
-                    tcp_ok.append(cfg)
-                else:
-                    dead += 1
-            except Exception:
-                dead += 1
-
-    # Stage 2: TLS (только для прошедших TCP)
     with ThreadPoolExecutor(max_workers=max_workers) as ex:
         future_to_cfg = {
             ex.submit(
-                tls_probe,
+                tcp_tls_probe,
                 c["host"],
                 c["port"],
                 c.get("sni") or ("" if is_ip(c["host"]) else c["host"]),
+                timeout,
             ): c
-            for c in tcp_ok
+            for c in configs
         }
         for future in as_completed(future_to_cfg):
             cfg = future_to_cfg[future]
@@ -444,36 +321,10 @@ def build_outbound(cfg, tag: str):
 
     flow = params.get("flow", "xtls-rprx-vision")
     sni = params.get("sni", "")
-    # Fallback SNI: если пустой, а host — домен → используем host
-    if not sni and not is_ip(cfg["host"]):
-        sni = cfg["host"]
-
     pbk = params.get("pbk", "")
     fp = params.get("fp", "chrome")
     sid = params.get("sid", "")
     sec = params.get("security", "reality")
-
-    stream_settings = {
-        "network": "tcp",
-        "tcpSettings": {"header": {"type": "none"}},
-        "security": sec,
-    }
-
-    if sec == "reality":
-        stream_settings["realitySettings"] = {
-            "serverName": sni,
-            "publicKey": pbk,
-            "shortId": sid,
-            "fingerprint": fp,
-            "allowInsecure": False,
-            "show": False,
-        }
-    elif sec == "tls":
-        stream_settings["tlsSettings"] = {
-            "serverName": sni,
-            "fingerprint": fp,
-            "allowInsecure": False,
-        }
 
     return {
         "tag": tag,
@@ -489,7 +340,18 @@ def build_outbound(cfg, tag: str):
                 }]
             }]
         },
-        "streamSettings": stream_settings,
+        "streamSettings": {
+            "network": "tcp",
+            "security": sec,
+            "realitySettings": {
+                "serverName": sni,
+                "publicKey": pbk,
+                "shortId": sid,
+                "fingerprint": fp,
+                "allowInsecure": False,
+                "show": False,
+            },
+        },
     }
 
 
@@ -532,7 +394,13 @@ def generate_packs(configs, filepath: str, pack_size: int = 50):
                     },
                     {
                         "type": "field",
-                        "ip": ["geoip:private", "::1"],
+                        "ip": [
+                            "10.0.0.0/8",
+                            "172.16.0.0/12",
+                            "192.168.0.0/16",
+                            "127.0.0.1",
+                            "::1",
+                        ],
                         "outboundTag": "direct",
                     },
                     {
@@ -595,11 +463,10 @@ def main():
     parser.add_argument("--white-sni", type=str, default="scripts/sni.txt")
     parser.add_argument("--vlees", type=str, default="vlees.txt")
     parser.add_argument("--packs", type=str, default="packs.json")
-    parser.add_argument("--probe", action="store_true", default=True, help="TCP/TLS health-check")
-    parser.add_argument("--no-probe", action="store_true", help="Отключить probe")
-    parser.add_argument("--probe-timeout-tcp", type=float, default=2.0)
-    parser.add_argument("--probe-timeout-tls", type=float, default=3.0)
-    parser.add_argument("--probe-workers", type=int, default=100)
+    parser.add_argument("--probe", action="store_true", default=True, help="TCP/TLS health-check (def: True)")
+    parser.add_argument("--no-probe", action="store_true", help="Отключить health-check")
+    parser.add_argument("--probe-timeout", type=float, default=5.0, help="Таймаут probe, сек")
+    parser.add_argument("--probe-workers", type=int, default=100, help="Потоков для probe")
     args = parser.parse_args()
 
     do_probe = args.probe and not args.no_probe
@@ -607,10 +474,10 @@ def main():
     white_sni = load_white_sni(args.white_sni)
     print(f"Загружено разрешённых SNI/доменов: {len(white_sni)}")
 
-    stats = load_source_stats()
     all_configs = []
     batches = [args.batch] if args.batch else range(1, 7)
 
+    # Параллельная загрузка источников
     tasks = []
     for batch in batches:
         for url, prefix in SOURCES.get(batch, []):
@@ -628,16 +495,8 @@ def main():
             except Exception as e:
                 print(f"[{prefix}] Крит ошибка {url}: {e}", file=sys.stderr)
                 continue
-
-            update_source_stat(url, len(cfgs), stats)
-
-            if is_source_dead(url, stats):
-                print(f"[{prefix}] 💀 DEAD SOURCE (skip): {url.split('/')[-1][:40]}")
-            else:
-                print(f"[{prefix}] {url.split('/')[-1][:40]:<<40} → {len(cfgs):>3} конфигов")
-                all_configs.extend(cfgs)
-
-    save_source_stats(stats)
+            print(f"[{prefix}] {url.split('/')[-1][:40]:<<40} → {len(cfgs):>3} конфигов")
+            all_configs.extend(cfgs)
 
     print(f"\nВсего до дедупликации: {len(all_configs)}")
 
@@ -655,8 +514,8 @@ def main():
 
     # Health-check
     if do_probe:
-        print(f"\n🔍 TCP/TLS health-check {len(unique)} серверов...")
-        unique = filter_alive(unique, max_workers=args.probe_workers)
+        print(f"\n🔍 TCP/TLS health-check {len(unique)} серверов (workers={args.probe_workers}, timeout={args.probe_timeout}s)...")
+        unique = filter_alive(unique, max_workers=args.probe_workers, timeout=args.probe_timeout)
         print(f"✅ Живых после probe: {len(unique)}")
 
     generate_vlees(unique, args.vlees)
