@@ -3,6 +3,7 @@
 VLESS fetcher, deduplicator, packer + TCP/TLS health-check.
 Фильтр: SNI из белого списка scripts/sni.txt  ИЛИ  IP из разрешённых префиксов.
 Мёртвые серверы отсеиваются через TCP+TLS probe.
+packs.json — один объект, не массив.
 """
 import argparse
 import base64
@@ -321,7 +322,7 @@ def generate_vlees(configs, filepath: str):
 
 
 # =============================================================================
-# Генерация packs.json
+# Генерация packs.json — ОДИН ОБЪЕКТ, не массив
 # =============================================================================
 RU_DOMAINS = [
     "keyword:vk", "keyword:ok.ru", "keyword:mail.ru", "keyword:gosuslugi",
@@ -376,103 +377,101 @@ def build_outbound(cfg, tag: str):
     }
 
 
-def generate_packs(configs, filepath: str, pack_size: int = 50):
-    packs = []
-    total = len(configs)
+def generate_packs(configs, filepath: str):
+    """
+    Генерирует ОДИН JSON-объект со всеми серверами.
+    Не массив паков — один конфиг с балансировщиком.
+    """
+    outbounds = [build_outbound(c, f"lte-{i}") for i, c in enumerate(configs, start=1)]
+    outbounds.append({"tag": "direct", "protocol": "freedom"})
+    outbounds.append({"tag": "block", "protocol": "blackhole"})
 
-    for pack_num in range(0, total, pack_size):
-        chunk = configs[pack_num : pack_num + pack_size]
-        outbounds = [build_outbound(c, f"lte-{i}") for i, c in enumerate(chunk, start=1)]
-        outbounds.append({"tag": "direct", "protocol": "freedom"})
-        outbounds.append({"tag": "block", "protocol": "blackhole"})
-
-        pack = {
-            "remarks": f"🇪🇺LTE | 1.{pack_num // pack_size + 1} 🌐",
-            "dns": {
-                "queryStrategy": "UseIP",
-                "servers": [
-                    "1.1.1.1",
-                    "8.8.8.8",
-                    "tls://1.1.1.1",
-                    "https://dns.google/dns-query",
-                    "https://cloudflare-dns.com/dns-query",
-                ],
-            },
-            "observatory": {
-                "enableConcurrency": True,
-                "probeInterval": "15s",
-                "probeUrl": "https://cp.cloudflare.com/generate_204",
-                "subjectSelector": ["lte-"],
-            },
-            "routing": {
-                "domainMatcher": "hybrid",
-                "domainStrategy": "IPIfNonMatch",
-                "rules": [
-                    {
-                        "type": "field",
-                        "domain": RU_DOMAINS,
-                        "outboundTag": "direct",
-                    },
-                    {
-                        "type": "field",
-                        "ip": [
-                            "10.0.0.0/8",
-                            "172.16.0.0/12",
-                            "192.168.0.0/16",
-                            "127.0.0.1",
-                            "::1",
-                        ],
-                        "outboundTag": "direct",
-                    },
-                    {
-                        "type": "field",
-                        "protocol": ["bittorrent"],
-                        "outboundTag": "direct",
-                    },
-                    {
-                        "type": "field",
-                        "inboundTag": ["socks", "http"],
-                        "balancerTag": "BALANCER",
-                    },
-                ],
-                "balancers": [{
-                    "tag": "BALANCER",
-                    "selector": ["lte-"],
-                    "strategy": {"type": "leastPing"},
-                }],
-            },
-            "inbounds": [
+    pack = {
+        "remarks": "🇪🇺LTE | HiBypass 🏳🇷🇺",
+        "dns": {
+            "queryStrategy": "UseIP",
+            "servers": [
+                "1.1.1.1",
+                "8.8.8.8",
+                "tls://1.1.1.1",
+                "https://dns.google/dns-query",
+                "https://cloudflare-dns.com/dns-query",
+            ],
+        },
+        "observatory": {
+            "enableConcurrency": True,
+            "probeInterval": "15s",
+            "probeUrl": "https://cp.cloudflare.com/generate_204",
+            "subjectSelector": ["lte-"],
+        },
+        "routing": {
+            "domainMatcher": "hybrid",
+            "domainStrategy": "IPIfNonMatch",
+            "rules": [
                 {
-                    "tag": "socks",
-                    "port": 10808,
-                    "listen": "127.0.0.1",
-                    "protocol": "socks",
-                    "settings": {"udp": True, "auth": "noauth"},
-                    "sniffing": {
-                        "enabled": True,
-                        "routeOnly": False,
-                        "destOverride": ["http", "tls", "quic"],
-                    },
+                    "type": "field",
+                    "domain": RU_DOMAINS,
+                    "outboundTag": "direct",
                 },
                 {
-                    "tag": "http",
-                    "port": 10809,
-                    "listen": "127.0.0.1",
-                    "protocol": "http",
-                    "settings": {"allowTransparent": False},
-                    "sniffing": {
-                        "enabled": True,
-                        "routeOnly": False,
-                        "destOverride": ["http", "tls", "quic"],
-                    },
+                    "type": "field",
+                    "ip": [
+                        "10.0.0.0/8",
+                        "172.16.0.0/12",
+                        "192.168.0.0/16",
+                        "127.0.0.1",
+                        "::1",
+                    ],
+                    "outboundTag": "direct",
+                },
+                {
+                    "type": "field",
+                    "protocol": ["bittorrent"],
+                    "outboundTag": "direct",
+                },
+                {
+                    "type": "field",
+                    "inboundTag": ["socks", "http"],
+                    "balancerTag": "BALANCER",
                 },
             ],
-            "outbounds": outbounds,
-        }
-        packs.append(pack)
+            "balancers": [{
+                "tag": "BALANCER",
+                "selector": ["lte-"],
+                "strategy": {"type": "leastPing"},
+            }],
+        },
+        "inbounds": [
+            {
+                "tag": "socks",
+                "port": 10808,
+                "listen": "127.0.0.1",
+                "protocol": "socks",
+                "settings": {"udp": True, "auth": "noauth"},
+                "sniffing": {
+                    "enabled": True,
+                    "routeOnly": False,
+                    "destOverride": ["http", "tls", "quic"],
+                },
+            },
+            {
+                "tag": "http",
+                "port": 10809,
+                "listen": "127.0.0.1",
+                "protocol": "http",
+                "settings": {"allowTransparent": False},
+                "sniffing": {
+                    "enabled": True,
+                    "routeOnly": False,
+                    "destOverride": ["http", "tls", "quic"],
+                },
+            },
+        ],
+        "outbounds": outbounds,
+    }
 
     with open(filepath, "w", encoding="utf-8") as f:
-        json.dump(packs, f, ensure_ascii=False, indent=2)
+        json.dump(pack, f, ensure_ascii=False, indent=2)
 
 
 # =============================================================================
@@ -545,12 +544,12 @@ def main():
     # Валидация
     try:
         with open(args.packs, "r", encoding="utf-8") as f:
-            packs = json.load(f)
+            pack = json.load(f)
         server_count = sum(
-            1 for p in packs for o in p.get("outbounds", [])
+            1 for o in pack.get("outbounds", [])
             if o.get("tag", "").startswith("lte-")
         )
-        print(f"\n✅ packs.json валидный | {len(packs)} паков | {server_count} серверов")
+        print(f"\n✅ packs.json валидный | {server_count} серверов")
     except Exception as e:
         print(f"\n❌ Ошибка валидации packs.json: {e}")
         sys.exit(1)
