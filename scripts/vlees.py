@@ -2,6 +2,7 @@
 """
 VLESS fetcher, deduplicator, packer + TCP/TLS health-check.
 Фильтр по белому списку SNI (scripts/sni.txt).
+Фильтр по префиксам IP: разрешены только 158.x.x.x, 89.x.x.x, 84.x.x.x
 Split-tunneling для российских сервисов + RFC1918 в direct.
 Мёртвые серверы отсеиваются через TCP+TLS probe.
 """
@@ -15,6 +16,11 @@ import ssl
 import sys
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
+
+# =============================================================================
+# Разрешённые префиксы IP (первый октет)
+# =============================================================================
+ALLOWED_IP_PREFIXES = (158, 89, 84)
 
 # =============================================================================
 # 61 источник
@@ -124,7 +130,29 @@ def is_allowed_sni(sni: str, white: set) -> bool:
 
 
 def is_ip(addr: str) -> bool:
-    return bool(re.match(r"^\d", addr))
+    return bool(re.match(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$", addr))
+
+
+# =============================================================================
+# Фильтр по префиксам IP
+# =============================================================================
+def is_allowed_ip(host: str, allowed_prefixes: tuple = ALLOWED_IP_PREFIXES) -> bool:
+    """
+    Возвращает True, если host является IP-адресом и его первый октет
+    входит в allowed_prefixes (например, 158, 89, 84).
+
+    Если host — доменное имя, возвращает True (не фильтруем домены здесь,
+    этим занимается фильтр SNI).
+    """
+    if not is_ip(host):
+        # Это домен — пропускаем через SNI-фильтр, не через IP-фильтр
+        return True
+
+    try:
+        first_octet = int(host.split(".")[0])
+        return first_octet in allowed_prefixes
+    except (ValueError, IndexError):
+        return False
 
 
 # =============================================================================
@@ -184,6 +212,9 @@ def process_source(url: str, prefix: str, white_sni: set):
     if not text:
         return configs
 
+    skipped_sni = 0
+    skipped_ip = 0
+
     for line in text.splitlines():
         line = line.strip()
         if not line.startswith("vless://"):
@@ -212,6 +243,13 @@ def process_source(url: str, prefix: str, white_sni: set):
         elif not sni and not is_ip(host) and is_allowed_sni(host, white_sni):
             pass
         else:
+            skipped_sni += 1
+            continue
+
+        # === ФИЛЬТР ПО IP-ПРЕФИКСУ ===
+        # Если host — IP, его первый октет должен быть в ALLOWED_IP_PREFIXES
+        if not is_allowed_ip(host):
+            skipped_ip += 1
             continue
 
         configs.append({
@@ -223,6 +261,13 @@ def process_source(url: str, prefix: str, white_sni: set):
             "query": query,
             "sni": sni,
         })
+
+    if skipped_ip > 0:
+        print(
+            f"[{prefix}] ⛔ Отсеяно по IP-префиксу "
+            f"(не 158/89/84): {skipped_ip}",
+            file=sys.stderr,
+        )
 
     return configs
 
@@ -244,8 +289,6 @@ def tcp_tls_probe(host: str, port: int, sni: str, timeout: float = 5.0) -> bool:
         return False
 
     if not sni:
-        # Без SNI можем проверить только TCP; для Reality SNI обычно обязателен,
-        # но оставляем такие конфиги на усмотрение пользователя (TCP открылся — уже хорошо)
         return True
 
     try:
@@ -467,9 +510,35 @@ def main():
     parser.add_argument("--no-probe", action="store_true", help="Отключить health-check")
     parser.add_argument("--probe-timeout", type=float, default=5.0, help="Таймаут probe, сек")
     parser.add_argument("--probe-workers", type=int, default=100, help="Потоков для probe")
+    parser.add_argument(
+        "--ip-prefixes",
+        type=str,
+        default=",".join(str(p) for p in ALLOWED_IP_PREFIXES),
+        help="Разрешённые первые октеты IP через запятую (по умолчанию: 158,89,84). "
+             "Используйте --ip-prefixes='' чтобы отключить фильтр.",
+    )
     args = parser.parse_args()
 
     do_probe = args.probe and not args.no_probe
+
+    # Парсим список разрешённых префиксов из аргументов
+    if args.ip_prefixes.strip():
+        try:
+            allowed_prefixes = tuple(int(x.strip()) for x in args.ip_prefixes.split(",") if x.strip())
+        except ValueError:
+            print("[ERROR] --ip-prefixes должен содержать числа через запятую, например: 158,89,84", file=sys.stderr)
+            sys.exit(1)
+    else:
+        allowed_prefixes = ()  # пустой — фильтр отключён
+
+    # Патчим глобальную константу под текущий запуск
+    global ALLOWED_IP_PREFIXES
+    ALLOWED_IP_PREFIXES = allowed_prefixes
+
+    if allowed_prefixes:
+        print(f"🔒 Фильтр IP-префиксов активен: {list(allowed_prefixes)}")
+    else:
+        print("⚠️  Фильтр IP-префиксов отключён (пропускаются все IP)")
 
     white_sni = load_white_sni(args.white_sni)
     print(f"Загружено разрешённых SNI/доменов: {len(white_sni)}")
