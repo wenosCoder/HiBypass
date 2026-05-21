@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
 VLESS fetcher, deduplicator, packer + TCP/TLS health-check.
-Фильтр: SNI из белого списка scripts/sni.txt  ИЛИ  IP из разрешённых префиксов.
+Фильтр по белому списку SNI (scripts/sni.txt).
+Split-tunneling для российских сервисов + RFC1918 в direct.
 Мёртвые серверы отсеиваются через TCP+TLS probe.
-Паки по 50 серверов — V2RayTUN-friendly.
 """
 import argparse
 import base64
@@ -96,20 +96,6 @@ SOURCES = {
 }
 
 # =============================================================================
-# РАЗРЕШЁННЫЕ IP-ПРЕФИКСЫ
-# =============================================================================
-ALLOWED_IP_PREFIXES = ("84.", "89.", "158.", "2.", "144.", "87.")
-
-
-def is_allowed_ip(host: str) -> bool:
-    if not host:
-        return False
-    if re.match(r"^\d", host):
-        return host.startswith(ALLOWED_IP_PREFIXES)
-    return True
-
-
-# =============================================================================
 # Белый список SNI
 # =============================================================================
 def load_white_sni(path: str) -> set:
@@ -186,17 +172,6 @@ def parse_query(query: str) -> dict:
     return params
 
 
-def validate_pbk(pbk: str) -> bool:
-    """Проверяет, что publicKey — валидный base64, 32 байта."""
-    if not pbk:
-        return False
-    try:
-        decoded = base64.b64decode(pbk + "=" * (-len(pbk) % 4))
-        return len(decoded) == 32
-    except Exception:
-        return False
-
-
 def process_source(url: str, prefix: str, white_sni: set):
     configs = []
     try:
@@ -230,26 +205,14 @@ def process_source(url: str, prefix: str, white_sni: set):
 
         params = parse_query(query)
         sni = params.get("sni", "")
-        pbk = params.get("pbk", "")
-        sec = params.get("security", "reality")
 
-        # === ВАЛИДАЦИЯ PBK (publicKey) ===
-        if sec == "reality" and not validate_pbk(pbk):
-            continue
-
-        # === ДВОЙНОЙ ФИЛЬТР ===
-        if not is_allowed_ip(host):
-            continue
-
-        if is_ip(host):
-            if sni and not is_allowed_sni(sni, white_sni):
-                continue
-            if not sni:
-                continue
+        # === ФИЛЬТР БЕЛОГО СПИСКА SNI ===
+        if is_allowed_sni(sni, white_sni):
+            pass
+        elif not sni and not is_ip(host) and is_allowed_sni(host, white_sni):
+            pass
         else:
-            effective_sni = sni or host
-            if not is_allowed_sni(effective_sni, white_sni):
-                continue
+            continue
 
         configs.append({
             "base": base,
@@ -265,16 +228,24 @@ def process_source(url: str, prefix: str, white_sni: set):
 
 
 # =============================================================================
-# TCP + TLS PROBE
+# TCP + TLS PROBE (health-check)
 # =============================================================================
 def tcp_tls_probe(host: str, port: int, sni: str, timeout: float = 5.0) -> bool:
+    """
+    Проверяет:
+      1. TCP connect на host:port
+      2. TLS handshake с указанным SNI (если SNI не пустой)
+    Возвращает True только если оба этапа прошли.
+    """
     try:
         with socket.create_connection((host, port), timeout=timeout):
-            pass
+            pass  # TCP OK
     except Exception:
         return False
 
     if not sni:
+        # Без SNI можем проверить только TCP; для Reality SNI обычно обязателен,
+        # но оставляем такие конфиги на усмотрение пользователя (TCP открылся — уже хорошо)
         return True
 
     try:
@@ -333,7 +304,7 @@ def generate_vlees(configs, filepath: str):
 
 
 # =============================================================================
-# Генерация packs.json — МАССИВ ПАКОВ по 50 серверов
+# Генерация packs.json
 # =============================================================================
 RU_DOMAINS = [
     "keyword:vk", "keyword:ok.ru", "keyword:mail.ru", "keyword:gosuslugi",
@@ -350,9 +321,6 @@ def build_outbound(cfg, tag: str):
 
     flow = params.get("flow", "xtls-rprx-vision")
     sni = params.get("sni", "")
-    if not sni and not is_ip(cfg["host"]):
-        sni = cfg["host"]
-
     pbk = params.get("pbk", "")
     fp = params.get("fp", "chrome")
     sid = params.get("sid", "")
@@ -505,11 +473,11 @@ def main():
 
     white_sni = load_white_sni(args.white_sni)
     print(f"Загружено разрешённых SNI/доменов: {len(white_sni)}")
-    print(f"Разрешённые IP-префиксы: {ALLOWED_IP_PREFIXES}")
 
     all_configs = []
     batches = [args.batch] if args.batch else range(1, 7)
 
+    # Параллельная загрузка источников
     tasks = []
     for batch in batches:
         for url, prefix in SOURCES.get(batch, []):
@@ -546,7 +514,7 @@ def main():
 
     # Health-check
     if do_probe:
-        print(f"\n🔍 TCP/TLS health-check {len(unique)} серверов...")
+        print(f"\n🔍 TCP/TLS health-check {len(unique)} серверов (workers={args.probe_workers}, timeout={args.probe_timeout}s)...")
         unique = filter_alive(unique, max_workers=args.probe_workers, timeout=args.probe_timeout)
         print(f"✅ Живых после probe: {len(unique)}")
 
@@ -561,8 +529,7 @@ def main():
             1 for p in packs for o in p.get("outbounds", [])
             if o.get("tag", "").startswith("lte-")
         )
-        pack_count = len(packs)
-        print(f"\n✅ packs.json валидный | {pack_count} паков | {server_count} серверов")
+        print(f"\n✅ packs.json валидный | {len(packs)} паков | {server_count} серверов")
     except Exception as e:
         print(f"\n❌ Ошибка валидации packs.json: {e}")
         sys.exit(1)
