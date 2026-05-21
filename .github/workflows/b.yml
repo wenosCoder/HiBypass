@@ -44,9 +44,10 @@ jobs:
           python -c "
           import json
           with open('packs.json') as f:
-              pack = json.load(f)
-          servers = sum(1 for o in pack['outbounds'] if o.get('tag','').startswith('lte-'))
-          print(f'✅ packs.json валидный | {servers} серверов')
+              packs = json.load(f)
+          servers = sum(1 for p in packs for o in p['outbounds'] if o.get('tag','').startswith('lte-'))
+          pack_count = len(packs)
+          print(f'✅ packs.json валидный | {pack_count} паков | {servers} серверов')
           "
 
       - name: Commit and push
@@ -57,9 +58,10 @@ jobs:
           STATS=$(python -c "
           import json
           with open('packs.json') as f:
-              pack = json.load(f)
-          servers = sum(1 for o in pack['outbounds'] if o.get('tag','').startswith('lte-'))
-          print(f'{servers} серверов')
+              packs = json.load(f)
+          servers = sum(1 for p in packs for o in p['outbounds'] if o.get('tag','').startswith('lte-'))
+          pack_count = len(packs)
+          print(f'{servers} серверов | {pack_count} паков')
           ")
           git diff --staged --quiet || git commit -m "Auto: $(date -u '+%Y-%m-%d %H:%M UTC') | $STATS"
           git push
