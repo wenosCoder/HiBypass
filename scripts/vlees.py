@@ -20,7 +20,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 # =============================================================================
 # Разрешённые префиксы IP (первый октет)
 # =============================================================================
-ALLOWED_IP_PREFIXES = (158, 89, 84)
+DEFAULT_IP_PREFIXES = (158, 89, 84)
 
 # =============================================================================
 # 61 источник
@@ -136,18 +136,16 @@ def is_ip(addr: str) -> bool:
 # =============================================================================
 # Фильтр по префиксам IP
 # =============================================================================
-def is_allowed_ip(host: str, allowed_prefixes: tuple = ALLOWED_IP_PREFIXES) -> bool:
+def is_allowed_ip(host: str, allowed_prefixes: tuple) -> bool:
     """
-    Возвращает True, если host является IP-адресом и его первый октет
-    входит в allowed_prefixes (например, 158, 89, 84).
-
-    Если host — доменное имя, возвращает True (не фильтруем домены здесь,
-    этим занимается фильтр SNI).
+    Возвращает True, если host — домен (фильтруется по SNI, не здесь).
+    Если host — IP, первый октет должен быть в allowed_prefixes.
+    Если allowed_prefixes пустой — пропускаем всё.
     """
     if not is_ip(host):
-        # Это домен — пропускаем через SNI-фильтр, не через IP-фильтр
         return True
-
+    if not allowed_prefixes:
+        return True
     try:
         first_octet = int(host.split(".")[0])
         return first_octet in allowed_prefixes
@@ -200,7 +198,7 @@ def parse_query(query: str) -> dict:
     return params
 
 
-def process_source(url: str, prefix: str, white_sni: set):
+def process_source(url: str, prefix: str, white_sni: set, allowed_prefixes: tuple):
     configs = []
     try:
         raw = fetch(url)
@@ -247,8 +245,7 @@ def process_source(url: str, prefix: str, white_sni: set):
             continue
 
         # === ФИЛЬТР ПО IP-ПРЕФИКСУ ===
-        # Если host — IP, его первый октет должен быть в ALLOWED_IP_PREFIXES
-        if not is_allowed_ip(host):
+        if not is_allowed_ip(host, allowed_prefixes):
             skipped_ip += 1
             continue
 
@@ -264,8 +261,7 @@ def process_source(url: str, prefix: str, white_sni: set):
 
     if skipped_ip > 0:
         print(
-            f"[{prefix}] ⛔ Отсеяно по IP-префиксу "
-            f"(не 158/89/84): {skipped_ip}",
+            f"[{prefix}] ⛔ Отсеяно по IP-префиксу (не 158/89/84): {skipped_ip}",
             file=sys.stderr,
         )
 
@@ -276,15 +272,9 @@ def process_source(url: str, prefix: str, white_sni: set):
 # TCP + TLS PROBE (health-check)
 # =============================================================================
 def tcp_tls_probe(host: str, port: int, sni: str, timeout: float = 5.0) -> bool:
-    """
-    Проверяет:
-      1. TCP connect на host:port
-      2. TLS handshake с указанным SNI (если SNI не пустой)
-    Возвращает True только если оба этапа прошли.
-    """
     try:
         with socket.create_connection((host, port), timeout=timeout):
-            pass  # TCP OK
+            pass
     except Exception:
         return False
 
@@ -361,7 +351,6 @@ RU_DOMAINS = [
 
 def build_outbound(cfg, tag: str):
     params = parse_query(cfg["query"])
-
     flow = params.get("flow", "xtls-rprx-vision")
     sni = params.get("sni", "")
     pbk = params.get("pbk", "")
@@ -403,7 +392,7 @@ def generate_packs(configs, filepath: str, pack_size: int = 50):
     total = len(configs)
 
     for pack_num in range(0, total, pack_size):
-        chunk = configs[pack_num : pack_num + pack_size]
+        chunk = configs[pack_num: pack_num + pack_size]
         outbounds = [build_outbound(c, f"lte-{i}") for i, c in enumerate(chunk, start=1)]
         outbounds.append({"tag": "direct", "protocol": "freedom"})
         outbounds.append({"tag": "block", "protocol": "blackhole"})
@@ -430,32 +419,14 @@ def generate_packs(configs, filepath: str, pack_size: int = 50):
                 "domainMatcher": "hybrid",
                 "domainStrategy": "IPIfNonMatch",
                 "rules": [
+                    {"type": "field", "domain": RU_DOMAINS, "outboundTag": "direct"},
                     {
                         "type": "field",
-                        "domain": RU_DOMAINS,
+                        "ip": ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "127.0.0.1", "::1"],
                         "outboundTag": "direct",
                     },
-                    {
-                        "type": "field",
-                        "ip": [
-                            "10.0.0.0/8",
-                            "172.16.0.0/12",
-                            "192.168.0.0/16",
-                            "127.0.0.1",
-                            "::1",
-                        ],
-                        "outboundTag": "direct",
-                    },
-                    {
-                        "type": "field",
-                        "protocol": ["bittorrent"],
-                        "outboundTag": "direct",
-                    },
-                    {
-                        "type": "field",
-                        "inboundTag": ["socks", "http"],
-                        "balancerTag": "BALANCER",
-                    },
+                    {"type": "field", "protocol": ["bittorrent"], "outboundTag": "direct"},
+                    {"type": "field", "inboundTag": ["socks", "http"], "balancerTag": "BALANCER"},
                 ],
                 "balancers": [{
                     "tag": "BALANCER",
@@ -470,11 +441,7 @@ def generate_packs(configs, filepath: str, pack_size: int = 50):
                     "listen": "127.0.0.1",
                     "protocol": "socks",
                     "settings": {"udp": True, "auth": "noauth"},
-                    "sniffing": {
-                        "enabled": True,
-                        "routeOnly": False,
-                        "destOverride": ["http", "tls", "quic"],
-                    },
+                    "sniffing": {"enabled": True, "routeOnly": False, "destOverride": ["http", "tls", "quic"]},
                 },
                 {
                     "tag": "http",
@@ -482,11 +449,7 @@ def generate_packs(configs, filepath: str, pack_size: int = 50):
                     "listen": "127.0.0.1",
                     "protocol": "http",
                     "settings": {"allowTransparent": False},
-                    "sniffing": {
-                        "enabled": True,
-                        "routeOnly": False,
-                        "destOverride": ["http", "tls", "quic"],
-                    },
+                    "sniffing": {"enabled": True, "routeOnly": False, "destOverride": ["http", "tls", "quic"]},
                 },
             ],
             "outbounds": outbounds,
@@ -513,15 +476,15 @@ def main():
     parser.add_argument(
         "--ip-prefixes",
         type=str,
-        default=",".join(str(p) for p in ALLOWED_IP_PREFIXES),
+        default="158,89,84",
         help="Разрешённые первые октеты IP через запятую (по умолчанию: 158,89,84). "
-             "Используйте --ip-prefixes='' чтобы отключить фильтр.",
+             "Пустая строка — отключить фильтр.",
     )
     args = parser.parse_args()
 
     do_probe = args.probe and not args.no_probe
 
-    # Парсим список разрешённых префиксов из аргументов
+    # Парсим префиксы — без global, просто локальная переменная
     if args.ip_prefixes.strip():
         try:
             allowed_prefixes = tuple(int(x.strip()) for x in args.ip_prefixes.split(",") if x.strip())
@@ -529,11 +492,7 @@ def main():
             print("[ERROR] --ip-prefixes должен содержать числа через запятую, например: 158,89,84", file=sys.stderr)
             sys.exit(1)
     else:
-        allowed_prefixes = ()  # пустой — фильтр отключён
-
-    # Патчим глобальную константу под текущий запуск
-    global ALLOWED_IP_PREFIXES
-    ALLOWED_IP_PREFIXES = allowed_prefixes
+        allowed_prefixes = ()
 
     if allowed_prefixes:
         print(f"🔒 Фильтр IP-префиксов активен: {list(allowed_prefixes)}")
@@ -546,7 +505,6 @@ def main():
     all_configs = []
     batches = [args.batch] if args.batch else range(1, 7)
 
-    # Параллельная загрузка источников
     tasks = []
     for batch in batches:
         for url, prefix in SOURCES.get(batch, []):
@@ -554,7 +512,7 @@ def main():
 
     with ThreadPoolExecutor(max_workers=16) as ex:
         future_to_src = {
-            ex.submit(process_source, url, pfx, white_sni): (url, pfx)
+            ex.submit(process_source, url, pfx, white_sni, allowed_prefixes): (url, pfx)
             for url, pfx in tasks
         }
         for future in as_completed(future_to_src):
@@ -569,19 +527,17 @@ def main():
 
     print(f"\nВсего до дедупликации: {len(all_configs)}")
 
-    # Дедупликация
     seen = set()
     unique = []
     for cfg in all_configs:
         params = parse_query(cfg["query"])
-        key = f"{cfg['host']}:{cfg['port']}:{cfg['uuid']}:{params.get('pbk','')}:{cfg.get('sni','')}"
+        key = f"{cfg['host']}:{cfg['port']}:{cfg['uuid']}:{params.get('pbk', '')}:{cfg.get('sni', '')}"
         if key not in seen:
             seen.add(key)
             unique.append(cfg)
 
     print(f"Всего уникальных: {len(unique)}")
 
-    # Health-check
     if do_probe:
         print(f"\n🔍 TCP/TLS health-check {len(unique)} серверов (workers={args.probe_workers}, timeout={args.probe_timeout}s)...")
         unique = filter_alive(unique, max_workers=args.probe_workers, timeout=args.probe_timeout)
@@ -590,7 +546,6 @@ def main():
     generate_vlees(unique, args.vlees)
     generate_packs(unique, args.packs)
 
-    # Валидация
     try:
         with open(args.packs, "r", encoding="utf-8") as f:
             packs = json.load(f)
