@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """
 VLESS fetcher, deduplicator, packer + TCP/TLS health-check.
-Фильтр по белому списку SNI (scripts/sni.txt).
-Split-tunneling для российских сервисов + RFC1918 в direct.
+Фильтр: SNI из белого списка scripts/sni.txt  ИЛИ  IP из разрешённых префиксов.
 Мёртвые серверы отсеиваются через TCP+TLS probe.
 """
 import argparse
@@ -96,6 +95,21 @@ SOURCES = {
 }
 
 # =============================================================================
+# РАЗРЕШЁННЫЕ IP-ПРЕФИКСЫ
+# =============================================================================
+ALLOWED_IP_PREFIXES = ("84.", "89.", "158.", "2.", "144.", "87.")
+
+
+def is_allowed_ip(host: str) -> bool:
+    """Если host — IP, проверяем префикс. Если домен — True (проверяем по SNI)."""
+    if not host:
+        return False
+    if re.match(r"^\d", host):
+        return host.startswith(ALLOWED_IP_PREFIXES)
+    return True  # Домен — разрешаем, SNI проверится отдельно
+
+
+# =============================================================================
 # Белый список SNI
 # =============================================================================
 def load_white_sni(path: str) -> set:
@@ -121,10 +135,6 @@ def is_allowed_sni(sni: str, white: set) -> bool:
         if sni.endswith("." + domain):
             return True
     return False
-
-
-def is_ip(addr: str) -> bool:
-    return bool(re.match(r"^\d", addr))
 
 
 # =============================================================================
@@ -206,13 +216,24 @@ def process_source(url: str, prefix: str, white_sni: set):
         params = parse_query(query)
         sni = params.get("sni", "")
 
-        # === ФИЛЬТР БЕЛОГО СПИСКА SNI ===
-        if is_allowed_sni(sni, white_sni):
-            pass
-        elif not sni and not is_ip(host) and is_allowed_sni(host, white_sni):
-            pass
-        else:
+        # === ДВОЙНОЙ ФИЛЬТР ===
+        # 1. IP-фильтр: если host — IP, должен быть в разрешённых префиксах
+        if not is_allowed_ip(host):
             continue
+
+        # 2. SNI-фильтр: если host — домен ИЛИ IP с SNI, проверяем SNI по белому списку
+        if is_ip(host):
+            # IP-адрес: если SNI указан — он должен быть в белом списке
+            # Если SNI не указан — пропускаем (без SNI Reality на IP не работает)
+            if sni and not is_allowed_sni(sni, white_sni):
+                continue
+            if not sni:
+                continue  # IP без SNI — бесполезен для обхода
+        else:
+            # Домен: host или sni должен быть в белом списке
+            effective_sni = sni or host
+            if not is_allowed_sni(effective_sni, white_sni):
+                continue
 
         configs.append({
             "base": base,
@@ -228,25 +249,17 @@ def process_source(url: str, prefix: str, white_sni: set):
 
 
 # =============================================================================
-# TCP + TLS PROBE (health-check)
+# TCP + TLS PROBE
 # =============================================================================
 def tcp_tls_probe(host: str, port: int, sni: str, timeout: float = 5.0) -> bool:
-    """
-    Проверяет:
-      1. TCP connect на host:port
-      2. TLS handshake с указанным SNI (если SNI не пустой)
-    Возвращает True только если оба этапа прошли.
-    """
     try:
         with socket.create_connection((host, port), timeout=timeout):
-            pass  # TCP OK
+            pass
     except Exception:
         return False
 
     if not sni:
-        # Без SNI можем проверить только TCP; для Reality SNI обычно обязателен,
-        # но оставляем такие конфиги на усмотрение пользователя (TCP открылся — уже хорошо)
-        return True
+        return True  # Доменный host без явного SNI — TCP достаточно
 
     try:
         ctx = ssl.create_default_context()
@@ -321,6 +334,10 @@ def build_outbound(cfg, tag: str):
 
     flow = params.get("flow", "xtls-rprx-vision")
     sni = params.get("sni", "")
+    # Fallback SNI: если пустой, а host — домен — используем host
+    if not sni and not is_ip(cfg["host"]):
+        sni = cfg["host"]
+
     pbk = params.get("pbk", "")
     fp = params.get("fp", "chrome")
     sid = params.get("sid", "")
@@ -473,11 +490,11 @@ def main():
 
     white_sni = load_white_sni(args.white_sni)
     print(f"Загружено разрешённых SNI/доменов: {len(white_sni)}")
+    print(f"Разрешённые IP-префиксы: {ALLOWED_IP_PREFIXES}")
 
     all_configs = []
     batches = [args.batch] if args.batch else range(1, 7)
 
-    # Параллельная загрузка источников
     tasks = []
     for batch in batches:
         for url, prefix in SOURCES.get(batch, []):
@@ -514,7 +531,7 @@ def main():
 
     # Health-check
     if do_probe:
-        print(f"\n🔍 TCP/TLS health-check {len(unique)} серверов (workers={args.probe_workers}, timeout={args.probe_timeout}s)...")
+        print(f"\n🔍 TCP/TLS health-check {len(unique)} серверов...")
         unique = filter_alive(unique, max_workers=args.probe_workers, timeout=args.probe_timeout)
         print(f"✅ Живых после probe: {len(unique)}")
 
