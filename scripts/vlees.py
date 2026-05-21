@@ -3,7 +3,7 @@
 VLESS fetcher, deduplicator, packer + TCP/TLS health-check.
 Фильтр: SNI из белого списка scripts/sni.txt  ИЛИ  IP из разрешённых префиксов.
 Мёртвые серверы отсеиваются через TCP+TLS probe.
-packs.json — один объект, не массив.
+Паки по 50 серверов — V2RayTUN-friendly.
 """
 import argparse
 import base64
@@ -102,12 +102,11 @@ ALLOWED_IP_PREFIXES = ("84.", "89.", "158.", "2.", "144.", "87.")
 
 
 def is_allowed_ip(host: str) -> bool:
-    """Если host — IP, проверяем префикс. Если домен — True (проверяем по SNI)."""
     if not host:
         return False
     if re.match(r"^\d", host):
         return host.startswith(ALLOWED_IP_PREFIXES)
-    return True  # Домен — разрешаем, SNI проверится отдельно
+    return True
 
 
 # =============================================================================
@@ -187,6 +186,17 @@ def parse_query(query: str) -> dict:
     return params
 
 
+def validate_pbk(pbk: str) -> bool:
+    """Проверяет, что publicKey — валидный base64, 32 байта."""
+    if not pbk:
+        return False
+    try:
+        decoded = base64.b64decode(pbk + "=" * (-len(pbk) % 4))
+        return len(decoded) == 32
+    except Exception:
+        return False
+
+
 def process_source(url: str, prefix: str, white_sni: set):
     configs = []
     try:
@@ -220,22 +230,23 @@ def process_source(url: str, prefix: str, white_sni: set):
 
         params = parse_query(query)
         sni = params.get("sni", "")
+        pbk = params.get("pbk", "")
+        sec = params.get("security", "reality")
+
+        # === ВАЛИДАЦИЯ PBK (publicKey) ===
+        if sec == "reality" and not validate_pbk(pbk):
+            continue
 
         # === ДВОЙНОЙ ФИЛЬТР ===
-        # 1. IP-фильтр: если host — IP, должен быть в разрешённых префиксах
         if not is_allowed_ip(host):
             continue
 
-        # 2. SNI-фильтр: если host — домен ИЛИ IP с SNI, проверяем SNI по белому списку
         if is_ip(host):
-            # IP-адрес: если SNI указан — он должен быть в белом списке
-            # Если SNI не указан — пропускаем (без SNI Reality на IP не работает)
             if sni and not is_allowed_sni(sni, white_sni):
                 continue
             if not sni:
-                continue  # IP без SNI — бесполезен для обхода
+                continue
         else:
-            # Домен: host или sni должен быть в белом списке
             effective_sni = sni or host
             if not is_allowed_sni(effective_sni, white_sni):
                 continue
@@ -264,7 +275,7 @@ def tcp_tls_probe(host: str, port: int, sni: str, timeout: float = 5.0) -> bool:
         return False
 
     if not sni:
-        return True  # Доменный host без явного SNI — TCP достаточно
+        return True
 
     try:
         ctx = ssl.create_default_context()
@@ -322,7 +333,7 @@ def generate_vlees(configs, filepath: str):
 
 
 # =============================================================================
-# Генерация packs.json — ОДИН ОБЪЕКТ, не массив
+# Генерация packs.json — МАССИВ ПАКОВ по 50 серверов
 # =============================================================================
 RU_DOMAINS = [
     "keyword:vk", "keyword:ok.ru", "keyword:mail.ru", "keyword:gosuslugi",
@@ -339,7 +350,6 @@ def build_outbound(cfg, tag: str):
 
     flow = params.get("flow", "xtls-rprx-vision")
     sni = params.get("sni", "")
-    # Fallback SNI: если пустой, а host — домен — используем host
     if not sni and not is_ip(cfg["host"]):
         sni = cfg["host"]
 
@@ -377,101 +387,103 @@ def build_outbound(cfg, tag: str):
     }
 
 
-def generate_packs(configs, filepath: str):
-    """
-    Генерирует ОДИН JSON-объект со всеми серверами.
-    Не массив паков — один конфиг с балансировщиком.
-    """
-    outbounds = [build_outbound(c, f"lte-{i}") for i, c in enumerate(configs, start=1)]
-    outbounds.append({"tag": "direct", "protocol": "freedom"})
-    outbounds.append({"tag": "block", "protocol": "blackhole"})
+def generate_packs(configs, filepath: str, pack_size: int = 50):
+    packs = []
+    total = len(configs)
 
-    pack = {
-        "remarks": "🇪🇺LTE | HiBypass 🏳🇷🇺",
-        "dns": {
-            "queryStrategy": "UseIP",
-            "servers": [
-                "1.1.1.1",
-                "8.8.8.8",
-                "tls://1.1.1.1",
-                "https://dns.google/dns-query",
-                "https://cloudflare-dns.com/dns-query",
-            ],
-        },
-        "observatory": {
-            "enableConcurrency": True,
-            "probeInterval": "15s",
-            "probeUrl": "https://cp.cloudflare.com/generate_204",
-            "subjectSelector": ["lte-"],
-        },
-        "routing": {
-            "domainMatcher": "hybrid",
-            "domainStrategy": "IPIfNonMatch",
-            "rules": [
-                {
-                    "type": "field",
-                    "domain": RU_DOMAINS,
-                    "outboundTag": "direct",
-                },
-                {
-                    "type": "field",
-                    "ip": [
-                        "10.0.0.0/8",
-                        "172.16.0.0/12",
-                        "192.168.0.0/16",
-                        "127.0.0.1",
-                        "::1",
-                    ],
-                    "outboundTag": "direct",
-                },
-                {
-                    "type": "field",
-                    "protocol": ["bittorrent"],
-                    "outboundTag": "direct",
-                },
-                {
-                    "type": "field",
-                    "inboundTag": ["socks", "http"],
-                    "balancerTag": "BALANCER",
-                },
-            ],
-            "balancers": [{
-                "tag": "BALANCER",
-                "selector": ["lte-"],
-                "strategy": {"type": "leastPing"},
-            }],
-        },
-        "inbounds": [
-            {
-                "tag": "socks",
-                "port": 10808,
-                "listen": "127.0.0.1",
-                "protocol": "socks",
-                "settings": {"udp": True, "auth": "noauth"},
-                "sniffing": {
-                    "enabled": True,
-                    "routeOnly": False,
-                    "destOverride": ["http", "tls", "quic"],
-                },
+    for pack_num in range(0, total, pack_size):
+        chunk = configs[pack_num : pack_num + pack_size]
+        outbounds = [build_outbound(c, f"lte-{i}") for i, c in enumerate(chunk, start=1)]
+        outbounds.append({"tag": "direct", "protocol": "freedom"})
+        outbounds.append({"tag": "block", "protocol": "blackhole"})
+
+        pack = {
+            "remarks": f"🇪🇺LTE | 1.{pack_num // pack_size + 1} 🌐",
+            "dns": {
+                "queryStrategy": "UseIP",
+                "servers": [
+                    "1.1.1.1",
+                    "8.8.8.8",
+                    "tls://1.1.1.1",
+                    "https://dns.google/dns-query",
+                    "https://cloudflare-dns.com/dns-query",
+                ],
             },
-            {
-                "tag": "http",
-                "port": 10809,
-                "listen": "127.0.0.1",
-                "protocol": "http",
-                "settings": {"allowTransparent": False},
-                "sniffing": {
-                    "enabled": True,
-                    "routeOnly": False,
-                    "destOverride": ["http", "tls", "quic"],
-                },
+            "observatory": {
+                "enableConcurrency": True,
+                "probeInterval": "15s",
+                "probeUrl": "https://cp.cloudflare.com/generate_204",
+                "subjectSelector": ["lte-"],
             },
-        ],
-        "outbounds": outbounds,
-    }
+            "routing": {
+                "domainMatcher": "hybrid",
+                "domainStrategy": "IPIfNonMatch",
+                "rules": [
+                    {
+                        "type": "field",
+                        "domain": RU_DOMAINS,
+                        "outboundTag": "direct",
+                    },
+                    {
+                        "type": "field",
+                        "ip": [
+                            "10.0.0.0/8",
+                            "172.16.0.0/12",
+                            "192.168.0.0/16",
+                            "127.0.0.1",
+                            "::1",
+                        ],
+                        "outboundTag": "direct",
+                    },
+                    {
+                        "type": "field",
+                        "protocol": ["bittorrent"],
+                        "outboundTag": "direct",
+                    },
+                    {
+                        "type": "field",
+                        "inboundTag": ["socks", "http"],
+                        "balancerTag": "BALANCER",
+                    },
+                ],
+                "balancers": [{
+                    "tag": "BALANCER",
+                    "selector": ["lte-"],
+                    "strategy": {"type": "leastPing"},
+                }],
+            },
+            "inbounds": [
+                {
+                    "tag": "socks",
+                    "port": 10808,
+                    "listen": "127.0.0.1",
+                    "protocol": "socks",
+                    "settings": {"udp": True, "auth": "noauth"},
+                    "sniffing": {
+                        "enabled": True,
+                        "routeOnly": False,
+                        "destOverride": ["http", "tls", "quic"],
+                    },
+                },
+                {
+                    "tag": "http",
+                    "port": 10809,
+                    "listen": "127.0.0.1",
+                    "protocol": "http",
+                    "settings": {"allowTransparent": False},
+                    "sniffing": {
+                        "enabled": True,
+                        "routeOnly": False,
+                        "destOverride": ["http", "tls", "quic"],
+                    },
+                },
+            ],
+            "outbounds": outbounds,
+        }
+        packs.append(pack)
 
     with open(filepath, "w", encoding="utf-8") as f:
-        json.dump(pack, f, ensure_ascii=False, indent=2)
+        json.dump(packs, f, ensure_ascii=False, indent=2)
 
 
 # =============================================================================
@@ -544,12 +556,13 @@ def main():
     # Валидация
     try:
         with open(args.packs, "r", encoding="utf-8") as f:
-            pack = json.load(f)
+            packs = json.load(f)
         server_count = sum(
-            1 for o in pack.get("outbounds", [])
+            1 for p in packs for o in p.get("outbounds", [])
             if o.get("tag", "").startswith("lte-")
         )
-        print(f"\n✅ packs.json валидный | {server_count} серверов")
+        pack_count = len(packs)
+        print(f"\n✅ packs.json валидный | {pack_count} паков | {server_count} серверов")
     except Exception as e:
         print(f"\n❌ Ошибка валидации packs.json: {e}")
         sys.exit(1)
