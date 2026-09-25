@@ -5,10 +5,6 @@
 #announce: Бесплатный обход белых списков РФ 🏳🇷🇺 | ТГ : @Hibypass
 #traffic-limit: ∞
 #traffic-remaining: ∞
-vless://c61ec320-29f1-4e00-9272-8b676e6957b4@89.169.39.55:443?security=reality&encryption=none&pbk=Lbug_wz0y9xgKeDK44D9kuUap0fXzNKyv_nMJxnZRzU&headerType=none&fp=qq&type=tcp&flow=xtls-rprx-vision&sni=max.ru&sid=28a059440d3d5ba1#🇪🇺LTE | 1 🌐 RU
-vless://06a07c44-80e5-436e-8876-ffb194e1611a@84.201.173.187:443?type=raw&security=reality&encryption=none&sni=yandex.ru&fp=chrome&pbk=WrPShaEtQUXeKeyWDuELzBsd_ygDsU-k2bL1Avi13xI&flow=xtls-rprx-vision&headerType=none#🇪🇺LTE | 2 🌐 RU
-vless://596b215c-3743-4893-b24a-4e396c4ab80f@158.160.198.58:443?security=reality&encryption=mlkem768x25519plus.random.0rtt.QTfJnUbk6kpgCG8PVYGWL0dKYXVEm4Oax8_cqtmCjk0&pbk=DQW3GuEvmRgUQnnKdHjSZhgaEDcu_07Ijuqibd72-0I&headerType=none&type=tcp&sni=api-maps.yandex.ru&sid=ca7dd27a72c7c203#🇪🇺LTE | 3 🌐 RU
-vless://03e6c071-d34b-4236-9d06-a57cc364bede@nw.shadownet.pro:8443?type=tcp&headerType=none&security=reality&encryption=none&sni=yandex.ru&fp=qq&pbk=RDoffndyw7wskux1uVqjlPPe_ikh3cisVEoyleiRlR4&flow=xtls-rprx-vision#🇪🇺LTE | 4 🌐 RU
-vless://b4bc10bf-80f9-40c9-b4e5-29817c2f0992@l90909l.vip:8082?encryption=none&fp=&pbk=SbVKOEMjK0sIlbwg4akyBg5mL5KZwwB-ed4eEE7YnRc&security=reality&serviceName=vless-grpc-reality&sni=id.vk.com&type=grpc#🇪🇺LTE | 5 🌐 RU
-vless://ada16414-ea27-433b-b448-f77744493deb@api.cloudconsole.ru:443?type=xhttp&security=reality&fp=chrome&pbk=xejt7baNPj-ZmBgQVNW0MikXcVuLSro14gb6EyW4rAA&sid=ab000000&sni=vk.com&host=vk.com&mode=auto&spx=#🇪🇺LTE | 6 🌐 RU
-vless://2bdf5db2-da78-4b5a-8a1f-8deb6c9b00df@s3.cloudconsole.ru:443?type=xhttp&security=reality&fp=chrome&pbk=pxnzbJKyXFslwW8ZUNp04hP8BnBC7vpgvKhLpdwZvUk&sid=1a5cdc31a8649874&sni=vk.com&path=/userapi&host=vk.com&mode=auto&spx=#🇪🇺LTE | 7 🌐 RU
+vless://41f33146-7eb4-11f1-855a-d60b69bb56c6@eu-gw.videomonitor.cloud:2053?encryption=none&security=reality&sni=dzen.ru&fp=chrome&pbk=j8OW1foMwfeiy3VMbNPHLgTXgy_ZPdFFxv-H3HrbNF0&sid=2c60309fa586eb60&type=grpc&mode=gun&authority=&serviceName=grpc-direct#🇪🇺LTE | 1 🌐 RU
+vless://34a38f21-310e-4da5-b549-35076e16993c@polbridge1.frost-api.com:443?&security=reality&flow=xtls-rprx-vision&pbk=SHIYN7zN9aFVxwKK-bIvDbhUgtHvlBhDi1qSl2sWwRw&sid=e7&fp=chrome&sni=eh.vk.com&type=tcp&headerType=none&host=eh.vk.com&path=%2F#🇪🇺LTE | 2 🌐 RU
+vless://34a38f21-310e-4da5-b549-35076e16993c@node3.frost-api.com:443?encryption=none&flow=xtls-rprx-vision&security=reality&sni=max.ru&fp=chrome&pbk=SHIYN7zN9aFVxwKK-bIvDbhUgtHvlBhDi1qSl2sWwRw&sid=e7&type=tcp&headerType=none#🇪🇺LTE | 3 🌐 RU
