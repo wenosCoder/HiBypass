@@ -5,5 +5,6 @@
 #announce: Бесплатный обход белых списков РФ 🏳🇷🇺 | ТГ : @Hibypass
 #traffic-limit: ∞
 #traffic-remaining: ∞
-vless://ada16414-ea27-433b-b448-f77744493deb@api.cloudconsole.ru:443?encryption=none&security=reality&sni=vk.com&fp=chrome&pbk=xejt7baNPj-ZmBgQVNW0MikXcVuLSro14gb6EyW4rAA&sid=ab000000&spx=&type=xhttp&host=vk.com&mode=auto#🇪🇺LTE | 1 🌐 RU
-vless://2bdf5db2-da78-4b5a-8a1f-8deb6c9b00df@s3.cloudconsole.ru:443?fp=chrome&host=vk.com&mode=auto&path=/userapi&pbk=pxnzbJKyXFslwW8ZUNp04hP8BnBC7vpgvKhLpdwZvUk&security=reality&sid=1a5cdc31a8649874&sni=vk.com&spx=&type=xhttp#🇪🇺LTE | 2 🌐 RU
+vless://441afe11-a180-4516-bb80-80a8a6b38705@bl3fk52.sysopnova.art:443?security=reality&type=tcp&packetEncoding=xudp&sni=yandex.ru&fp=firefox&flow=xtls-rprx-vision&sid=5ee019e02e6ed99a&pbk=gE8LUmGFXik94SoDXNiAG5KprGyhjoRwDuhGebgAVWk#🇪🇺LTE | 1 🌐 RU
+vless://1c332eae-7e02-4acd-996d-4eb3e652401c@prep.wwwinternetvideo.click:443?type=raw&security=reality&flow=xtls-rprx-vision&fp=firefox&pbk=uitO4Z8t9TplwwYaqwLqh5rfxDh_X8bOBiNuPbzvaEM&sid=bbe46bd8f6b96839&sni=yandex.ru#🇪🇺LTE | 2 🌐 RU
+vless://85e26ea2-0c09-44d3-94ff-57209916f935@nl2.nvrsk-not-news.ru:41698?type=tcp&security=reality&fp=firefox&pbk=CGy3XQXti0IWqe5GK93fH5kolq7zafDhFZvkedRFKR8&sid=455b&sni=www.vk.com#🇪🇺LTE | 3 🌐 RU
