@@ -5,6 +5,5 @@
 #announce: Бесплатный обход белых списков РФ 🏳🇷🇺 | ТГ : @Hibypass
 #traffic-limit: ∞
 #traffic-remaining: ∞
-vless://41f33146-7eb4-11f1-855a-d60b69bb56c6@eu-gw.videomonitor.cloud:2053?encryption=none&security=reality&sni=dzen.ru&fp=chrome&pbk=j8OW1foMwfeiy3VMbNPHLgTXgy_ZPdFFxv-H3HrbNF0&sid=2c60309fa586eb60&type=grpc&mode=gun&authority=&serviceName=grpc-direct#🇪🇺LTE | 1 🌐 RU
-vless://34a38f21-310e-4da5-b549-35076e16993c@polbridge1.frost-api.com:443?&security=reality&flow=xtls-rprx-vision&pbk=SHIYN7zN9aFVxwKK-bIvDbhUgtHvlBhDi1qSl2sWwRw&sid=e7&fp=chrome&sni=eh.vk.com&type=tcp&headerType=none&host=eh.vk.com&path=%2F#🇪🇺LTE | 2 🌐 RU
-vless://34a38f21-310e-4da5-b549-35076e16993c@node3.frost-api.com:443?encryption=none&flow=xtls-rprx-vision&security=reality&sni=max.ru&fp=chrome&pbk=SHIYN7zN9aFVxwKK-bIvDbhUgtHvlBhDi1qSl2sWwRw&sid=e7&type=tcp&headerType=none#🇪🇺LTE | 3 🌐 RU
+vless://ada16414-ea27-433b-b448-f77744493deb@api.cloudconsole.ru:443?encryption=none&security=reality&sni=vk.com&fp=chrome&pbk=xejt7baNPj-ZmBgQVNW0MikXcVuLSro14gb6EyW4rAA&sid=ab000000&spx=&type=xhttp&host=vk.com&mode=auto#🇪🇺LTE | 1 🌐 RU
+vless://2bdf5db2-da78-4b5a-8a1f-8deb6c9b00df@s3.cloudconsole.ru:443?fp=chrome&host=vk.com&mode=auto&path=/userapi&pbk=pxnzbJKyXFslwW8ZUNp04hP8BnBC7vpgvKhLpdwZvUk&security=reality&sid=1a5cdc31a8649874&sni=vk.com&spx=&type=xhttp#🇪🇺LTE | 2 🌐 RU
