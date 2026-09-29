@@ -194,37 +194,6 @@
         }
       },
       {
-        "tag": "lte-3",
-        "protocol": "vless",
-        "settings": {
-          "vnext": [
-            {
-              "address": "ru1server.rabstvo.shop",
-              "port": 443,
-              "users": [
-                {
-                  "id": "5b8fb9a7-70b4-4d38-90eb-9f72e6ddf783",
-                  "encryption": "none",
-                  "flow": "xtls-rprx-vision"
-                }
-              ]
-            }
-          ]
-        },
-        "streamSettings": {
-          "network": "tcp",
-          "security": "reality",
-          "realitySettings": {
-            "serverName": "www.max.ru",
-            "publicKey": "Irvu1ScKMHoj6FBEPmYdj5RGvdpj1qwVLrQTu_OzNyY",
-            "shortId": "bbb76504",
-            "fingerprint": "chrome",
-            "allowInsecure": false,
-            "show": false
-          }
-        }
-      },
-      {
         "tag": "direct",
         "protocol": "freedom"
       },
