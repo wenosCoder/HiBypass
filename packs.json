@@ -137,6 +137,37 @@
         "settings": {
           "vnext": [
             {
+              "address": "de2.techdatacloud.org",
+              "port": 443,
+              "users": [
+                {
+                  "id": "5e19b3c8-c1dc-4163-95e2-895319c15d6c",
+                  "encryption": "none",
+                  "flow": "xtls-rprx-vision"
+                }
+              ]
+            }
+          ]
+        },
+        "streamSettings": {
+          "network": "tcp",
+          "security": "reality",
+          "realitySettings": {
+            "serverName": "cloud.mail.ru",
+            "publicKey": "O3UO3JVFI6zhBjXmGLXadyaOfIhbgz6ESDwIwDnVfGk",
+            "shortId": "b5598de0526876e2",
+            "fingerprint": "firefox",
+            "allowInsecure": false,
+            "show": false
+          }
+        }
+      },
+      {
+        "tag": "lte-2",
+        "protocol": "vless",
+        "settings": {
+          "vnext": [
+            {
               "address": "api.cloudconsole.ru",
               "port": 443,
               "users": [
@@ -163,7 +194,7 @@
         }
       },
       {
-        "tag": "lte-2",
+        "tag": "lte-3",
         "protocol": "vless",
         "settings": {
           "vnext": [
@@ -187,6 +218,37 @@
             "serverName": "vk.com",
             "publicKey": "pxnzbJKyXFslwW8ZUNp04hP8BnBC7vpgvKhLpdwZvUk",
             "shortId": "1a5cdc31a8649874",
+            "fingerprint": "chrome",
+            "allowInsecure": false,
+            "show": false
+          }
+        }
+      },
+      {
+        "tag": "lte-4",
+        "protocol": "vless",
+        "settings": {
+          "vnext": [
+            {
+              "address": "prep.wwwinternetvideo.click",
+              "port": 443,
+              "users": [
+                {
+                  "id": "1c332eae-7e02-4acd-996d-4eb3e652401c",
+                  "encryption": "none",
+                  "flow": "xtls-rprx-vision"
+                }
+              ]
+            }
+          ]
+        },
+        "streamSettings": {
+          "network": "tcp",
+          "security": "reality",
+          "realitySettings": {
+            "serverName": "yandex.ru",
+            "publicKey": "uitO4Z8t9TplwwYaqwLqh5rfxDh_X8bOBiNuPbzvaEM",
+            "shortId": "bbe46bd8f6b96839",
             "fingerprint": "chrome",
             "allowInsecure": false,
             "show": false
