@@ -5,5 +5,5 @@
 #announce: Бесплатный обход белых списков РФ 🏳🇷🇺 | ТГ : @Hibypass
 #traffic-limit: ∞
 #traffic-remaining: ∞
-vless://441afe11-a180-4516-bb80-80a8a6b38705@bl3fk52.sysopnova.art:443?encryption=none&flow=xtls-rprx-vision&type=raw&headerType=none&security=reality&fp=chrome&pbk=gE8LUmGFXik94SoDXNiAG5KprGyhjoRwDuhGebgAVWk&sni=yandex.ru&sid=5ee019e02e6ed99a#🇪🇺LTE | 1 🌐 RU
-vless://1c332eae-7e02-4acd-996d-4eb3e652401c@prep.wwwinternetvideo.click:443?flow=xtls-rprx-vision&fp=chrome&host=yandex.ru&path=%2F%20&pbk=uitO4Z8t9TplwwYaqwLqh5rfxDh_X8bOBiNuPbzvaEM&security=reality&sid=bbe46bd8f6b96839&sni=yandex.ru&type=tcp#🇪🇺LTE | 2 🌐 RU
+vless://1c332eae-7e02-4acd-996d-4eb3e652401c@prep.wwwinternetvideo.click:443?type=tcp&security=reality&sni=yandex.ru&fp=chrome&flow=xtls-rprx-vision&pbk=uitO4Z8t9TplwwYaqwLqh5rfxDh_X8bOBiNuPbzvaEM&sid=bbe46bd8f6b96839#🇪🇺LTE | 1 🌐 RU
+vless://b4370239-e25b-4396-8d67-2c6f2f6c8655@84.201.180.177:7443?encryption=none&flow=xtls-rprx-vision&fp=firefox&pbk=8qUiIosG5-OQWo0tD29BQCbxb50neUg8BynxdAvDzB4&security=reality&sid=132142&sni=api.dobro.ru&type=raw#🇪🇺LTE | 2 🌐 RU
