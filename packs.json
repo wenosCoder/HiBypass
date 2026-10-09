@@ -137,11 +137,11 @@
         "settings": {
           "vnext": [
             {
-              "address": "de2.techdatacloud.org",
+              "address": "api.cloudconsole.ru",
               "port": 443,
               "users": [
                 {
-                  "id": "5e19b3c8-c1dc-4163-95e2-895319c15d6c",
+                  "id": "ada16414-ea27-433b-b448-f77744493deb",
                   "encryption": "none",
                   "flow": "xtls-rprx-vision"
                 }
@@ -153,10 +153,10 @@
           "network": "tcp",
           "security": "reality",
           "realitySettings": {
-            "serverName": "cloud.mail.ru",
-            "publicKey": "O3UO3JVFI6zhBjXmGLXadyaOfIhbgz6ESDwIwDnVfGk",
-            "shortId": "b5598de0526876e2",
-            "fingerprint": "firefox",
+            "serverName": "vk.com",
+            "publicKey": "xejt7baNPj-ZmBgQVNW0MikXcVuLSro14gb6EyW4rAA",
+            "shortId": "ab000000",
+            "fingerprint": "chrome",
             "allowInsecure": false,
             "show": false
           }
@@ -187,6 +187,37 @@
             "serverName": "vk.com",
             "publicKey": "pxnzbJKyXFslwW8ZUNp04hP8BnBC7vpgvKhLpdwZvUk",
             "shortId": "1a5cdc31a8649874",
+            "fingerprint": "chrome",
+            "allowInsecure": false,
+            "show": false
+          }
+        }
+      },
+      {
+        "tag": "lte-3",
+        "protocol": "vless",
+        "settings": {
+          "vnext": [
+            {
+              "address": "ru1server.rabstvo.shop",
+              "port": 443,
+              "users": [
+                {
+                  "id": "5b8fb9a7-70b4-4d38-90eb-9f72e6ddf783",
+                  "encryption": "none",
+                  "flow": "xtls-rprx-vision"
+                }
+              ]
+            }
+          ]
+        },
+        "streamSettings": {
+          "network": "tcp",
+          "security": "reality",
+          "realitySettings": {
+            "serverName": "www.max.ru",
+            "publicKey": "Irvu1ScKMHoj6FBEPmYdj5RGvdpj1qwVLrQTu_OzNyY",
+            "shortId": "bbb76504",
             "fingerprint": "chrome",
             "allowInsecure": false,
             "show": false
