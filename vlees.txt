@@ -5,11 +5,3 @@
 #announce: Бесплатный обход белых списков РФ 🏳🇷🇺 | ТГ : @Hibypass
 #traffic-limit: ∞
 #traffic-remaining: ∞
-vless://5e19b3c8-c1dc-4163-95e2-895319c15d6c@us3.techdatacloud.org:443?type=tcp&security=reality&flow=xtls-rprx-vision&pbk=06GvG7PU5F3Hgq-vUH24tU0tpsbGMCCt26BSvlaBNUE&fp=firefox&sni=cloud.mail.ru&sid=dfbfa87e9f37f1f0&spx=%2F&headerType=none&encryption=none#🇪🇺LTE | 1 🌐 RU
-vless://9e27f64b-7ae9-461b-b4c4-99696276633b@de3.voronvpn.com:443?security=reality&encryption=none&pbk=UR-ELTbCCTAAvg_y8vIznWFkGkCKFFaEAVgTtPYNCCk&headerType=none&fp=chrome&type=tcp&flow=xtls-rprx-vision&sni=storage.yandexcloud.net&sid=54861d36#🇪🇺LTE | 2 🌐 RU
-vless://441afe11-a180-4516-bb80-80a8a6b38705@bl3fk52.sysopnova.art:443?flow=xtls-rprx-vision&fp=chrome&pbk=gE8LUmGFXik94SoDXNiAG5KprGyhjoRwDuhGebgAVWk&security=reality&sid=5ee019e02e6ed99a&sni=yandex.ru&type=tcp%233%F0%9F%94%A5%40oneclickvpnkeysvless%3A%2F%2F607801ac-dbdd-4938-a167-129015d9978e%4091.192.81.214%3A443%3Fencryption%3Dnone#🇪🇺LTE | 3 🌐 RU
-vless://8325bd97-b77c-4917-acaa-2446e9e8cc03@lbeiggdz.smart-cats.ru:443?type=grpc&security=reality&fp=firefox&pbk=mzrVbIsEggpJfXR8M7yxki2vgv3sXWQdy1bGhXqatUY&sid=79651ae525860543&sni=vk.com&mode=gun&serviceName=haknewhpjmv&spx=/#🇪🇺LTE | 4 🌐 RU
-vless://1c332eae-7e02-4acd-996d-4eb3e652401c@prep.wwwinternetvideo.click:443?&security=reality&flow=xtls-rprx-vision&pbk=uitO4Z8t9TplwwYaqwLqh5rfxDh_X8bOBiNuPbzvaEM&sid=bbe46bd8f6b96839&fp=firefox&sni=yandex.ru&type=tcp&headerType=none&host=yandex.ru&path=%2F#🇪🇺LTE | 5 🌐 RU
-vless://83383473-0d62-4089-ac4d-d7ecb413504a@se3.h1cloud.net:25642?type=raw&flow=xtls-rprx-vision&security=reality&pbk=0PdoBW4uTOpf4zUR1Jc_5WHy1QKHp-W81emZAQKL93s&sni=sun6-21.userapi.com&sid=225dc9f736dc9058&spx=%2F&fp=chrome#🇪🇺LTE | 6 🌐 RU
-vless://a18f7c2d-9e45-4b8a-af3c-1d5e7f9c8b2a@tg.riotvpn.eu:443?security=reality&encryption=none&pbk=8h8t5eBWL9oERK7xWHQLFJE5j6sZdgNDQAs3EGnNbho&headerType=none&fp=chrome&type=tcp&sni=ads.x5.ru&sid=2f49bccf11150ef2#🇪🇺LTE | 7 🌐 RU
-vless://1e2b9c0c-4f9b-56f5-a062-1c4f2d2aa200@84.201.146.8:443?type=xhttp&security=reality&encryption=none&host=max.ru&sni=max.ru&fp=safari&pbk=biyXF3Egpu0ul4Jyf04Vh1Zl6u3JGXJ2k5y5y7pDjgo&headerType=none#🇪🇺LTE | 8 🌐 RU
