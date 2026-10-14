@@ -5,5 +5,7 @@
 #announce: Бесплатный обход белых списков РФ 🏳🇷🇺 | ТГ : @Hibypass
 #traffic-limit: ∞
 #traffic-remaining: ∞
-vless://408c51e8-9246-483d-ba73-34ab4e202eb9@fr.song69.fun:28150?&security=reality&flow=xtls-rprx-vision&pbk=HRmmr0Ii4Tr9jPLwratvLhee3_VWFNK47T8AAo7kzww&sid=dcb858da&fp=chrome&sni=metrika.yandex.ru&type=tcp&headerType=none&host=metrika.yandex.ru&path=%2F#🇪🇺LTE | 1 🌐 RU
-vless://6656cc0a-5908-4d04-a436-64f5843c0c7a@finkawwwbroy5.qcloud.surf:20324?type=tcp&security=reality&flow=xtls-rprx-vision&fp=firefox&pbk=RK2g-bLoaa9GD9cJRRk2ktU9nAvP4-YmUPnBs1-UC1A&sid=a9391e22&sni=metrika.yandex.ru#🇪🇺LTE | 2 🌐 RU
+vless://596b215c-3743-4893-b24a-4e396c4ab80f@158.160.198.58:443?security=reality&encryption=mlkem768x25519plus.random.0rtt.QTfJnUbk6kpgCG8PVYGWL0dKYXVEm4Oax8_cqtmCjk0&pbk=DQW3GuEvmRgUQnnKdHjSZhgaEDcu_07Ijuqibd72-0I&headerType=none&type=tcp&sni=api-maps.yandex.ru&sid=ca7dd27a72c7c203#🇪🇺LTE | 1 🌐 RU
+vless://23bf7812-57b9-4b1c-b4bd-3776b3a50d5b@158.160.149.94:443?type=raw&security=reality&encryption=none&sni=yandex.ru&fp=safari&pbk=CF49-iS9dsHBwvqYFoDs_T3Me8TT0FpNW2kibGBkVXY&flow=xtls-rprx-vision&headerType=none#🇪🇺LTE | 2 🌐 RU
+vless://c61ec320-29f1-4e00-9272-8b676e6957b4@89.169.39.55:443?security=reality&encryption=none&pbk=Lbug_wz0y9xgKeDK44D9kuUap0fXzNKyv_nMJxnZRzU&headerType=none&fp=qq&type=tcp&flow=xtls-rprx-vision&sni=max.ru&sid=28a059440d3d5ba1#🇪🇺LTE | 3 🌐 RU
+vless://b4bc10bf-80f9-40c9-b4e5-29817c2f0992@l90909l.vip:8082?encryption=none&fp=&pbk=SbVKOEMjK0sIlbwg4akyBg5mL5KZwwB-ed4eEE7YnRc&security=reality&serviceName=vless-grpc-reality&sni=id.vk.com&type=grpc#🇪🇺LTE | 4 🌐 RU
