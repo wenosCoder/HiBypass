@@ -137,11 +137,11 @@
         "settings": {
           "vnext": [
             {
-              "address": "us3.techdatacloud.org",
-              "port": 443,
+              "address": "qcloudge1.exitvpn.shop",
+              "port": 20268,
               "users": [
                 {
-                  "id": "5e19b3c8-c1dc-4163-95e2-895319c15d6c",
+                  "id": "8bd04756-3beb-4348-82c9-d35453df50ce",
                   "encryption": "none",
                   "flow": "xtls-rprx-vision"
                 }
@@ -153,10 +153,10 @@
           "network": "tcp",
           "security": "reality",
           "realitySettings": {
-            "serverName": "cloud.mail.ru",
-            "publicKey": "06GvG7PU5F3Hgq-vUH24tU0tpsbGMCCt26BSvlaBNUE",
-            "shortId": "dfbfa87e9f37f1f0",
-            "fingerprint": "firefox",
+            "serverName": "metrika.yandex.ru",
+            "publicKey": "5H_MmyfvF4SkwS84wTbLmtcZDecXJIJtZ3uisiKQpSM",
+            "shortId": "0c774b50",
+            "fingerprint": "chrome",
             "allowInsecure": false,
             "show": false
           }
@@ -164,37 +164,6 @@
       },
       {
         "tag": "lte-2",
-        "protocol": "vless",
-        "settings": {
-          "vnext": [
-            {
-              "address": "de2.techdatacloud.org",
-              "port": 443,
-              "users": [
-                {
-                  "id": "5e19b3c8-c1dc-4163-95e2-895319c15d6c",
-                  "encryption": "none",
-                  "flow": "xtls-rprx-vision"
-                }
-              ]
-            }
-          ]
-        },
-        "streamSettings": {
-          "network": "tcp",
-          "security": "reality",
-          "realitySettings": {
-            "serverName": "cloud.mail.ru",
-            "publicKey": "O3UO3JVFI6zhBjXmGLXadyaOfIhbgz6ESDwIwDnVfGk",
-            "shortId": "b5598de0526876e2",
-            "fingerprint": "firefox",
-            "allowInsecure": false,
-            "show": false
-          }
-        }
-      },
-      {
-        "tag": "lte-3",
         "protocol": "vless",
         "settings": {
           "vnext": [
@@ -218,6 +187,37 @@
             "serverName": "yandex.ru",
             "publicKey": "uitO4Z8t9TplwwYaqwLqh5rfxDh_X8bOBiNuPbzvaEM",
             "shortId": "bbe46bd8f6b96839",
+            "fingerprint": "firefox",
+            "allowInsecure": false,
+            "show": false
+          }
+        }
+      },
+      {
+        "tag": "lte-3",
+        "protocol": "vless",
+        "settings": {
+          "vnext": [
+            {
+              "address": "qcloudge1.exitvpn.shop",
+              "port": 20268,
+              "users": [
+                {
+                  "id": "4ad3dbf5-2005-4d96-b56c-a0ca9905cab6",
+                  "encryption": "none",
+                  "flow": "xtls-rprx-vision"
+                }
+              ]
+            }
+          ]
+        },
+        "streamSettings": {
+          "network": "tcp",
+          "security": "reality",
+          "realitySettings": {
+            "serverName": "metrika.yandex.ru",
+            "publicKey": "5H_MmyfvF4SkwS84wTbLmtcZDecXJIJtZ3uisiKQpSM",
+            "shortId": "0c774b50",
             "fingerprint": "chrome",
             "allowInsecure": false,
             "show": false
@@ -226,6 +226,130 @@
       },
       {
         "tag": "lte-4",
+        "protocol": "vless",
+        "settings": {
+          "vnext": [
+            {
+              "address": "qcloudge1.exitvpn.shop",
+              "port": 20268,
+              "users": [
+                {
+                  "id": "f83ce3c4-07d9-4895-bd14-cb74abbcab37",
+                  "encryption": "none",
+                  "flow": "xtls-rprx-vision"
+                }
+              ]
+            }
+          ]
+        },
+        "streamSettings": {
+          "network": "tcp",
+          "security": "reality",
+          "realitySettings": {
+            "serverName": "metrika.yandex.ru",
+            "publicKey": "5H_MmyfvF4SkwS84wTbLmtcZDecXJIJtZ3uisiKQpSM",
+            "shortId": "0c774b50",
+            "fingerprint": "firefox",
+            "allowInsecure": false,
+            "show": false
+          }
+        }
+      },
+      {
+        "tag": "lte-5",
+        "protocol": "vless",
+        "settings": {
+          "vnext": [
+            {
+              "address": "finkawwwbroy5.qcloud.surf",
+              "port": 20324,
+              "users": [
+                {
+                  "id": "8bd04756-3beb-4348-82c9-d35453df50ce",
+                  "encryption": "none",
+                  "flow": "xtls-rprx-vision"
+                }
+              ]
+            }
+          ]
+        },
+        "streamSettings": {
+          "network": "tcp",
+          "security": "reality",
+          "realitySettings": {
+            "serverName": "metrika.yandex.ru",
+            "publicKey": "RK2g-bLoaa9GD9cJRRk2ktU9nAvP4-YmUPnBs1-UC1A",
+            "shortId": "a9391e22",
+            "fingerprint": "firefox",
+            "allowInsecure": false,
+            "show": false
+          }
+        }
+      },
+      {
+        "tag": "lte-6",
+        "protocol": "vless",
+        "settings": {
+          "vnext": [
+            {
+              "address": "sweedenqfds777.qcloud.surf",
+              "port": 21221,
+              "users": [
+                {
+                  "id": "408c51e8-9246-483d-ba73-34ab4e202eb9",
+                  "encryption": "none",
+                  "flow": "xtls-rprx-vision"
+                }
+              ]
+            }
+          ]
+        },
+        "streamSettings": {
+          "network": "tcp",
+          "security": "reality",
+          "realitySettings": {
+            "serverName": "metrika.yandex.ru",
+            "publicKey": "RtxGqCtQJeOyUwSe7k6oZOrQWV1hPbC-TMqqgxl9fn4",
+            "shortId": "c430045c",
+            "fingerprint": "firefox",
+            "allowInsecure": false,
+            "show": false
+          }
+        }
+      },
+      {
+        "tag": "lte-7",
+        "protocol": "vless",
+        "settings": {
+          "vnext": [
+            {
+              "address": "finkawwwbroy5.qcloud.surf",
+              "port": 20324,
+              "users": [
+                {
+                  "id": "4ad3dbf5-2005-4d96-b56c-a0ca9905cab6",
+                  "encryption": "none",
+                  "flow": "xtls-rprx-vision"
+                }
+              ]
+            }
+          ]
+        },
+        "streamSettings": {
+          "network": "tcp",
+          "security": "reality",
+          "realitySettings": {
+            "serverName": "metrika.yandex.ru",
+            "publicKey": "RK2g-bLoaa9GD9cJRRk2ktU9nAvP4-YmUPnBs1-UC1A",
+            "shortId": "a9391e22",
+            "fingerprint": "firefox",
+            "allowInsecure": false,
+            "show": false
+          }
+        }
+      },
+      {
+        "tag": "lte-8",
         "protocol": "vless",
         "settings": {
           "vnext": [
@@ -256,140 +380,16 @@
         }
       },
       {
-        "tag": "lte-5",
-        "protocol": "vless",
-        "settings": {
-          "vnext": [
-            {
-              "address": "84.201.146.8",
-              "port": 443,
-              "users": [
-                {
-                  "id": "1e2b9c0c-4f9b-56f5-a062-1c4f2d2aa200",
-                  "encryption": "none",
-                  "flow": "xtls-rprx-vision"
-                }
-              ]
-            }
-          ]
-        },
-        "streamSettings": {
-          "network": "tcp",
-          "security": "reality",
-          "realitySettings": {
-            "serverName": "max.ru",
-            "publicKey": "biyXF3Egpu0ul4Jyf04Vh1Zl6u3JGXJ2k5y5y7pDjgo",
-            "shortId": "",
-            "fingerprint": "qq",
-            "allowInsecure": false,
-            "show": false
-          }
-        }
-      },
-      {
-        "tag": "lte-6",
-        "protocol": "vless",
-        "settings": {
-          "vnext": [
-            {
-              "address": "sweedenqfds777.qcloud.surf",
-              "port": 21221,
-              "users": [
-                {
-                  "id": "8bd04756-3beb-4348-82c9-d35453df50ce",
-                  "encryption": "none",
-                  "flow": "xtls-rprx-vision"
-                }
-              ]
-            }
-          ]
-        },
-        "streamSettings": {
-          "network": "tcp",
-          "security": "reality",
-          "realitySettings": {
-            "serverName": "metrika.yandex.ru",
-            "publicKey": "RtxGqCtQJeOyUwSe7k6oZOrQWV1hPbC-TMqqgxl9fn4",
-            "shortId": "c430045c",
-            "fingerprint": "chrome",
-            "allowInsecure": false,
-            "show": false
-          }
-        }
-      },
-      {
-        "tag": "lte-7",
-        "protocol": "vless",
-        "settings": {
-          "vnext": [
-            {
-              "address": "spainspeedboostjbl88.qcloud.surf",
-              "port": 27311,
-              "users": [
-                {
-                  "id": "f83ce3c4-07d9-4895-bd14-cb74abbcab37",
-                  "encryption": "none",
-                  "flow": "xtls-rprx-vision"
-                }
-              ]
-            }
-          ]
-        },
-        "streamSettings": {
-          "network": "tcp",
-          "security": "reality",
-          "realitySettings": {
-            "serverName": "metrika.yandex.ru",
-            "publicKey": "9vHDWMrmerdjndp_XHbCc9jaR-9K95H_mwpLvI2emkY",
-            "shortId": "56daff9a",
-            "fingerprint": "chrome",
-            "allowInsecure": false,
-            "show": false
-          }
-        }
-      },
-      {
-        "tag": "lte-8",
-        "protocol": "vless",
-        "settings": {
-          "vnext": [
-            {
-              "address": "qcloudge1.exitvpn.shop",
-              "port": 20268,
-              "users": [
-                {
-                  "id": "4ad3dbf5-2005-4d96-b56c-a0ca9905cab6",
-                  "encryption": "none",
-                  "flow": "xtls-rprx-vision"
-                }
-              ]
-            }
-          ]
-        },
-        "streamSettings": {
-          "network": "tcp",
-          "security": "reality",
-          "realitySettings": {
-            "serverName": "metrika.yandex.ru",
-            "publicKey": "5H_MmyfvF4SkwS84wTbLmtcZDecXJIJtZ3uisiKQpSM",
-            "shortId": "0c774b50",
-            "fingerprint": "chrome",
-            "allowInsecure": false,
-            "show": false
-          }
-        }
-      },
-      {
         "tag": "lte-9",
         "protocol": "vless",
         "settings": {
           "vnext": [
             {
-              "address": "spainspeedboostjbl88.qcloud.surf",
-              "port": 27311,
+              "address": "ivx-ivy-al0.whitenetwork.cloud",
+              "port": 7445,
               "users": [
                 {
-                  "id": "408c51e8-9246-483d-ba73-34ab4e202eb9",
+                  "id": "66217279-de40-4b62-b2bb-9c33b8fb7a01",
                   "encryption": "none",
                   "flow": "xtls-rprx-vision"
                 }
@@ -401,10 +401,10 @@
           "network": "tcp",
           "security": "reality",
           "realitySettings": {
-            "serverName": "metrika.yandex.ru",
-            "publicKey": "9vHDWMrmerdjndp_XHbCc9jaR-9K95H_mwpLvI2emkY",
-            "shortId": "56daff9a",
-            "fingerprint": "firefox",
+            "serverName": "passport.yandex.ru",
+            "publicKey": "S_s3FVodJIep88KnIgT0cZLUMB2tAJHTJEn0o-J03G8",
+            "shortId": "283f4b51fbe39ad9",
+            "fingerprint": "random",
             "allowInsecure": false,
             "show": false
           }
@@ -416,39 +416,8 @@
         "settings": {
           "vnext": [
             {
-              "address": "qcloudge1.exitvpn.shop",
-              "port": 20268,
-              "users": [
-                {
-                  "id": "8bd04756-3beb-4348-82c9-d35453df50ce",
-                  "encryption": "none",
-                  "flow": "xtls-rprx-vision"
-                }
-              ]
-            }
-          ]
-        },
-        "streamSettings": {
-          "network": "tcp",
-          "security": "reality",
-          "realitySettings": {
-            "serverName": "metrika.yandex.ru",
-            "publicKey": "5H_MmyfvF4SkwS84wTbLmtcZDecXJIJtZ3uisiKQpSM",
-            "shortId": "0c774b50",
-            "fingerprint": "chrome",
-            "allowInsecure": false,
-            "show": false
-          }
-        }
-      },
-      {
-        "tag": "lte-11",
-        "protocol": "vless",
-        "settings": {
-          "vnext": [
-            {
-              "address": "sweedenqfds777.qcloud.surf",
-              "port": 21221,
+              "address": "finkawwwbroy5.qcloud.surf",
+              "port": 20324,
               "users": [
                 {
                   "id": "408c51e8-9246-483d-ba73-34ab4e202eb9",
@@ -464,8 +433,39 @@
           "security": "reality",
           "realitySettings": {
             "serverName": "metrika.yandex.ru",
-            "publicKey": "RtxGqCtQJeOyUwSe7k6oZOrQWV1hPbC-TMqqgxl9fn4",
-            "shortId": "c430045c",
+            "publicKey": "RK2g-bLoaa9GD9cJRRk2ktU9nAvP4-YmUPnBs1-UC1A",
+            "shortId": "a9391e22",
+            "fingerprint": "firefox",
+            "allowInsecure": false,
+            "show": false
+          }
+        }
+      },
+      {
+        "tag": "lte-11",
+        "protocol": "vless",
+        "settings": {
+          "vnext": [
+            {
+              "address": "spainspeedboostjbl88.qcloud.surf",
+              "port": 27311,
+              "users": [
+                {
+                  "id": "8bd04756-3beb-4348-82c9-d35453df50ce",
+                  "encryption": "none",
+                  "flow": "xtls-rprx-vision"
+                }
+              ]
+            }
+          ]
+        },
+        "streamSettings": {
+          "network": "tcp",
+          "security": "reality",
+          "realitySettings": {
+            "serverName": "metrika.yandex.ru",
+            "publicKey": "9vHDWMrmerdjndp_XHbCc9jaR-9K95H_mwpLvI2emkY",
+            "shortId": "56daff9a",
             "fingerprint": "firefox",
             "allowInsecure": false,
             "show": false
@@ -482,7 +482,7 @@
               "port": 21221,
               "users": [
                 {
-                  "id": "4ad3dbf5-2005-4d96-b56c-a0ca9905cab6",
+                  "id": "8bd04756-3beb-4348-82c9-d35453df50ce",
                   "encryption": "none",
                   "flow": "xtls-rprx-vision"
                 }
@@ -497,7 +497,7 @@
             "serverName": "metrika.yandex.ru",
             "publicKey": "RtxGqCtQJeOyUwSe7k6oZOrQWV1hPbC-TMqqgxl9fn4",
             "shortId": "c430045c",
-            "fingerprint": "firefox",
+            "fingerprint": "chrome",
             "allowInsecure": false,
             "show": false
           }
@@ -513,7 +513,7 @@
               "port": 27311,
               "users": [
                 {
-                  "id": "4ad3dbf5-2005-4d96-b56c-a0ca9905cab6",
+                  "id": "f83ce3c4-07d9-4895-bd14-cb74abbcab37",
                   "encryption": "none",
                   "flow": "xtls-rprx-vision"
                 }
@@ -540,42 +540,11 @@
         "settings": {
           "vnext": [
             {
-              "address": "qcloudge1.exitvpn.shop",
-              "port": 20268,
-              "users": [
-                {
-                  "id": "f83ce3c4-07d9-4895-bd14-cb74abbcab37",
-                  "encryption": "none",
-                  "flow": "xtls-rprx-vision"
-                }
-              ]
-            }
-          ]
-        },
-        "streamSettings": {
-          "network": "tcp",
-          "security": "reality",
-          "realitySettings": {
-            "serverName": "metrika.yandex.ru",
-            "publicKey": "5H_MmyfvF4SkwS84wTbLmtcZDecXJIJtZ3uisiKQpSM",
-            "shortId": "0c774b50",
-            "fingerprint": "firefox",
-            "allowInsecure": false,
-            "show": false
-          }
-        }
-      },
-      {
-        "tag": "lte-15",
-        "protocol": "vless",
-        "settings": {
-          "vnext": [
-            {
               "address": "spainspeedboostjbl88.qcloud.surf",
               "port": 27311,
               "users": [
                 {
-                  "id": "8bd04756-3beb-4348-82c9-d35453df50ce",
+                  "id": "4ad3dbf5-2005-4d96-b56c-a0ca9905cab6",
                   "encryption": "none",
                   "flow": "xtls-rprx-vision"
                 }
@@ -597,7 +566,69 @@
         }
       },
       {
+        "tag": "lte-15",
+        "protocol": "vless",
+        "settings": {
+          "vnext": [
+            {
+              "address": "spainspeedboostjbl88.qcloud.surf",
+              "port": 27311,
+              "users": [
+                {
+                  "id": "408c51e8-9246-483d-ba73-34ab4e202eb9",
+                  "encryption": "none",
+                  "flow": "xtls-rprx-vision"
+                }
+              ]
+            }
+          ]
+        },
+        "streamSettings": {
+          "network": "tcp",
+          "security": "reality",
+          "realitySettings": {
+            "serverName": "metrika.yandex.ru",
+            "publicKey": "9vHDWMrmerdjndp_XHbCc9jaR-9K95H_mwpLvI2emkY",
+            "shortId": "56daff9a",
+            "fingerprint": "chrome",
+            "allowInsecure": false,
+            "show": false
+          }
+        }
+      },
+      {
         "tag": "lte-16",
+        "protocol": "vless",
+        "settings": {
+          "vnext": [
+            {
+              "address": "sweedenqfds777.qcloud.surf",
+              "port": 21221,
+              "users": [
+                {
+                  "id": "4ad3dbf5-2005-4d96-b56c-a0ca9905cab6",
+                  "encryption": "none",
+                  "flow": "xtls-rprx-vision"
+                }
+              ]
+            }
+          ]
+        },
+        "streamSettings": {
+          "network": "tcp",
+          "security": "reality",
+          "realitySettings": {
+            "serverName": "metrika.yandex.ru",
+            "publicKey": "RtxGqCtQJeOyUwSe7k6oZOrQWV1hPbC-TMqqgxl9fn4",
+            "shortId": "c430045c",
+            "fingerprint": "firefox",
+            "allowInsecure": false,
+            "show": false
+          }
+        }
+      },
+      {
+        "tag": "lte-17",
         "protocol": "vless",
         "settings": {
           "vnext": [
@@ -621,14 +652,14 @@
             "serverName": "ya.ru",
             "publicKey": "1MLoHw7RVkGefh7XUyuGg4ndxwv4vDU9en-f9JxpXRQ",
             "shortId": "d2061bb1",
-            "fingerprint": "chrome",
+            "fingerprint": "firefox",
             "allowInsecure": false,
             "show": false
           }
         }
       },
       {
-        "tag": "lte-17",
+        "tag": "lte-18",
         "protocol": "vless",
         "settings": {
           "vnext": [
