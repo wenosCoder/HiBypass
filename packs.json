@@ -1,1 +1,237 @@
-[]
+[
+  {
+    "remarks": "🇪🇺LTE | 1.1 🌐",
+    "dns": {
+      "queryStrategy": "UseIP",
+      "servers": [
+        "1.1.1.1",
+        "8.8.8.8",
+        "tls://1.1.1.1",
+        "https://dns.google/dns-query",
+        "https://cloudflare-dns.com/dns-query"
+      ]
+    },
+    "observatory": {
+      "enableConcurrency": true,
+      "probeInterval": "15s",
+      "probeUrl": "https://cp.cloudflare.com/generate_204",
+      "subjectSelector": [
+        "lte-"
+      ]
+    },
+    "routing": {
+      "domainMatcher": "hybrid",
+      "domainStrategy": "IPIfNonMatch",
+      "rules": [
+        {
+          "type": "field",
+          "domain": [
+            "keyword:vk",
+            "keyword:ok.ru",
+            "keyword:mail.ru",
+            "keyword:gosuslugi",
+            "keyword:ozon",
+            "keyword:wildberries",
+            "keyword:avito",
+            "keyword:kinopoisk",
+            "keyword:dzen",
+            "keyword:hh",
+            "keyword:2gis",
+            "keyword:rutube",
+            "keyword:magnit",
+            "keyword:5ka",
+            "keyword:perekrestok",
+            "keyword:alfabank",
+            "keyword:alfaonline",
+            "keyword:tbank",
+            "keyword:t-bank",
+            "keyword:tinkoff",
+            "keyword:yookassa",
+            "keyword:yoomoney",
+            "keyword:vtb"
+          ],
+          "outboundTag": "direct"
+        },
+        {
+          "type": "field",
+          "ip": [
+            "10.0.0.0/8",
+            "172.16.0.0/12",
+            "192.168.0.0/16",
+            "127.0.0.1",
+            "::1"
+          ],
+          "outboundTag": "direct"
+        },
+        {
+          "type": "field",
+          "protocol": [
+            "bittorrent"
+          ],
+          "outboundTag": "direct"
+        },
+        {
+          "type": "field",
+          "inboundTag": [
+            "socks",
+            "http"
+          ],
+          "balancerTag": "BALANCER"
+        }
+      ],
+      "balancers": [
+        {
+          "tag": "BALANCER",
+          "selector": [
+            "lte-"
+          ],
+          "strategy": {
+            "type": "leastPing"
+          }
+        }
+      ]
+    },
+    "inbounds": [
+      {
+        "tag": "socks",
+        "port": 10808,
+        "listen": "127.0.0.1",
+        "protocol": "socks",
+        "settings": {
+          "udp": true,
+          "auth": "noauth"
+        },
+        "sniffing": {
+          "enabled": true,
+          "routeOnly": false,
+          "destOverride": [
+            "http",
+            "tls",
+            "quic"
+          ]
+        }
+      },
+      {
+        "tag": "http",
+        "port": 10809,
+        "listen": "127.0.0.1",
+        "protocol": "http",
+        "settings": {
+          "allowTransparent": false
+        },
+        "sniffing": {
+          "enabled": true,
+          "routeOnly": false,
+          "destOverride": [
+            "http",
+            "tls",
+            "quic"
+          ]
+        }
+      }
+    ],
+    "outbounds": [
+      {
+        "tag": "lte-1",
+        "protocol": "vless",
+        "settings": {
+          "vnext": [
+            {
+              "address": "89.169.39.55",
+              "port": 443,
+              "users": [
+                {
+                  "id": "c61ec320-29f1-4e00-9272-8b676e6957b4",
+                  "encryption": "none",
+                  "flow": "xtls-rprx-vision"
+                }
+              ]
+            }
+          ]
+        },
+        "streamSettings": {
+          "network": "tcp",
+          "security": "reality",
+          "realitySettings": {
+            "serverName": "max.ru",
+            "publicKey": "Lbug_wz0y9xgKeDK44D9kuUap0fXzNKyv_nMJxnZRzU",
+            "shortId": "28a059440d3d5ba1",
+            "fingerprint": "qq",
+            "allowInsecure": false,
+            "show": false
+          }
+        }
+      },
+      {
+        "tag": "lte-2",
+        "protocol": "vless",
+        "settings": {
+          "vnext": [
+            {
+              "address": "158.160.198.58",
+              "port": 443,
+              "users": [
+                {
+                  "id": "596b215c-3743-4893-b24a-4e396c4ab80f",
+                  "encryption": "none",
+                  "flow": "xtls-rprx-vision"
+                }
+              ]
+            }
+          ]
+        },
+        "streamSettings": {
+          "network": "tcp",
+          "security": "reality",
+          "realitySettings": {
+            "serverName": "api-maps.yandex.ru",
+            "publicKey": "DQW3GuEvmRgUQnnKdHjSZhgaEDcu_07Ijuqibd72-0I",
+            "shortId": "ca7dd27a72c7c203",
+            "fingerprint": "chrome",
+            "allowInsecure": false,
+            "show": false
+          }
+        }
+      },
+      {
+        "tag": "lte-3",
+        "protocol": "vless",
+        "settings": {
+          "vnext": [
+            {
+              "address": "l90909l.vip",
+              "port": 8082,
+              "users": [
+                {
+                  "id": "b4bc10bf-80f9-40c9-b4e5-29817c2f0992",
+                  "encryption": "none",
+                  "flow": "xtls-rprx-vision"
+                }
+              ]
+            }
+          ]
+        },
+        "streamSettings": {
+          "network": "tcp",
+          "security": "reality",
+          "realitySettings": {
+            "serverName": "id.vk.com",
+            "publicKey": "SbVKOEMjK0sIlbwg4akyBg5mL5KZwwB-ed4eEE7YnRc",
+            "shortId": "",
+            "fingerprint": "chrome",
+            "allowInsecure": false,
+            "show": false
+          }
+        }
+      },
+      {
+        "tag": "direct",
+        "protocol": "freedom"
+      },
+      {
+        "tag": "block",
+        "protocol": "blackhole"
+      }
+    ]
+  }
+]
