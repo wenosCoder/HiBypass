@@ -5,3 +5,9 @@
 #announce: Бесплатный обход белых списков РФ 🏳🇷🇺 | ТГ : @Hibypass
 #traffic-limit: ∞
 #traffic-remaining: ∞
+vless://1c332eae-7e02-4acd-996d-4eb3e652401c@prep.wwwinternetvideo.click:443?security=reality&type=tcp&sni=yandex.ru&fp=firefox&flow=xtls-rprx-vision&sid=bbe46bd8f6b96839&pbk=uitO4Z8t9TplwwYaqwLqh5rfxDh_X8bOBiNuPbzvaEM#🇪🇺LTE | 1 🌐 RU
+vless://9ebf4fda-7395-4800-b42f-b2dda649880a@e1-ee.edgemedia.lol:443?flow=xtls-rprx-vision&security=reality&sni=ya.ru&fp=chrome&pbk=1MLoHw7RVkGefh7XUyuGg4ndxwv4vDU9en-f9JxpXRQ&sid=d2061bb1&type=raw#🇪🇺LTE | 2 🌐 RU
+vless://9ebf4fda-7395-4800-b42f-b2dda649880a@84.21.191.85:20443?encryption=none&flow=xtls-rprx-vision&fp=firefox&pbk=1MLoHw7RVkGefh7XUyuGg4ndxwv4vDU9en-f9JxpXRQ&security=reality&sid=d2061bb1&sni=ya.ru&type=tcp#🇪🇺LTE | 3 🌐 RU
+vless://4ad3dbf5-2005-4d96-b56c-a0ca9905cab6@qcloudge1.exitvpn.shop:20268?type=raw&security=reality&flow=xtls-rprx-vision&fp=chrome&pbk=5H_MmyfvF4SkwS84wTbLmtcZDecXJIJtZ3uisiKQpSM&sid=0c774b50&sni=metrika.yandex.ru#🇪🇺LTE | 4 🌐 RU
+vless://8bd04756-3beb-4348-82c9-d35453df50ce@qcloudge1.exitvpn.shop:20268?type=tcp&security=reality&flow=xtls-rprx-vision&fp=firefox&pbk=5H_MmyfvF4SkwS84wTbLmtcZDecXJIJtZ3uisiKQpSM&sid=0c774b50&sni=metrika.yandex.ru#🇪🇺LTE | 5 🌐 RU
+vless://9ebf4fda-7395-4800-b42f-b2dda649880a@e1-us.edgemedia.lol:21443?pbk=1MLoHw7RVkGefh7XUyuGg4ndxwv4vDU9en-f9JxpXRQ&headerType=none&sni=ya.ru&encryption=none&flow=xtls-rprx-vision&type=tcp&sid=d2061bb1&security=reality&fp=chrome#🇪🇺LTE | 6 🌐 RU
