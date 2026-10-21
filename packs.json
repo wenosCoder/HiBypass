@@ -137,6 +137,37 @@
         "settings": {
           "vnext": [
             {
+              "address": "158.160.198.58",
+              "port": 443,
+              "users": [
+                {
+                  "id": "596b215c-3743-4893-b24a-4e396c4ab80f",
+                  "encryption": "none",
+                  "flow": "xtls-rprx-vision"
+                }
+              ]
+            }
+          ]
+        },
+        "streamSettings": {
+          "network": "tcp",
+          "security": "reality",
+          "realitySettings": {
+            "serverName": "api-maps.yandex.ru",
+            "publicKey": "DQW3GuEvmRgUQnnKdHjSZhgaEDcu_07Ijuqibd72-0I",
+            "shortId": "ca7dd27a72c7c203",
+            "fingerprint": "chrome",
+            "allowInsecure": false,
+            "show": false
+          }
+        }
+      },
+      {
+        "tag": "lte-2",
+        "protocol": "vless",
+        "settings": {
+          "vnext": [
+            {
               "address": "89.169.39.55",
               "port": 443,
               "users": [
@@ -157,6 +188,37 @@
             "publicKey": "Lbug_wz0y9xgKeDK44D9kuUap0fXzNKyv_nMJxnZRzU",
             "shortId": "28a059440d3d5ba1",
             "fingerprint": "qq",
+            "allowInsecure": false,
+            "show": false
+          }
+        }
+      },
+      {
+        "tag": "lte-3",
+        "protocol": "vless",
+        "settings": {
+          "vnext": [
+            {
+              "address": "l90909l.vip",
+              "port": 8082,
+              "users": [
+                {
+                  "id": "b4bc10bf-80f9-40c9-b4e5-29817c2f0992",
+                  "encryption": "none",
+                  "flow": "xtls-rprx-vision"
+                }
+              ]
+            }
+          ]
+        },
+        "streamSettings": {
+          "network": "tcp",
+          "security": "reality",
+          "realitySettings": {
+            "serverName": "id.vk.com",
+            "publicKey": "SbVKOEMjK0sIlbwg4akyBg5mL5KZwwB-ed4eEE7YnRc",
+            "shortId": "",
+            "fingerprint": "",
             "allowInsecure": false,
             "show": false
           }
