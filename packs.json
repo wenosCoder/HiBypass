@@ -137,11 +137,11 @@
         "settings": {
           "vnext": [
             {
-              "address": "l90909l.vip",
-              "port": 8082,
+              "address": "us3.techdatacloud.org",
+              "port": 443,
               "users": [
                 {
-                  "id": "b4bc10bf-80f9-40c9-b4e5-29817c2f0992",
+                  "id": "5e19b3c8-c1dc-4163-95e2-895319c15d6c",
                   "encryption": "none",
                   "flow": "xtls-rprx-vision"
                 }
@@ -153,10 +153,10 @@
           "network": "tcp",
           "security": "reality",
           "realitySettings": {
-            "serverName": "id.vk.com",
-            "publicKey": "SbVKOEMjK0sIlbwg4akyBg5mL5KZwwB-ed4eEE7YnRc",
-            "shortId": "",
-            "fingerprint": "",
+            "serverName": "cloud.mail.ru",
+            "publicKey": "06GvG7PU5F3Hgq-vUH24tU0tpsbGMCCt26BSvlaBNUE",
+            "shortId": "dfbfa87e9f37f1f0",
+            "fingerprint": "firefox",
             "allowInsecure": false,
             "show": false
           }
@@ -168,11 +168,11 @@
         "settings": {
           "vnext": [
             {
-              "address": "prep.wwwinternetvideo.click",
-              "port": 443,
+              "address": "95sub.ghost-lan.com",
+              "port": 8443,
               "users": [
                 {
-                  "id": "1c332eae-7e02-4acd-996d-4eb3e652401c",
+                  "id": "694fbac8-56da-4ecd-be68-59c57b700e93",
                   "encryption": "none",
                   "flow": "xtls-rprx-vision"
                 }
@@ -184,10 +184,72 @@
           "network": "tcp",
           "security": "reality",
           "realitySettings": {
-            "serverName": "yandex.ru",
-            "publicKey": "uitO4Z8t9TplwwYaqwLqh5rfxDh_X8bOBiNuPbzvaEM",
-            "shortId": "bbe46bd8f6b96839",
-            "fingerprint": "",
+            "serverName": "eh.vk.com",
+            "publicKey": "rGeqvmEcctHYxt19USUHXgGzMkUx-Tna8bq5KRNw7EY",
+            "shortId": "b59d33a750d35e66",
+            "fingerprint": "qq",
+            "allowInsecure": false,
+            "show": false
+          }
+        }
+      },
+      {
+        "tag": "lte-3",
+        "protocol": "vless",
+        "settings": {
+          "vnext": [
+            {
+              "address": "de2.techdatacloud.org",
+              "port": 443,
+              "users": [
+                {
+                  "id": "5e19b3c8-c1dc-4163-95e2-895319c15d6c",
+                  "encryption": "none",
+                  "flow": "xtls-rprx-vision"
+                }
+              ]
+            }
+          ]
+        },
+        "streamSettings": {
+          "network": "tcp",
+          "security": "reality",
+          "realitySettings": {
+            "serverName": "cloud.mail.ru",
+            "publicKey": "O3UO3JVFI6zhBjXmGLXadyaOfIhbgz6ESDwIwDnVfGk",
+            "shortId": "b5598de0526876e2",
+            "fingerprint": "firefox",
+            "allowInsecure": false,
+            "show": false
+          }
+        }
+      },
+      {
+        "tag": "lte-4",
+        "protocol": "vless",
+        "settings": {
+          "vnext": [
+            {
+              "address": "api.cloudconsole.ru",
+              "port": 443,
+              "users": [
+                {
+                  "id": "ada16414-ea27-433b-b448-f77744493deb",
+                  "encryption": "none",
+                  "flow": "xtls-rprx-vision"
+                }
+              ]
+            }
+          ]
+        },
+        "streamSettings": {
+          "network": "tcp",
+          "security": "reality",
+          "realitySettings": {
+            "serverName": "vk.com",
+            "publicKey": "xejt7baNPj-ZmBgQVNW0MikXcVuLSro14gb6EyW4rAA",
+            "shortId": "ab000000",
+            "fingerprint": "chrome",
             "allowInsecure": false,
             "show": false
           }
