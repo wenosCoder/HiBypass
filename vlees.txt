@@ -5,3 +5,4 @@
 #announce: Бесплатный обход белых списков РФ 🏳🇷🇺 | ТГ : @Hibypass
 #traffic-limit: ∞
 #traffic-remaining: ∞
+vless://ada16414-ea27-433b-b448-f77744493deb@api.cloudconsole.ru:443?encryption=none&security=reality&sni=vk.com&fp=chrome&pbk=xejt7baNPj-ZmBgQVNW0MikXcVuLSro14gb6EyW4rAA&sid=ab000000&spx=&type=xhttp&host=vk.com&mode=auto#🇪🇺LTE | 1 🌐 RU
