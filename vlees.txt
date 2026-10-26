@@ -5,7 +5,3 @@
 #announce: Бесплатный обход белых списков РФ 🏳🇷🇺 | ТГ : @Hibypass
 #traffic-limit: ∞
 #traffic-remaining: ∞
-vless://6c713691-3ca2-002b-ad25-113d1bed6b03@nl1.fluxorvpn.net:8443?type=grpc&security=reality&fp=chrome&pbk=86EUYgrS7mazQ-GsiMnStyHSx9AlG8B_-KgXluNdWXI&sid=d3ab13e9c496c399&sni=strm.yandex.net&mode=multi&serviceName=google.storage.v2.Storage#🇪🇺LTE | 1 🌐 RU
-vless://408c51e8-9246-483d-ba73-34ab4e202eb9@pl1.song69.fun:20268?encryption=none&type=tcp&flow=xtls-rprx-vision&security=reality&pbk=5H_MmyfvF4SkwS84wTbLmtcZDecXJIJtZ3uisiKQpSM&sni=metrika.yandex.ru&fp=firefox&sid=0c774b50#🇪🇺LTE | 2 🌐 RU
-vless://7c464358-6c89-4623-bd20-7c7bcd51bc55@vd2.outlinevpn.cc:12213?security=reality&type=tcp&sni=music.yandex.ru&fp=edge&flow=xtls-rprx-vision&sid=6a29a03b21&pbk=kTKM-s7XF0s878Ydmq1KeZFiGT6k1Bw_rLE79s1l1jI&encryption=none#🇪🇺LTE | 3 🌐 RU
-vless://408c51e8-9246-483d-ba73-34ab4e202eb9@hahahaarmenia.redemshenvpn.site:24694?type=tcp&security=reality&flow=xtls-rprx-vision&fp=firefox&pbk=kaPztgo_2b2CKxytGWXzn6EauyNKr6Ho8xerGpSS-SQ&sid=58301280&sni=metrika.yandex.ru#🇪🇺LTE | 4 🌐 RU
