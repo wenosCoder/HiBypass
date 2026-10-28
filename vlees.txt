@@ -5,4 +5,3 @@
 #announce: Бесплатный обход белых списков РФ 🏳🇷🇺 | ТГ : @Hibypass
 #traffic-limit: ∞
 #traffic-remaining: ∞
-vless://6c713691-3ca2-002b-ad25-113d1bed6b03@nl1.fluxorvpn.net:8443?type=grpc&security=reality&fp=chrome&pbk=86EUYgrS7mazQ-GsiMnStyHSx9AlG8B_-KgXluNdWXI&sid=d3ab13e9c496c399&sni=strm.yandex.net&mode=multi&serviceName=google.storage.v2.Storage&encryption=none#🇪🇺LTE | 1 🌐 RU
