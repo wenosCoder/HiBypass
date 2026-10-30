@@ -5,6 +5,3 @@
 #announce: Бесплатный обход белых списков РФ 🏳🇷🇺 | ТГ : @Hibypass
 #traffic-limit: ∞
 #traffic-remaining: ∞
-vless://5e19b3c8-c1dc-4163-95e2-895319c15d6c@us3.techdatacloud.org:443?type=tcp&security=reality&flow=xtls-rprx-vision&pbk=06GvG7PU5F3Hgq-vUH24tU0tpsbGMCCt26BSvlaBNUE&fp=firefox&sni=cloud.mail.ru&sid=dfbfa87e9f37f1f0&spx=%2F&headerType=none&encryption=none#🇪🇺LTE | 1 🌐 RU
-vless://1e2b9c0c-4f9b-56f5-a062-1c4f2d2aa200@84.201.146.8:443?encryption=none&security=reality&sni=max.ru&pbk=biyXF3Egpu0ul4Jyf04Vh1Zl6u3JGXJ2k5y5y7pDjgo&type=xhttp&host=max.ru&path=%2F&fp=chrome#🇪🇺LTE | 2 🌐 RU
-vless://e436321f-24a9-4c38-b935-7d7dee0c3f68@ss.ll0ll.vip:2096?type=grpc&security=reality&fp=firefox&pbk=SbVKOEMjK0sIlbwg4akyBg5mL5KZwwB-ed4eEE7YnRc&sni=id.vk.com&serviceName=vless-grpc-reality#🇪🇺LTE | 3 🌐 RU
