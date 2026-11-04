@@ -137,11 +137,11 @@
         "settings": {
           "vnext": [
             {
-              "address": "de3.voronvpn.com",
+              "address": "9lfgr4.dnetsolutions.ru",
               "port": 443,
               "users": [
                 {
-                  "id": "9e27f64b-7ae9-461b-b4c4-99696276633b",
+                  "id": "c6ac29f4-41d5-492a-a3d0-6582d620aba7",
                   "encryption": "none",
                   "flow": "xtls-rprx-vision"
                 }
@@ -153,71 +153,9 @@
           "network": "tcp",
           "security": "reality",
           "realitySettings": {
-            "serverName": "storage.yandexcloud.net",
-            "publicKey": "UR-ELTbCCTAAvg_y8vIznWFkGkCKFFaEAVgTtPYNCCk",
-            "shortId": "54861d36",
-            "fingerprint": "chrome",
-            "allowInsecure": false,
-            "show": false
-          }
-        }
-      },
-      {
-        "tag": "lte-2",
-        "protocol": "vless",
-        "settings": {
-          "vnext": [
-            {
-              "address": "server15.duckvpn.app",
-              "port": 443,
-              "users": [
-                {
-                  "id": "b1da2601-ff93-46d6-af87-04af3f541fde",
-                  "encryption": "none",
-                  "flow": "xtls-rprx-vision"
-                }
-              ]
-            }
-          ]
-        },
-        "streamSettings": {
-          "network": "tcp",
-          "security": "reality",
-          "realitySettings": {
-            "serverName": "sun1-16.userapi.com",
-            "publicKey": "wY_MYPJUx849su3BlowuxnwnUaj25iLfRw2LooQfPAY",
-            "shortId": "",
-            "fingerprint": "chrome",
-            "allowInsecure": false,
-            "show": false
-          }
-        }
-      },
-      {
-        "tag": "lte-3",
-        "protocol": "vless",
-        "settings": {
-          "vnext": [
-            {
-              "address": "tg.riotvpn.eu",
-              "port": 443,
-              "users": [
-                {
-                  "id": "a18f7c2d-9e45-4b8a-af3c-1d5e7f9c8b2a",
-                  "encryption": "none",
-                  "flow": "xtls-rprx-vision"
-                }
-              ]
-            }
-          ]
-        },
-        "streamSettings": {
-          "network": "tcp",
-          "security": "reality",
-          "realitySettings": {
-            "serverName": "ads.x5.ru",
-            "publicKey": "8h8t5eBWL9oERK7xWHQLFJE5j6sZdgNDQAs3EGnNbho",
-            "shortId": "2f49bccf11150ef2",
+            "serverName": "max.ru",
+            "publicKey": "ijDPaDKzsKkpYj9lEpBatS-FKdmYaGP3aUO2MThuLmU",
+            "shortId": "e56ea883b092f3",
             "fingerprint": "chrome",
             "allowInsecure": false,
             "show": false
