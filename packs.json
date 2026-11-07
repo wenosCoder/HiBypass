@@ -137,11 +137,11 @@
         "settings": {
           "vnext": [
             {
-              "address": "api.cloudconsole.ru",
-              "port": 443,
+              "address": "rapira-dof.whitenw.net",
+              "port": 8445,
               "users": [
                 {
-                  "id": "ada16414-ea27-433b-b448-f77744493deb",
+                  "id": "cd138479-c87a-4d4c-b6ea-4beeb6ef2b47",
                   "encryption": "none",
                   "flow": "xtls-rprx-vision"
                 }
@@ -153,41 +153,10 @@
           "network": "tcp",
           "security": "reality",
           "realitySettings": {
-            "serverName": "vk.com",
-            "publicKey": "xejt7baNPj-ZmBgQVNW0MikXcVuLSro14gb6EyW4rAA",
-            "shortId": "ab000000",
-            "fingerprint": "chrome",
-            "allowInsecure": false,
-            "show": false
-          }
-        }
-      },
-      {
-        "tag": "lte-2",
-        "protocol": "vless",
-        "settings": {
-          "vnext": [
-            {
-              "address": "ru1server.rabstvo.shop",
-              "port": 443,
-              "users": [
-                {
-                  "id": "5b8fb9a7-70b4-4d38-90eb-9f72e6ddf783",
-                  "encryption": "none",
-                  "flow": "xtls-rprx-vision"
-                }
-              ]
-            }
-          ]
-        },
-        "streamSettings": {
-          "network": "tcp",
-          "security": "reality",
-          "realitySettings": {
-            "serverName": "www.max.ru",
-            "publicKey": "Irvu1ScKMHoj6FBEPmYdj5RGvdpj1qwVLrQTu_OzNyY",
-            "shortId": "bbb76504",
-            "fingerprint": "chrome",
+            "serverName": "passport.yandex.ru",
+            "publicKey": "l06r0clkHjHk7HRGpkDBJwZ1JJscSqfwHUQOrV3v3hQ",
+            "shortId": "",
+            "fingerprint": "firefox",
             "allowInsecure": false,
             "show": false
           }
