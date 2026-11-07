@@ -137,11 +137,11 @@
         "settings": {
           "vnext": [
             {
-              "address": "158.160.198.58",
+              "address": "api.cloudconsole.ru",
               "port": 443,
               "users": [
                 {
-                  "id": "596b215c-3743-4893-b24a-4e396c4ab80f",
+                  "id": "ada16414-ea27-433b-b448-f77744493deb",
                   "encryption": "none",
                   "flow": "xtls-rprx-vision"
                 }
@@ -153,9 +153,9 @@
           "network": "tcp",
           "security": "reality",
           "realitySettings": {
-            "serverName": "api-maps.yandex.ru",
-            "publicKey": "DQW3GuEvmRgUQnnKdHjSZhgaEDcu_07Ijuqibd72-0I",
-            "shortId": "ca7dd27a72c7c203",
+            "serverName": "vk.com",
+            "publicKey": "xejt7baNPj-ZmBgQVNW0MikXcVuLSro14gb6EyW4rAA",
+            "shortId": "ab000000",
             "fingerprint": "chrome",
             "allowInsecure": false,
             "show": false
@@ -168,11 +168,11 @@
         "settings": {
           "vnext": [
             {
-              "address": "l90909l.vip",
-              "port": 8082,
+              "address": "ru1server.rabstvo.shop",
+              "port": 443,
               "users": [
                 {
-                  "id": "b4bc10bf-80f9-40c9-b4e5-29817c2f0992",
+                  "id": "5b8fb9a7-70b4-4d38-90eb-9f72e6ddf783",
                   "encryption": "none",
                   "flow": "xtls-rprx-vision"
                 }
@@ -184,40 +184,9 @@
           "network": "tcp",
           "security": "reality",
           "realitySettings": {
-            "serverName": "id.vk.com",
-            "publicKey": "SbVKOEMjK0sIlbwg4akyBg5mL5KZwwB-ed4eEE7YnRc",
-            "shortId": "",
-            "fingerprint": "",
-            "allowInsecure": false,
-            "show": false
-          }
-        }
-      },
-      {
-        "tag": "lte-3",
-        "protocol": "vless",
-        "settings": {
-          "vnext": [
-            {
-              "address": "rapira-dof.whitenw.net",
-              "port": 8445,
-              "users": [
-                {
-                  "id": "cd138479-c87a-4d4c-b6ea-4beeb6ef2b47",
-                  "encryption": "none",
-                  "flow": "xtls-rprx-vision"
-                }
-              ]
-            }
-          ]
-        },
-        "streamSettings": {
-          "network": "tcp",
-          "security": "reality",
-          "realitySettings": {
-            "serverName": "passport.yandex.ru",
-            "publicKey": "l06r0clkHjHk7HRGpkDBJwZ1JJscSqfwHUQOrV3v3hQ",
-            "shortId": "",
+            "serverName": "www.max.ru",
+            "publicKey": "Irvu1ScKMHoj6FBEPmYdj5RGvdpj1qwVLrQTu_OzNyY",
+            "shortId": "bbb76504",
             "fingerprint": "chrome",
             "allowInsecure": false,
             "show": false
