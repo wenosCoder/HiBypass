@@ -137,11 +137,11 @@
         "settings": {
           "vnext": [
             {
-              "address": "us3.techdatacloud.org",
+              "address": "api.cloudconsole.ru",
               "port": 443,
               "users": [
                 {
-                  "id": "5e19b3c8-c1dc-4163-95e2-895319c15d6c",
+                  "id": "ada16414-ea27-433b-b448-f77744493deb",
                   "encryption": "none",
                   "flow": "xtls-rprx-vision"
                 }
@@ -153,10 +153,41 @@
           "network": "tcp",
           "security": "reality",
           "realitySettings": {
-            "serverName": "cloud.mail.ru",
-            "publicKey": "06GvG7PU5F3Hgq-vUH24tU0tpsbGMCCt26BSvlaBNUE",
-            "shortId": "dfbfa87e9f37f1f0",
-            "fingerprint": "firefox",
+            "serverName": "vk.com",
+            "publicKey": "xejt7baNPj-ZmBgQVNW0MikXcVuLSro14gb6EyW4rAA",
+            "shortId": "ab000000",
+            "fingerprint": "chrome",
+            "allowInsecure": false,
+            "show": false
+          }
+        }
+      },
+      {
+        "tag": "lte-2",
+        "protocol": "vless",
+        "settings": {
+          "vnext": [
+            {
+              "address": "g8qfh.guardora.pro",
+              "port": 1443,
+              "users": [
+                {
+                  "id": "4a334454-22f7-491b-9bec-583e1e8a2773",
+                  "encryption": "none",
+                  "flow": "xtls-rprx-vision"
+                }
+              ]
+            }
+          ]
+        },
+        "streamSettings": {
+          "network": "tcp",
+          "security": "reality",
+          "realitySettings": {
+            "serverName": "yastatic.net",
+            "publicKey": "EltWI8AOqkN8lMjRycweRRoFRah5hu6xiKtgBmQOdE8",
+            "shortId": "1ed136481e0ede74",
+            "fingerprint": "chrome",
             "allowInsecure": false,
             "show": false
           }
