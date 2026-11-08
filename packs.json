@@ -168,6 +168,37 @@
         "settings": {
           "vnext": [
             {
+              "address": "nw.shadownet.pro",
+              "port": 8443,
+              "users": [
+                {
+                  "id": "03e6c071-d34b-4236-9d06-a57cc364bede",
+                  "encryption": "none",
+                  "flow": "xtls-rprx-vision"
+                }
+              ]
+            }
+          ]
+        },
+        "streamSettings": {
+          "network": "tcp",
+          "security": "reality",
+          "realitySettings": {
+            "serverName": "yandex.ru",
+            "publicKey": "RDoffndyw7wskux1uVqjlPPe_ikh3cisVEoyleiRlR4",
+            "shortId": "",
+            "fingerprint": "qq",
+            "allowInsecure": false,
+            "show": false
+          }
+        }
+      },
+      {
+        "tag": "lte-3",
+        "protocol": "vless",
+        "settings": {
+          "vnext": [
+            {
               "address": "l90909l.vip",
               "port": 8082,
               "users": [
@@ -187,7 +218,7 @@
             "serverName": "id.vk.com",
             "publicKey": "SbVKOEMjK0sIlbwg4akyBg5mL5KZwwB-ed4eEE7YnRc",
             "shortId": "",
-            "fingerprint": "chrome",
+            "fingerprint": "",
             "allowInsecure": false,
             "show": false
           }
