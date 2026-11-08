@@ -137,11 +137,11 @@
         "settings": {
           "vnext": [
             {
-              "address": "fox.chocolatemango.live",
+              "address": "us3.techdatacloud.org",
               "port": 443,
               "users": [
                 {
-                  "id": "d6dba391-9247-4a51-9e9b-eae045378b90",
+                  "id": "5e19b3c8-c1dc-4163-95e2-895319c15d6c",
                   "encryption": "none",
                   "flow": "xtls-rprx-vision"
                 }
@@ -153,10 +153,10 @@
           "network": "tcp",
           "security": "reality",
           "realitySettings": {
-            "serverName": "max.ru",
-            "publicKey": "SbVKOEMjK0sIlbwg4akyBg5mL5KZwwB-ed4eEE7YnRc",
-            "shortId": "",
-            "fingerprint": "chrome",
+            "serverName": "cloud.mail.ru",
+            "publicKey": "06GvG7PU5F3Hgq-vUH24tU0tpsbGMCCt26BSvlaBNUE",
+            "shortId": "dfbfa87e9f37f1f0",
+            "fingerprint": "firefox",
             "allowInsecure": false,
             "show": false
           }
