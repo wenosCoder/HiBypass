@@ -5,4 +5,4 @@
 #announce: Бесплатный обход белых списков РФ 🏳🇷🇺 | ТГ : @Hibypass
 #traffic-limit: ∞
 #traffic-remaining: ∞
-vless://b04a708a-7e56-45f9-9557-2d6253a8de6e@freenl.strettenvpn.com:443?&security=reality&flow=xtls-rprx-vision&pbk=yhUfTGgu5PYRlFqMnRZkxffH_aU05AFUToGI8_EKF28&sid=8248954896&fp=ios&sni=sun6-21.userapi.com&type=tcp&headerType=none&host=sun6-21.userapi.com&path=%2F#🇪🇺LTE | 1 🌐 RU
+vless://b4bc10bf-80f9-40c9-b4e5-29817c2f0992@l90909l.vip:8082?encryption=none&fp=&pbk=SbVKOEMjK0sIlbwg4akyBg5mL5KZwwB-ed4eEE7YnRc&security=reality&serviceName=vless-grpc-reality&sni=id.vk.com&type=grpc#🇪🇺LTE | 1 🌐 RU
