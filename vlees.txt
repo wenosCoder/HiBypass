@@ -5,14 +5,4 @@
 #announce: Бесплатный обход белых списков РФ 🏳🇷🇺 | ТГ : @Hibypass
 #traffic-limit: ∞
 #traffic-remaining: ∞
-vless://5e19b3c8-c1dc-4163-95e2-895319c15d6c@us3.techdatacloud.org:443?type=tcp&security=reality&flow=xtls-rprx-vision&pbk=06GvG7PU5F3Hgq-vUH24tU0tpsbGMCCt26BSvlaBNUE&fp=firefox&sni=cloud.mail.ru&sid=dfbfa87e9f37f1f0&spx=%2F&headerType=none&encryption=none#🇪🇺LTE | 1 🌐 RU
-vless://5e19b3c8-c1dc-4163-95e2-895319c15d6c@nl.techdatacloud.org:443?type=tcp&security=reality&flow=xtls-rprx-vision&pbk=06GvG7PU5F3Hgq-vUH24tU0tpsbGMCCt26BSvlaBNUE&fp=firefox&sni=cloud.mail.ru&sid=dfbfa87e9f37f1f0&spx=%2F&headerType=none&encryption=none#🇪🇺LTE | 2 🌐 RU
-vless://2181d0c8-448a-4f75-b848-1718029baef9@89.125.13.67:8443?encryption=none&flow=xtls-rprx-vision&security=reality&sni=max.ru&fp=chrome&pbk=-Dg4mGAAM5Lwe9ri7Bx5WlYdPBsyYJy-Pai2Z0FGlyc&sid=afee962d&type=tcp&headerType=none#🇪🇺LTE | 3 🌐 RU
-vless://03e6c071-d34b-4236-9d06-a57cc364bede@nw.shadownet.pro:8443?type=tcp&headerType=none&security=reality&encryption=none&sni=yandex.ru&fp=qq&pbk=RDoffndyw7wskux1uVqjlPPe_ikh3cisVEoyleiRlR4&flow=xtls-rprx-vision#🇪🇺LTE | 4 🌐 RU
-vless://5e19b3c8-c1dc-4163-95e2-895319c15d6c@ru-at.techdatacloud.org:443?type=tcp&security=reality&flow=xtls-rprx-vision&pbk=PM__cMUtCn3sMyH5mfQ8Ti6USaqHcHsli9CzVXt0W10&fp=firefox&sni=storage.yandex.net&sid=c142fd81e522ccf9&spx=%2F&headerType=none&encryption=none#🇪🇺LTE | 5 🌐 RU
-vless://34a38f21-310e-4da5-b549-35076e16993c@polbridge1.frost-api.com:443?&security=reality&flow=xtls-rprx-vision&pbk=SHIYN7zN9aFVxwKK-bIvDbhUgtHvlBhDi1qSl2sWwRw&sid=e7&fp=chrome&sni=eh.vk.com&type=tcp&headerType=none&host=eh.vk.com&path=%2F#🇪🇺LTE | 6 🌐 RU
-vless://5e19b3c8-c1dc-4163-95e2-895319c15d6c@de2.techdatacloud.org:443?security=reality&type=tcp&sni=cloud.mail.ru&fp=firefox&flow=xtls-rprx-vision&sid=b5598de0526876e2&pbk=O3UO3JVFI6zhBjXmGLXadyaOfIhbgz6ESDwIwDnVfGk&encryption=none#🇪🇺LTE | 7 🌐 RU
-vless://ada16414-ea27-433b-b448-f77744493deb@api.cloudconsole.ru:443?encryption=none&security=reality&sni=vk.com&fp=chrome&pbk=xejt7baNPj-ZmBgQVNW0MikXcVuLSro14gb6EyW4rAA&sid=ab000000&spx=&type=xhttp&host=vk.com&mode=auto#🇪🇺LTE | 8 🌐 RU
-vless://694fbac8-56da-4ecd-be68-59c57b700e93@95sub.ghost-lan.com:8443?type=tcp&security=reality&encryption=none&flow=xtls-rprx-vision&fp=qq&pbk=rGeqvmEcctHYxt19USUHXgGzMkUx-Tna8bq5KRNw7EY&sid=b59d33a750d35e66&sni=eh.vk.com#🇪🇺LTE | 9 🌐 RU
-vless://5b8fb9a7-70b4-4d38-90eb-9f72e6ddf783@ru1server.rabstvo.shop:443?type=xhttp&security=reality&fp=chrome&pbk=Irvu1ScKMHoj6FBEPmYdj5RGvdpj1qwVLrQTu_OzNyY&sid=bbb76504&sni=www.max.ru&path=/update&mode=auto#🇪🇺LTE | 10 🌐 RU
-vless://5bfdb6f5-6c07-4a42-9b45-a8b7c6d9cd28@kz.tgflow.me:1234?security=reality&encryption=none&pbk=DwN8rbQJY-yyrIW1IREEp6sw_CQZ2GRWNcu0UnPjlBo&headerType=none&fp=firefox&type=tcp&flow=xtls-rprx-vision&sni=ads.x5.ru&sid=0fafb2da2621#🇪🇺LTE | 11 🌐 RU
+vless://ada16414-ea27-433b-b448-f77744493deb@api.cloudconsole.ru:443?type=xhttp&security=reality&fp=chrome&pbk=xejt7baNPj-ZmBgQVNW0MikXcVuLSro14gb6EyW4rAA&sid=ab000000&sni=vk.com&host=vk.com&mode=auto&spx=#🇪🇺LTE | 1 🌐 RU
