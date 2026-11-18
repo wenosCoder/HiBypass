@@ -218,7 +218,7 @@
             "serverName": "id.vk.com",
             "publicKey": "SbVKOEMjK0sIlbwg4akyBg5mL5KZwwB-ed4eEE7YnRc",
             "shortId": "",
-            "fingerprint": "",
+            "fingerprint": "chrome",
             "allowInsecure": false,
             "show": false
           }
