@@ -137,11 +137,11 @@
         "settings": {
           "vnext": [
             {
-              "address": "us3.techdatacloud.org",
+              "address": "freenl.strettenvpn.com",
               "port": 443,
               "users": [
                 {
-                  "id": "5e19b3c8-c1dc-4163-95e2-895319c15d6c",
+                  "id": "b04a708a-7e56-45f9-9557-2d6253a8de6e",
                   "encryption": "none",
                   "flow": "xtls-rprx-vision"
                 }
@@ -153,10 +153,10 @@
           "network": "tcp",
           "security": "reality",
           "realitySettings": {
-            "serverName": "cloud.mail.ru",
-            "publicKey": "06GvG7PU5F3Hgq-vUH24tU0tpsbGMCCt26BSvlaBNUE",
-            "shortId": "dfbfa87e9f37f1f0",
-            "fingerprint": "firefox",
+            "serverName": "sun6-21.userapi.com",
+            "publicKey": "yhUfTGgu5PYRlFqMnRZkxffH_aU05AFUToGI8_EKF28",
+            "shortId": "8248954896",
+            "fingerprint": "",
             "allowInsecure": false,
             "show": false
           }
@@ -199,37 +199,6 @@
         "settings": {
           "vnext": [
             {
-              "address": "freenl.strettenvpn.com",
-              "port": 443,
-              "users": [
-                {
-                  "id": "b04a708a-7e56-45f9-9557-2d6253a8de6e",
-                  "encryption": "none",
-                  "flow": "xtls-rprx-vision"
-                }
-              ]
-            }
-          ]
-        },
-        "streamSettings": {
-          "network": "tcp",
-          "security": "reality",
-          "realitySettings": {
-            "serverName": "sun6-21.userapi.com",
-            "publicKey": "yhUfTGgu5PYRlFqMnRZkxffH_aU05AFUToGI8_EKF28",
-            "shortId": "8248954896",
-            "fingerprint": "",
-            "allowInsecure": false,
-            "show": false
-          }
-        }
-      },
-      {
-        "tag": "lte-4",
-        "protocol": "vless",
-        "settings": {
-          "vnext": [
-            {
               "address": "l90909l.vip",
               "port": 8082,
               "users": [
@@ -256,7 +225,7 @@
         }
       },
       {
-        "tag": "lte-5",
+        "tag": "lte-4",
         "protocol": "vless",
         "settings": {
           "vnext": [
@@ -287,7 +256,7 @@
         }
       },
       {
-        "tag": "lte-6",
+        "tag": "lte-5",
         "protocol": "vless",
         "settings": {
           "vnext": [
