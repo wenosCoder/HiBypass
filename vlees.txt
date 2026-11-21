@@ -5,7 +5,3 @@
 #announce: Бесплатный обход белых списков РФ 🏳🇷🇺 | ТГ : @Hibypass
 #traffic-limit: ∞
 #traffic-remaining: ∞
-vless://2181d0c8-448a-4f75-b848-1718029baef9@89.125.13.67:8443?encryption=none&flow=xtls-rprx-vision&security=reality&sni=max.ru&fp=chrome&pbk=-Dg4mGAAM5Lwe9ri7Bx5WlYdPBsyYJy-Pai2Z0FGlyc&sid=afee962d&type=tcp&headerType=none#🇪🇺LTE | 1 🌐 RU
-vless://03e6c071-d34b-4236-9d06-a57cc364bede@nw.shadownet.pro:8443?type=tcp&headerType=none&security=reality&encryption=none&sni=yandex.ru&fp=qq&pbk=RDoffndyw7wskux1uVqjlPPe_ikh3cisVEoyleiRlR4&flow=xtls-rprx-vision#🇪🇺LTE | 2 🌐 RU
-vless://ada16414-ea27-433b-b448-f77744493deb@api.cloudconsole.ru:443?encryption=none&security=reality&sni=vk.com&fp=chrome&pbk=xejt7baNPj-ZmBgQVNW0MikXcVuLSro14gb6EyW4rAA&sid=ab000000&spx=&type=xhttp&host=vk.com&mode=auto#🇪🇺LTE | 3 🌐 RU
-vless://5b8fb9a7-70b4-4d38-90eb-9f72e6ddf783@ru1server.rabstvo.shop:443?type=xhttp&security=reality&fp=chrome&pbk=Irvu1ScKMHoj6FBEPmYdj5RGvdpj1qwVLrQTu_OzNyY&sid=bbb76504&sni=www.max.ru&path=/update&mode=auto#🇪🇺LTE | 4 🌐 RU
