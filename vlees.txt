@@ -5,4 +5,3 @@
 #announce: Бесплатный обход белых списков РФ 🏳🇷🇺 | ТГ : @Hibypass
 #traffic-limit: ∞
 #traffic-remaining: ∞
-vless://5b8fb9a7-70b4-4d38-90eb-9f72e6ddf783@ru1server.rabstvo.shop:443?type=xhttp&security=reality&fp=chrome&pbk=Irvu1ScKMHoj6FBEPmYdj5RGvdpj1qwVLrQTu_OzNyY&sid=bbb76504&sni=www.max.ru&path=/update&mode=auto#🇪🇺LTE | 1 🌐 RU
